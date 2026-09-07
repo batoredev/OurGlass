@@ -113,17 +113,99 @@ confirmed it:
   bump every week. Revisit the ignores when the plan's "TS 7 as a measured spike" and
   "Vitest 5" follow-ups actually happen.
 
-## Open questions (do not block Phase 0)
+## Phase 1 decisions (Mission 1 four-lens review — full design in `docs/PHASE-1-DESIGN.md`)
+
+A 4-teammate review (`ceo`, `design`, `dx`, `arch`) ran before any Phase 1 code was written.
+Verdict: APPROVE WITH CHANGES. Full schema, tool-registry design, and reasoning in
+`docs/PHASE-1-DESIGN.md` — this is the compressed decision log.
+
+1. **Migration tooling: `node-pg-migrate` + numbered forward-only SQL files.** Verified
+   `node-pg-migrate@9.0.0`, MIT, peer `pg >=4.3.0 <9.0.0` (compatible with `pg ^8.13.0` already
+   in `packages/db`, no second driver). Chosen over a schema-first generator because this
+   product's schema is unusual exactly where a generator would fight it (bitemporal columns,
+   `hnsw.iterative_scan`, JSONB validated against a runtime registry). No down-migrations for
+   raw SQL — `db:reset` is the rollback model for a greenfield repo with no production data.
+2. **`due_soon`/`overdue` are computed in a view, never stored.** A scheduled job writing
+   status would either let undo reverse a clock tick, or leave `action_log` incomplete history
+   with no actor. `commitment_status` enum is nine values, not eleven.
+3. **Merge (`merge_person`, and the same operation on organizations and projects) is purely
+   non-destructive.** Sets the loser's `t_invalid` + `merged_into_id`; repoints no FKs, rewrites
+   no JSONB. **Two distinct read shapes, not one, on all three mergeable tables:**
+   list/enumerate uses each table's `*_current` view (merged rows correctly absent);
+   dereference-by-id uses `resolve_merged(tbl, uuid)`, one shared cycle-guarded function
+   (raises past 16 hops rather than looping — merges are undoable/redoable, which is exactly how
+   a cycle gets created by accident) that every table wraps (`resolve_person`, etc.). Two
+   earlier drafts of this decision were wrong in the same way, caught only by reading the
+   finished artifact against its own claims rather than trusting a summary of it: first, "reads
+   resolve through `merged_into_id` via a `*_current` view" — `*_current` *filters out* merged
+   rows rather than resolving through them, which would have reproduced the dangling-reference
+   bug the pointer exists to prevent; second, generalizing that fix to `merge_person` only,
+   which silently left organizations and projects with the identical unresolved bug one
+   paragraph later. Both corrected before any schema code was written. This is what makes merge
+   honestly `invertibility='full'` — the lossy alternative (`UPDATE ... SET owner_id = winner`)
+   has no cheap inverse, and per finding #9 a wrong merge
+   is the worst failure mode in the system.
+4. **`action_log`'s grain is the conversational turn, not the row mutation.** `turn_id` + `seq`
+   per entry. Undo is transactional at turn grain (all inverses in one transaction, descending
+   `seq`), append-only (writes new rows with `undoes_turn_id`, never mutates/deletes), once-only
+   (enforced by a partial unique index, not a check-then-act race), and traverses only
+   `actor_kind='user_turn'` (scheduled writes are never undoable). Driven by the Phase 2 demo
+   utterance itself producing one turn with two mutations (a commitment and a reminder).
+5. **Tool inputs take resolved UUIDs for entity references; content fields stay raw strings.**
+   `create_commitment` naming an unknown person **fails** rather than auto-creating — the
+   inverse of an auto-create is ambiguous (cascade-delete the person, or not?). Resolve creates
+   the person first, same `turn_id`, so undo reverses the pair.
+6. **`field_kind` is a closed six-value enum** (`text`, `number`, `bool`, `date`, `enum`,
+   `person_ref`), never open JSON Schema stored on disk — JSON Schema is generated from the
+   registry for the model's tool input, not what's persisted. `define_entity_type` rejects an
+   unknown kind at validation time with a clean error, not at Phase 5 render time.
+   `add_entity_field` is non-breaking: optional-only, absent keys render as an em-dash, no
+   backfill. Caps: 32 fields per type, 64 types. This is what makes "a new entity type requires
+   zero frontend code changes, always" true without qualification — the LLM can invent types
+   freely; it cannot invent field kinds.
+7. **`pg_cron` is absent from `pgvector/pgvector:pg17`** (verified from the image's Dockerfile
+   source — plain `postgres` + pgvector compiled in, nothing else). `EXECUTION-PLAN.md`'s and
+   `PHASES.md`'s mentions of `pg_cron` are corrected below to an open Phase 3 decision.
+   Building a custom image is more expensive than it looks: GitHub Actions `services:` accepts
+   only a pre-built `image:`, not a `build:`, so a custom image needs a GHCR publish step —
+   infra we can't fully control without ADMIN. Recommended default: an in-process poller
+   (`SELECT ... FOR UPDATE SKIP LOCKED` on `reminders`, injectable clock, same idempotency
+   requirement `pg_cron` would need anyway). Decide formally in Phase 3.
+8. **The `ci.yml:71` explicit `CREATE EXTENSION vector` step's deletion is atomic with
+   migration 001 landing — same commit, not a follow-up cleanup.** Deleting it earlier turns CI
+   red for a reason unrelated to whatever change is under review (the extension is gone with
+   nothing yet replacing it); deleting it later leaves a window where both mechanisms create the
+   extension (harmless under `IF NOT EXISTS`, but it's the two-mechanisms state this decision
+   exists to remove).
+9. **`README.md` did not exist and was unowned** — root `SETUP.md` is the Company Claude OS
+   install guide, not documentation for this product. Lead-owned, written before the Phase 1
+   build team spawns. Phase 1's definition of done gains the clause: *"a fresh clone with no
+   pre-set environment variables reaches this phase's demo using only the commands in
+   README.md."*
+
+**Correction to earlier plan text:** `EXECUTION-PLAN.md`'s "Dynamic entity types" section
+overstated its own provenance — it read as spec-derived. Verified twice, independently, by
+grep of `docs/SPEC.md` and `docs/SPEC-raw.txt`: dynamic entity types appear in **zero** of the
+38 spec sections. It is a user requirement from this build's design conversation, not the spec.
+User confirmed (asked directly): the schema-builder capability is wanted as designed — kept as
+Phase 1 scope, now correctly labelled as an owner addition rather than spec-derived.
+
+## Open questions (do not block Phase 1)
 
 1. Who has ADMIN on `batoredev/OurGlass`? Needed for branch protection and repo security
    toggles.
 2. Model tier for the extraction stage — Opus asks for missing parameters, Sonnet may infer
    them; spec §27 favors the model that asks. Recommend Opus for extraction, a cheaper tier for
    response generation.
-3. Timezone scope — single-timezone team assumed; multi-timezone changes the schema.
+3. ~~Timezone scope~~ — **resolved, not blocking.** `timestamptz` everywhere plus
+   `users.timezone` (default `Asia/Kolkata`) makes the schema indifferent to single- vs
+   multi-timezone; that becomes a Phase 2 behaviour question, not a migration.
 4. Cost budget per message — unstated in the spec, and spec §22 means every message triggers
    extraction.
 5. Branch protection with 1 required approval on a solo-maintainer repo needs a `bypass_actors`
    decision from the owner, or they cannot merge their own PRs.
+6. `due_soon`'s 2-hour threshold (`docs/PHASE-1-DESIGN.md` §2.4) is a placeholder — product
+   judgement, not architecture. The spec's own narrative implies "soon" should key off the
+   commitment's own reminder rather than a global constant. Not a Phase 1 blocker.
 
 See `docs/EXECUTION-PLAN.md` for the full plan and `docs/PHASES.md` for the phase checklist.

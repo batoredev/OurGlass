@@ -188,9 +188,12 @@ policy and hard vetoes. Duplicate detection (§23).
 commitment and one reminder, correctly owned and correctly timed.
 
 ### Phase 3 — Conversational loop + reminders *(Mission 4 team)*
-The full four-stage orchestrator. `pg_cron` reminder firing. Conditional rules (§25) with
-flattened conditions evaluated against live state. Completion updates and late-completion
-context (§20, §21). Concise response style (§30, §31).
+The full four-stage orchestrator. Reminder firing — mechanism **open**: `pg_cron` was assumed
+in earlier drafts but is absent from `pgvector/pgvector:pg17` (verified from the image's
+Dockerfile); default recommendation is an in-process poller, see `docs/DECISIONS.md` and
+`docs/PHASE-1-DESIGN.md` §6 for the tradeoff. Conditional rules (§25) with flattened conditions
+evaluated against live state. Completion updates and late-completion context (§20, §21).
+Concise response style (§30, §31).
 **Demo:** the spec's own Barkha/Hult/Arun narratives end-to-end, including "Barkha gave the
 article at 11" correctly producing `completed_late` with a 5-hour delay.
 
