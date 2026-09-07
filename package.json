@@ -17,11 +17,11 @@
     "dev": "pnpm --filter @ourglass/web --filter @ourglass/api -r run dev"
   },
   "devDependencies": {
-    "typescript": "6.0.3",
-    "@types/node": "^24.0.0",
-    "@eslint/js": "^9.39.5",
-    "eslint": "9.39.5",
+    "typescript": "7.0.2",
+    "@types/node": "^26.4.1",
+    "@eslint/js": "^10.0.1",
+    "eslint": "10.9.1",
     "typescript-eslint": "^8.69.0",
-    "vitest": "4.1.11"
+    "vitest": "5.0.0"
   }
 }
