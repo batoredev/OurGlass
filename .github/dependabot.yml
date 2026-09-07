@@ -13,6 +13,18 @@ updates:
       prod-minor-patch:
         dependency-type: "production"
         update-types: ["minor", "patch"]
+    ignore:
+      # Deliberately pinned below latest — see docs/DECISIONS.md for why.
+      # Major-version bumps only are ignored so patch/minor security fixes
+      # on the pinned line still land.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"

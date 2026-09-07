@@ -20,9 +20,10 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+      # No `version:` input here — pnpm/action-setup reads the version from
+      # package.json's "packageManager" field. Setting both throws
+      # "Multiple versions of pnpm specified" (found running this in CI).
       - uses: pnpm/action-setup@v6
-        with:
-          version: 10
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -57,9 +58,10 @@ jobs:
       DATABASE_URL: postgres://ourglass:ourglass@localhost:5432/ourglass_test
     steps:
       - uses: actions/checkout@v7
+      # No `version:` input here — pnpm/action-setup reads the version from
+      # package.json's "packageManager" field. Setting both throws
+      # "Multiple versions of pnpm specified" (found running this in CI).
       - uses: pnpm/action-setup@v6
-        with:
-          version: 10
       - uses: actions/setup-node@v7
         with:
           node-version: 24

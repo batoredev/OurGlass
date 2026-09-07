@@ -94,6 +94,24 @@ confirmed it:
   (verified via `pnpm install` and `npm view eslint-plugin-import@2.32.0 peerDependencies`).
   ESLint 9.39.5 is the latest 9.x and satisfies every plugin. Revisit once
   `eslint-plugin-import` (or Next.js dropping it) supports ESLint 10.
+- **`next lint` does not exist in Next.js 16 — discovered running `pnpm lint`, not in
+  research.** `next --help` no longer lists `lint` as a subcommand. `eslint-config-next`'s
+  default export is already a native flat-config array (it includes TypeScript handling too),
+  so `apps/web/eslint.config.mjs` spreads it directly via plain `eslint .`. Do not wrap it in
+  `@eslint/eslintrc`'s `FlatCompat` — that throws `Converting circular structure to JSON`
+  against this package's `eslint-plugin-react` config (verified while wiring this up);
+  `FlatCompat` expects a legacy `.eslintrc`-shaped config, not an already-flat array.
+- **`pnpm/action-setup@v6`'s `version:` input conflicts with `package.json`'s
+  `"packageManager"` field — discovered from a failed CI run, not research.** Setting both
+  throws `Error: Multiple versions of pnpm specified`. Fix: omit `version:` entirely in every
+  workflow; the action reads it from `packageManager`.
+- **Dependabot's first PR proposed exactly the four majors we pinned below latest**
+  (TypeScript 7, ESLint 10 x2, Vitest 5) — expected, since Dependabot has no notion of our
+  stability rationale. Closed that PR and added `ignore: [... semver-major]` entries for
+  `typescript`, `eslint`, `@eslint/js`, `vitest` in `.github/dependabot.yml` so it still
+  proposes patch/minor security fixes on the pinned line without re-litigating the major
+  bump every week. Revisit the ignores when the plan's "TS 7 as a measured spike" and
+  "Vitest 5" follow-ups actually happen.
 
 ## Open questions (do not block Phase 0)
 
