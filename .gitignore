@@ -16,3 +16,6 @@ coverage/
 
 # graphify (regenerated; graphify-out/ itself is committed, see docs/EXECUTION-PLAN.md)
 graphify-out/graph.html
+graphify-out/cache/
+graphify-out/.graphify_python
+graphify-out/.graphify_root
