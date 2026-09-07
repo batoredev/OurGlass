@@ -1,0 +1,58 @@
+name: Evals
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      live:
+        description: "Run the live-model lane (calls the Anthropic API, costs money)"
+        type: boolean
+        default: false
+
+permissions: {}
+
+concurrency:
+  group: evals-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  fixtures:
+    name: extraction evals (recorded fixtures — free, deterministic)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @ourglass/evals test
+
+  # Never triggered by pull_request — only a manual workflow_dispatch with
+  # live=true. A fork PR cannot reach ANTHROPIC_API_KEY through this job.
+  live:
+    name: extraction evals (live model — manual only, costs tokens)
+    if: github.event_name == 'workflow_dispatch' && inputs.live
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @ourglass/evals test:live
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

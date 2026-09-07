@@ -1,0 +1,27 @@
+{
+  "name": "ourglass",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Batore Personal Assistant — internal-use conversational AI assistant",
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@10.15.1",
+  "scripts": {
+    "build:libs": "pnpm --filter @ourglass/shared run build",
+    "typecheck": "pnpm run build:libs && pnpm -r --if-present run typecheck",
+    "lint": "eslint . && pnpm -r --if-present run lint",
+    "test": "pnpm run build:libs && pnpm -r --if-present run test",
+    "build": "pnpm -r --if-present run build",
+    "dev": "pnpm --filter @ourglass/web --filter @ourglass/api -r run dev"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "@types/node": "^24.0.0",
+    "@eslint/js": "^9.39.5",
+    "eslint": "9.39.5",
+    "typescript-eslint": "^8.69.0",
+    "vitest": "4.1.11"
+  }
+}

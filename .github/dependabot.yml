@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # package-ecosystem is "npm" even for a pnpm project — verified in
+  # docs/DECISIONS.md; "pnpm" is not a valid value.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      dev-dependencies:
+        dependency-type: "development"
+      prod-minor-patch:
+        dependency-type: "production"
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

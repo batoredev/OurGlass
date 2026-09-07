@@ -319,6 +319,7 @@ directly against the GitHub and Docker registries today, not recalled:
 | Node | **24** (active LTS) |
 | Vitest | **4.1.11** — pinning, not 5.0.0 (released 4 days ago) |
 | TypeScript | **6.0.3** — not 7.x (Go-port rewrite, 2 months old; ts-eslint compat unverified) |
+| ESLint | **9.39.5**, not 10.x — `eslint-config-next`'s `eslint-plugin-import` peer-caps at `^9` (found during Phase 0 install; see `docs/DECISIONS.md`) |
 
 ### ⚠ Two blockers confirmed empirically
 

@@ -87,6 +87,13 @@ confirmed it:
   `pnpm -r --filter` covers the task graph, and the expensive cache (install) comes from
   `setup-node`'s `cache: pnpm`, which is a different cache from Turborepo's remote cache.
   Revisit only if package count or CI wall-time grows.
+- **ESLint 9.39.5, not 10.x — discovered during Phase 0 install, not in the original
+  research.** `eslint-config-next@16.3.4` itself declares `eslint: >=9.0.0` (ESLint 10
+  compatible), but its transitive dependency `eslint-plugin-import@2.32.0` caps its own peer
+  range at `^9`, so ESLint 10 with Next.js's config throws a peer-dependency conflict
+  (verified via `pnpm install` and `npm view eslint-plugin-import@2.32.0 peerDependencies`).
+  ESLint 9.39.5 is the latest 9.x and satisfies every plugin. Revisit once
+  `eslint-plugin-import` (or Next.js dropping it) supports ESLint 10.
 
 ## Open questions (do not block Phase 0)
 
