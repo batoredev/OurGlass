@@ -1,0 +1,819 @@
+BATORE PERSONAL ASSISTANT
+Product, Architecture & Implementation Specification
+You are building an internal-use AI personal assistant for Batore.
+This application is not intended to be a generic SaaS product at this stage. It is being built specificallyfor internal use by the Batore team and should prioritize usefulness, speed, contextual understanding,and low-friction interaction over generic productivity-app conventions.
+The product should feel like a human executive/personal assistant that exists inside a conversationalinterface.
+The user should be able to tell it things naturally.
+They should not have to manage the assistant through forms, task lists, calendars, tags, databases, orcomplicated workflows.
+The assistant should understand what the user says, remember it, connect it to existing context, askquestions when necessary, identify conflicts, track commitments, and execute explicit instructions.
+1. THE CORE PRODUCT IDEA
+The fundamental interaction is:
+The user talks. The assistant understands and manages the resulting state.
+The user may enter:
+l
+free-form text
+l
+screenshots
+l
+photographs
+l
+PDFs
+l
+documents
+l
+eventually voice
+l
+eventually emails/messages forwarded into the system
+Examples:
+"Barkha needs to give me the article by 6."
+"Remind me at 5 to ask her if she hasn't sent it."
+"Barkha gave the article by 11."
+"She had a family emergency."
+"I finished the Hult poster."
+"Arun is handling the backend for the CRM."
+"Arun hasn't sent the schema yet."
+"I have a meeting with Karthik at 5 tomorrow."
+"Schedule Arun at 5 tomorrow."
+
+The assistant should interpret these statements and maintain a persistent model of the user's world.
+2. THIS IS NOT A PRODUCTIVITY APP
+Do NOT build this as:
+l
+Todoist with AI
+l
+Notion with AI
+l
+Google Calendar with AI
+l
+a chatbot with a task database
+l
+a generic "AI productivity assistant"
+The user should NOT have to:
+l
+create a task manually
+l
+select a category
+l
+select a project
+l
+choose a priority
+l
+open a calendar
+l
+mark a task complete
+l
+manually create a contact
+l
+manually create a reminder
+l
+organize information into folders
+The assistant should infer these structures from natural conversation.
+The interface may eventually expose these structures for inspection, but they should not be required fornormal interaction.
+3. THE CENTRAL PRODUCT PRINCIPLE
+Use this as the highest-level product rule:
+Don't make the user organize their life for the assistant. Make the assistant understand their life.
+The user should be able to dump information into the system exactly as they would tell a humanassistant.
+The assistant converts unstructured human communication into structured state.
+4. THE ASSISTANT IS NOT A LIFE COACH
+This is extremely important.
+The assistant should NOT give unsolicited productivity advice.
+
+If the user says:
+"I have an inflammation exam next Friday."
+The assistant should log the exam.
+It should NOT respond:
+"Here's a seven-day study plan."
+If the user says:
+"I haven't studied inflammation."
+It should store that context.
+It should NOT automatically lecture the user or create a study schedule.
+Only provide planning/advice when the user explicitly asks for it.
+For example:
+"I have an inflammation exam next Friday. Help me plan."
+Now planning is appropriate.
+The assistant manages the user's information and commitments.
+It does not attempt to manage the user's personality or life unless asked.
+5. INFORMATION VS ACTION
+The assistant must distinguish between statements that provide information and statements thatrequest action.
+INFORMATION
+User:
+"Barkha needs to give me the article by 6."
+The assistant should understand and record the commitment.
+ACTION
+User:
+"Remind me at 5 to ask Barkha."
+Create a reminder.
+COMPLETION UPDATE
+User:
+"Barkha gave the article at 11."
+Update the existing commitment.
+CONTEXT
+User:
+"She had a family emergency."
+
+Attach contextual information to the relevant commitment/event.
+QUESTION
+User:
+"What happened with Barkha's article?"
+Retrieve the relevant history.
+EXECUTION
+User:
+"Send Arun this."
+Execute through an authorized integration if available.
+Do not confuse these modes.
+6. COMMITMENTS ARE A CORE DATA MODEL
+Do NOT make "Task" the primary abstraction.
+Use a broader concept:
+COMMITMENT
+A commitment represents:
+Who is expected to do what, for whom, by when, and what eventually happened.
+This is fundamental to the application.
+Examples:
+Someone owes the user something
+"Barkha needs to give me the article by 6."
+l
+Owner: Barkha
+l
+Recipient: User
+l
+Object: Article
+l
+Expected: 6:00 PM
+l
+Status: Pending
+User owes someone something
+"I need to send Hult the final poster by Wednesday."
+l
+Owner: User
+l
+Recipient: Hult
+l
+Object: Final poster
+l
+Expected: Wednesday
+l
+Status: Pending
+User completes something
+"I finished the Hult poster."
+
+l
+Owner: User
+l
+Object: Hult poster
+l
+Status: Completed
+l
+Completed at: timestamp
+Someone completes something late
+"Barkha gave the article at 11."
+If expected time was 6 PM:
+l
+Expected: 6 PM
+l
+Completed: 11 PM
+l
+Status: Completed late
+l
+Delay: 5 hours
+The assistant should understand that the event represents a change in state rather than creating anunrelated new note.
+7. OWNERSHIP MATTERS
+The assistant must distinguish who owes whom.
+These statements are fundamentally different:
+"I need to send Barkha the article by 6."
+versus:
+"Barkha needs to send me the article by 6."
+The underlying commitment should explicitly represent:
+l
+owner
+l
+recipient
+l
+action/object
+l
+expected time
+l
+status
+This allows the assistant to track both:
+Things the user owes other people
+and
+Things other people owe the user
+This is one of the major differentiating features of the product.
+8. COMMITMENT LIFECYCLE
+A commitment can move through states such as:
+
+l
+Pending
+l
+In progress
+l
+Waiting
+l
+Waiting on someone
+l
+Due soon
+l
+Overdue
+l
+Completed
+l
+Completed late
+l
+Cancelled
+l
+Blocked
+l
+Superseded
+Do not require the user to manually select these states.
+Infer state from conversation and system events.
+Example:
+"Arun hasn't sent the schema."
+Waiting on Arun.
+If deadline passes:
+Overdue / waiting on Arun.
+If Arun sends it:
+"Arun sent the schema."
+Completed.
+9. PEOPLE ARE FIRST-CLASS ENTITIES
+The assistant must understand people over time.
+Example:
+Barkha
+l
+associated with MTTN
+l
+frequently coordinates interviews
+l
+has specific commitments
+l
+has conversations
+l
+is connected to projects
+l
+has a history of interactions with the user
+Arun
+l
+associated with Batore
+l
+handles backend
+l
+involved in CRM
+
+l
+has outstanding commitments
+The assistant should build relationships from explicit information.
+10. ASK ABOUT PEOPLE WHEN NECESSARY
+When a person is first introduced, the assistant can ask a short contextual question when thatinformation is useful.
+Example:
+User:
+"Karthik needs to send me the poster tomorrow."
+A:
+"Karthik from Hult?"
+User:
+"Yeah."
+Now associate Karthik with Hult.
+However, do not interrogate the user unnecessarily.
+If context is obvious, infer it.
+The principle is:
+Ask when the answer materially improves future understanding. Don't ask just because you can.
+11. AMBIGUITY HANDLING
+The assistant should ask clarification questions when ambiguity could cause an incorrect action ormemory.
+Example:
+User:
+"Send it to her tomorrow."
+A:
+"Who do you mean by 'her'?"
+If there are two Aruns:
+User:
+"Remind me to ask Arun about the poster."
+A:
+"Arun from Batore or Arun from MTTN?"
+If the context is unambiguous, do not ask.
+
+12. INFERENCE LEVELS
+Internally distinguish between:
+CONFIRMED
+Explicitly stated by the user.
+INFERRED
+Highly probable based on repeated context.
+UNCERTAIN
+Insufficient information.
+Never convert an uncertain inference into a confirmed fact without appropriate confirmation.
+Example:
+If the user repeatedly mentions Arun in relation to Batore backend work, the system may infer theassociation.
+But if there are multiple Aruns, ask.
+13. THE ASSISTANT SHOULD UNDERSTAND THE USER OVERTIME
+As the system accumulates information, it should build a useful model of:
+l
+projects
+l
+collaborators
+l
+recurring organizations
+l
+commitments
+l
+deadlines
+l
+communication patterns
+l
+explicit preferences
+l
+recurring workflows
+l
+relationships
+l
+working context
+However, avoid amateur psychological profiling.
+Do not make unsupported claims like:
+"You procrastinate because you fear failure."
+Instead use observable facts:
+"You've postponed this three times."
+The assistant can eventually understand patterns in the user's work, but should remain grounded inactual evidence.
+
+14. MEMORY MUST BE STRUCTURED
+Do NOT treat memory as simply an enormous chat transcript.
+Use structured entities plus semantic memory.
+Core entities:
+l
+User
+l
+Person
+l
+Organization
+l
+Project
+l
+Commitment
+l
+Event
+l
+Reminder
+l
+Conversation
+l
+Message
+l
+Document/File
+l
+Relationship
+l
+Workflow/Conditional rule
+l
+Memory
+15. RELATIONSHIP GRAPH
+The system should conceptually maintain a graph such as:
+User nnn works on \256 Batore n       nnn Arun \256 Backend n       nnn Karthik \256 CRM n       nnn Project X n nnn works with \256 MTTN n       nnn Barkha n       nnn Interview Candidate n nnn works with \256 Hult         nnn Karthik
+Relationships should have:
+l
+type
+l
+source
+l
+confidence
+l
+created_at
+l
+updated_at
+l
+optional expiration
+
+l
+historical versions
+This allows the assistant to understand context rather than merely retrieve keywords.
+16. MEMORY PROVENANCE
+Important memories should have provenance.
+Example:
+Fact: Arun handles Batore backend.
+Source: Conversation from September 7, 2026.
+Confidence: Confirmed.
+This allows the user to correct the assistant.
+17. MEMORY CORRECTION
+The user must be able to correct stored information conversationally.
+Example:
+A:
+"Arun handles the backend."
+User:
+"No, Karthik handles it now."
+The system should:
+Update the current relationship. Preserve relevant historical information. Mark Arun's previous role ashistorical if appropriate. Associate Karthik with the current role.
+Do not simply append contradictory facts forever.
+The memory system must understand temporal changes.
+18. TEMPORAL UNDERSTANDING
+The assistant must understand:
+l
+today
+l
+tomorrow
+l
+yesterday
+l
+tonight
+l
+this evening
+l
+next Friday
+
+l
+this week
+l
+by Wednesday
+l
+before the meeting
+l
+after Arun replies
+l
+in two hours
+l
+later
+Normalize timestamps internally.
+Use the user's timezone.
+Do not rely on vague text when scheduling actual actions.
+19. REMINDERS
+Reminders should be conversational.
+User:
+"Barkha needs to give the article by 6. Remind me at 5 to ask her."
+Create:
+l
+Commitment:
+l
+Barkha \256 article \256 user
+l
+Expected: 6 PM
+Reminder: 5 PM Action: Ask Barkha if article has not arrived.
+At 5 PM:
+"Barkha's article is due at 6 PM. Ask her if you haven't received it."
+If the user then says:
+"Barkha gave it at 11."
+Update the commitment.
+The user should NOT need to manually open a task or reminder screen.
+20. CONTEXT AFTER COMPLETION
+This is important.
+If the user says:
+"Barkha gave the article by 11."
+The assistant should recognize:
+l
+commitment existed
+l
+expected time was 6 PM
+l
+actual completion was 11 PM
+
+l
+commitment was completed late
+It may optionally ask:
+"Got it \227 she sent it at 11 PM, five hours late. Do you want to add any context for the delay?"
+This should be OPTIONAL.
+If the user says:
+"She had a family emergency."
+Attach that context.
+If the user says:
+"No."
+Do not continue asking.
+Do not make judgmental statements about Barkha.
+The system is recording context, not passing moral judgment.
+21. COMPLETING THE USER'S OWN WORK
+The user should be able to complete something simply by saying it.
+User:
+"Finished the Hult poster."
+The assistant should update the relevant commitment/task.
+No need to open:
+Projects \256 Hult \256 Tasks \256 Poster \256 Mark Complete
+The conversational interface IS the control interface.
+22. CONVERSATIONAL STATE UPDATES
+Every user message should potentially modify state.
+Example:
+User:
+"Arun still hasn't sent the schema."
+This should update:
+l
+Commitment:
+l
+Arun \256 schema \256 User
+l
+Status:
+l
+Waiting / overdue depending on deadline
+l
+Last observed:
+
+l
+Not received
+l
+Updated:
+l
+Current timestamp
+The assistant should not create duplicate commitments every time the user mentions them.
+Use entity resolution and semantic matching.
+23. DUPLICATE DETECTION
+If the user says:
+"I need to finish the poster."
+Then later:
+"Still need to finish that Hult poster."
+Do not create two independent tasks.
+Resolve them to the same underlying commitment where confidence is sufficient.
+24. CONFLICT DETECTION
+The assistant should detect meaningful conflicts.
+Example:
+Existing:
+5 PM \227 Hult meeting.
+User:
+"Schedule Arun at 5 tomorrow."
+A:
+"5 PM tomorrow conflicts with your Hult meeting. Should I move the call or keep both?"
+Do not automatically choose.
+Other conflicts:
+l
+overlapping meetings
+l
+impossible deadlines
+l
+contradictory commitments
+l
+duplicate events
+l
+contradictory people information
+l
+dependency conflicts
+The assistant should surface important conflicts without micromanaging.
+
+25. CONDITIONAL COMMITMENTS / WORKFLOWS
+Support natural conditional instructions.
+Example:
+"If Arun hasn't sent the schema by Friday, remind me."
+Represent:
+l
+Condition:
+l
+Schema not received from Arun
+l
+Deadline:
+l
+Friday
+l
+Action:
+l
+Remind user
+Another:
+"If Barkha doesn't reply by tomorrow, ask me whether I want to follow up."
+Another:
+"Let me know if the venue isn't confirmed by Wednesday."
+These are persistent rules.
+The assistant should evaluate them automatically.
+For MVP, focus on notifications/reminders.
+External autonomous actions can come later.
+26. PROACTIVE BEHAVIOUR
+The assistant should be proactive, but not annoying.
+Good:
+"Barkha's article is five hours overdue and you haven't marked it as received."
+Good:
+"You have a 5 PM meeting with Hult and you're trying to schedule Arun at the same time."
+Bad:
+"You have 17 tasks! Here's how to optimize your day!"
+Bad:
+"You should study now."
+Bad:
+"Would you like me to create a plan?" after every statement.
+Proactivity should be driven by actual relevance.
+
+27. THE ASSISTANT SHOULD NOT OVER-ASK
+Avoid confirmation fatigue.
+If the user says:
+"Finished the poster."
+Do not ask:
+"Would you like me to mark the poster as complete?"
+Just do it.
+If the user says:
+"Remind me at 6."
+and there is only one obvious pending item:
+Infer it if safe.
+If there are multiple possible things:
+Ask.
+Use this principle:
+Infer when safe. Ask when necessary. Never guess when guessing can cause a meaningful mistake.
+28. USER CONTROL
+The user should always be able to inspect and correct what the assistant believes.
+Potential commands:
+l
+"What do you know about Arun?"
+l
+"What am I waiting on?"
+l
+"What does Barkha owe me?"
+l
+"What do I owe Hult?"
+l
+"Forget that Arun works on backend."
+l
+"That's not Karthik from Hult."
+l
+"Show me everything pending for Batore."
+The system should retrieve structured state.
+29. THE PRIMARY UI
+The UI should be intentionally minimal.
+The primary experience should be a conversational space.
+Do NOT make a giant dashboard the home screen.
+
+Optional secondary views may exist:
+l
+Today
+l
+Commitments
+l
+People
+l
+Projects
+l
+Memory
+l
+Activity
+But these should be inspection surfaces, not mandatory workflows.
+The user should be able to operate the entire application conversationally.
+30. CONVERSATION DESIGN
+The assistant should feel like a competent human assistant.
+Prefer "Got it." over "I've successfully analyzed your input and updated the commitment database."
+Prefer "Karthik from Hult?" over "Please clarify which Karthik entity you are referring to."
+Prefer "5 PM conflicts with your Hult meeting." over "A scheduling conflict has been detected."
+The system can be technically sophisticated underneath while remaining conversational on thesurface.
+31. RESPONSE LENGTH
+Default to concise responses.
+The assistant should not repeat everything it understood unless useful.
+Example:
+User:
+"I finished the Hult poster."
+A:
+"Got it \227 Hult poster marked complete."
+Not a paragraph.
+When clarification or reasoning is necessary, provide enough context to make the decision.
+32. IMAGE INPUT
+Support image input in the architecture.
+Potential inputs:
+
+l
+screenshots
+l
+WhatsApp screenshots
+l
+event posters
+l
+documents
+l
+photographs
+l
+handwritten notes
+l
+schedules
+l
+design briefs
+The system should extract useful information.
+Example:
+User uploads an event poster.
+The assistant identifies:
+l
+event name
+l
+date
+l
+time
+l
+venue
+l
+organizers
+l
+people
+l
+deadlines
+But it should NOT automatically create a calendar event merely because an event was detected.
+Interpret first. Act only when appropriate.
+33. DOCUMENTS
+Eventually support:
+l
+PDF
+l
+DOCX
+l
+XLSX
+l
+TXT
+l
+images
+Documents should be associated with relevant projects, people, and commitments.
+Example:
+User:
+"This is the final Hult brief."
+Uploads PDF.
+The system associates it with:
+Hult \256 relevant project \256 brief.
+
+34. EXTERNAL INTEGRATIONS
+The architecture should eventually support:
+l
+Gmail
+l
+Google Calendar
+l
+Google Drive
+l
+messaging platforms where APIs permit
+l
+internal Batore systems
+l
+web search
+l
+documents
+l
+spreadsheets
+l
+file storage
+Potential actions:
+l
+"Draft an email to Arun."
+l
+"Send this to Arun."
+l
+"Check if Arun replied."
+l
+"Create a meeting."
+l
+"Find the file Karthik sent."
+l
+"Create a document from this."
+External actions must have proper permissions.
+Do not allow an LLM to arbitrarily perform consequential actions.
+35. PERMISSION MODEL
+Separate internal state changes from external actions.
+Internal state changes (generally low risk):
+l
+save memory
+l
+update commitment
+l
+create reminder
+l
+update project
+l
+store conversation
+External actions (higher risk):
+l
+send email
+l
+send message
+l
+modify calendar
+l
+delete file
+
+l
+publish something
+l
+submit something
+Build a permission system that supports:
+l
+one-time confirmation
+l
+persistent permission
+l
+permission by action type
+l
+permission revocation
+For example:
+"Always allow calendar creation."
+"Require confirmation before sending emails."
+36. TECHNICAL ARCHITECTURE
+Use a modular architecture: Conversation UI \256 API/Backend \256 Assistant Orchestrator, whichcoordinates the LLM/AI layer, the Memory Engine, and Tools/Actions. These converge on a StateLayer composed of a relational database, semantic memory, and an event log.
+37. LLM SHOULD NOT DIRECTLY MODIFY DATABASE
+Do not allow arbitrary model-generated database mutations.
+Use structured tool/function calls.
+Example:
+{  "action": "update_commitment",  "commitment_id": "...",  "changes": {    "status": "completed",    "completed_at": "..."  },  "confidence": 0.97}
+Validate the structured output.
+Then execute the mutation through application code.
+The LLM should propose state changes. The backend should validate and commit them.
+38. MEMORY ARCHITECTURE
+Use a hybrid architecture.
+Relational database, for deterministic state:
+
+l
+users
+l
+people
+l
+organizations
+l
+projects
+l
+commitments
+l
+reminders
+l
+events
+l
+relationships
+l
+workflows
+l
+permissions
+l
+messages
+l
+action logs
+Semantic/vector memory for contextual recall and unstructured understanding, layered on top of therelational core.
+
