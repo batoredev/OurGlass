@@ -184,3 +184,42 @@ Full rules: `.claude/rules/wat.md`
 ## 15. Final principle
 
 **Understand → Specify → Architect → Design → Build → Test → Attack → Review → Ship → Verify → Learn.**
+
+---
+
+## Project
+
+**Product:** Batore Personal Assistant — an internal-use conversational AI assistant. Full
+spec in `docs/SPEC.md`, execution plan in `docs/EXECUTION-PLAN.md`, locked decisions and
+research findings in `docs/DECISIONS.md`, phase checklist in `docs/PHASES.md`.
+
+**Stack:** TypeScript end-to-end, pnpm monorepo. `apps/web` (Next.js 16.3.4), `apps/api`
+(Fastify + `pg`), `packages/shared` (shared types), `packages/db` (schema/migrations, Phase 1),
+`packages/evals` (extraction eval harness, Phase 2). Postgres 17 + pgvector 0.8.6 via
+`docker-compose.yml`. See `docs/DECISIONS.md` for exact pinned versions and why (several
+depart from "latest" for verified compatibility reasons discovered at install/CI time).
+
+**Commands:** `pnpm install`, `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`,
+`pnpm dev` (root scripts, fan out per-package). `docker compose up postgres` for local DB.
+CI mirrors these in `.github/workflows/ci.yml`.
+
+**Default ownership map:** `packages/db/**` → `database-data-engineer` (sole owner per
+`docs/EXECUTION-PLAN.md`'s Mission 4 team). `apps/api/src/assistant/**` (Phase 2+) →
+`ai-agent-engineer`. Rest of `apps/api/**` → `backend-lead`. `apps/web/**` →
+`frontend-lead`, idle until Phase 5. Re-verify against `docs/PHASES.md` before each phase's
+team spawn — the map is real now that the paths exist.
+
+**Repo notes:** Initialized via the Company Claude OS v2 install pack from `~/.claude-os`.
+Baseline git commit created before agent-team files were added. Remote is
+`github.com/batoredev/OurGlass` (public); we hold WRITE, not ADMIN — see `docs/DECISIONS.md`
+open question 1 for what that blocks.
+
+## Installed skill ecosystems
+
+~931 skills installed at `~/.claude/skills/`:
+- Security practice: ~700+ skills across offensive (~240 incl. exploiting/attacking/pentest/C2), detection/SOC (~113), threat hunting (~40), DFIR/malware analysis (~102), threat intel, cloud/appsec/GRC/AI-sec/OT security
+- Design/frontend: ~79 skills (design systems, UI/UX, accessibility, frontend patterns)
+- Media/video: remotion + higgsfield (~20 skills)
+- gstack core: present at `~/.claude/skills/gstack`
+
+Agents use `find-skills` to resolve specific procedures — the library is not memorised. All major ecosystems referenced by the 46-agent roster appear present; no missing families detected in this pass.
