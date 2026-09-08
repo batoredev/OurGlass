@@ -235,14 +235,26 @@ new callers make exactly these paths reachable:
    added to the integration job, and `packages/db` gained its own `test:integration` script so
    `pnpm -r --if-present run test:integration` (also added to CI) exercises the merge-resolution
    regression suite there, not just `apps/api`'s.
-8. **No SQL has executed anywhere in this build.** No Docker and a hanging WSL Ubuntu blocked
-   every attempt (three independent agents reproduced the same hang), so all of the above is
-   verified by reading and by static typecheck/lint/unit tests only — never against a live
-   Postgres. The integration test files hard-fail (not silently skip) when `CI=true` and
-   `DATABASE_URL` is unset, specifically so this gap cannot masquerade as a pass. **CI's first
-   run of `pnpm db:migrate` against the real service container is the first actual execution of
-   any of this SQL — treat that run's result, not this locally-green report, as the real Phase 1
-   gate.**
+8. **No SQL had executed anywhere in this build** — until the first push to CI. The prediction
+   in this very list held: real bugs surfaced only once a live Postgres actually ran the SQL,
+   confirming the "static evidence only" gap was real rather than defensive hedging. Two CI-only
+   failures, both fixed the same day:
+   - **`CREATE UNIQUE INDEX ... DEFERRABLE INITIALLY DEFERRED` is not valid Postgres syntax** —
+     `DEFERRABLE` is a constraint property, not an index option. `entity_type_fields`'s
+     ordinal-uniqueness check moved to `ALTER TABLE ... ADD CONSTRAINT ... UNIQUE (...)
+     DEFERRABLE INITIALLY DEFERRED`, which achieves the identical deferred-uniqueness guarantee
+     the correct way. Nothing else in the six migrations used this pattern.
+   - **`apps/api` depends on `@ourglass/db`, but root `build:libs` only built
+     `@ourglass/shared`.** Passed locally only because a stale `packages/db/dist/` from earlier
+     manual builds masked it — exactly the class of false-green the team's own root-drift
+     concerns were about, just one level up the dependency graph. Fixed:
+     `build:libs` now builds both `@ourglass/shared` and `@ourglass/db`.
+
+   CI's own Postgres+pgvector service container is what caught the first bug; nothing short of
+   a real database execution would have. **Lesson for every future migration: a migration that
+   only ever ran through this team's own reading is not verified — schedule the first real run
+   against CI (or a working local Postgres) before calling a schema phase done, and expect a
+   syntax-level surprise even after thorough review.**
 
 ## Open questions (do not block Phase 1)
 

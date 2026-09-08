@@ -44,8 +44,16 @@ CREATE TABLE entity_type_fields (
 -- DEFERRABLE INITIALLY DEFERRED because reordering fields swaps two ordinals inside
 -- one transaction, and a non-deferrable constraint rejects the intermediate state.
 -- Users reorder fields. Do not "simplify" this to a plain unique index.
-CREATE UNIQUE INDEX entity_type_fields_ordinal_idx
-  ON entity_type_fields(entity_type_id, ordinal) DEFERRABLE INITIALLY DEFERRED;
+--
+-- Postgres has no `CREATE UNIQUE INDEX ... DEFERRABLE` — DEFERRABLE is a constraint
+-- property, not an index option, and that form is a syntax error (caught by CI's
+-- first real run against a live Postgres: "syntax error at or near DEFERRABLE").
+-- A deferrable uniqueness check must be a table CONSTRAINT, which Postgres then
+-- backs with its own unique index — so this achieves the identical guarantee via
+-- ALTER TABLE ADD CONSTRAINT instead of CREATE UNIQUE INDEX.
+ALTER TABLE entity_type_fields
+  ADD CONSTRAINT entity_type_fields_ordinal_key
+  UNIQUE (entity_type_id, ordinal) DEFERRABLE INITIALLY DEFERRED;
 
 CREATE TABLE entity_records (
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),

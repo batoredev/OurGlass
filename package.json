@@ -9,7 +9,7 @@
   },
   "packageManager": "pnpm@10.15.1",
   "scripts": {
-    "build:libs": "pnpm --filter @ourglass/shared run build",
+    "build:libs": "pnpm --filter @ourglass/shared --filter @ourglass/db run build",
     "typecheck": "pnpm run build:libs && pnpm -r --if-present run typecheck",
     "lint": "eslint . && pnpm -r --if-present run lint",
     "test": "pnpm run build:libs && pnpm -r --if-present run test",
