@@ -67,6 +67,13 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # apps/api imports @ourglass/db, which resolves through its built dist/ (its
+      # package.json "main" points there) — not through source. Without this,
+      # apps/api's integration tests fail with "Failed to resolve entry for package
+      # @ourglass/db" (found by CI's own first run). Same class of bug as the build
+      # job's build:libs fix, one job over: each CI job builds its own workspace,
+      # nothing carries over between them.
+      - run: pnpm run build:libs
       - run: pnpm db:migrate
       # Runs every package's test:integration script (currently packages/db's
       # merge-resolution suite and apps/api's tool-registry suite). Stays

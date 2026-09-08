@@ -255,6 +255,29 @@ new callers make exactly these paths reachable:
    only ever ran through this team's own reading is not verified — schedule the first real run
    against CI (or a working local Postgres) before calling a schema phase done, and expect a
    syntax-level surprise even after thorough review.**
+9. **A second CI round, two more bugs — both about each CI job building its own workspace
+   independently, with nothing carried over between jobs:**
+   - **`packages/db`'s `test` script ran the merge-resolution *integration* suite in the fast,
+     Docker-free job**, where the suite's own CI-hard-fail guard (`if (!DATABASE_URL &&
+     process.env.CI) throw`) correctly fired — because GitHub Actions sets `CI=true` in *every*
+     job, not only the one with a Postgres service container. The guard's intent (fail loudly if
+     the integration job silently skips) was right; its file just wasn't excluded from the
+     wrong job's test run. Fixed by giving `packages/db` the same `vitest.config.ts` /
+     `vitest.integration.config.ts` split `apps/api` already had — `test` excludes
+     `*.integration.test.ts`, a new `test:integration` script points at a dedicated config that
+     includes only them.
+   - **The `integration` job never ran `pnpm run build:libs`**, so `apps/api`'s integration
+     tests failed to resolve `@ourglass/db` (its `package.json` `main` points at compiled
+     `dist/`, which the `build` job's fix builds — but the `integration` job is a separate
+     runner that starts from a clean checkout and never runs that step). Fixed: `integration`
+     now runs `pnpm run build:libs` before `pnpm db:migrate`.
+
+   Neither bug was reachable locally with any command this team ran, because a developer's
+   local `pnpm install` + ad hoc builds leave residual `dist/` output across packages that a
+   fresh CI runner never has. **This is the general shape to watch for, not a one-off:** any
+   assumption that one job's setup step (a build, an install, an env var) carries into another
+   job is false in GitHub Actions — each job is a clean runner. Verify a fix by asking "does the
+   *specific job* that fails have this step," not "does CI have this step anywhere."
 
 ## Open questions (do not block Phase 1)
 
