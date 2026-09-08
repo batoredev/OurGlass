@@ -14,7 +14,9 @@
     "lint": "eslint . && pnpm -r --if-present run lint",
     "test": "pnpm run build:libs && pnpm -r --if-present run test",
     "build": "pnpm -r --if-present run build",
-    "dev": "pnpm --filter @ourglass/web --filter @ourglass/api -r run dev"
+    "dev": "pnpm --filter @ourglass/web --filter @ourglass/api -r run dev",
+    "db:migrate": "pnpm --filter @ourglass/db run migrate",
+    "db:reset": "pnpm --filter @ourglass/db run reset"
   },
   "devDependencies": {
     "typescript": "6.0.3",

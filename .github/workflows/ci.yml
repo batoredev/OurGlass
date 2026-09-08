@@ -67,6 +67,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Enable pgvector extension
-        run: psql "$DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS vector;"
-      - run: pnpm --filter @ourglass/api test:integration
+      - run: pnpm db:migrate
+      # Runs every package's test:integration script (currently packages/db's
+      # merge-resolution suite and apps/api's tool-registry suite). Stays
+      # correct as more packages add an integration lane.
+      - run: pnpm -r --if-present run test:integration

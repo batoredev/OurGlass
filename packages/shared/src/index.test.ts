@@ -3,7 +3,7 @@ import { OURGLASS_SCHEMA_VERSION, type HealthCheck } from "./index.js";
 
 describe("@ourglass/shared", () => {
   it("exposes a schema version", () => {
-    expect(OURGLASS_SCHEMA_VERSION).toBe(0);
+    expect(OURGLASS_SCHEMA_VERSION).toBe(1);
   });
 
   it("HealthCheck shape is usable", () => {

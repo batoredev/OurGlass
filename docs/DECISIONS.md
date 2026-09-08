@@ -190,6 +190,60 @@ grep of `docs/SPEC.md` and `docs/SPEC-raw.txt`: dynamic entity types appear in *
 User confirmed (asked directly): the schema-builder capability is wanted as designed — kept as
 Phase 1 scope, now correctly labelled as an owner addition rather than spec-derived.
 
+## Phase 1 build findings (Mission 4: `database-data-engineer` + `backend-lead` + `staff-code-reviewer`)
+
+Three teammates working in parallel — `schema`, `api`, and a read-only `reviewer` — built and
+cross-checked Phase 1 against `docs/PHASE-1-DESIGN.md`. All four typecheck/lint/test/build
+gates are green locally. Real bugs the review process caught before they mattered, all in code
+whose lossy path was unreachable from any current caller — worth carrying into Phase 2/3, since
+new callers make exactly these paths reachable:
+
+1. **Migrations live at `packages/db/migrations/**`, not repo-root `migrations/**`** as
+   `docs/EXECUTION-PLAN.md` originally stated. Co-locating with `node-pg-migrate` and its config
+   is the conventional layout for this tool; still entirely inside `database-data-engineer`'s
+   one owned glob (`packages/db/**`). `docs/PHASE-1-DESIGN.md` §7 corrected to match.
+2. **`node-pg-migrate@9` has no default export.** `import runner from "node-pg-migrate"`
+   resolves to `undefined` and fails only at call time — caught by inspection
+   (`Object.keys` on the installed module), not by a type error.
+3. **`USING ERRCODE = 'invalid_recursion'` is not a documented Postgres condition name.**
+   An unrecognized name fails `CREATE FUNCTION` itself. Replaced with the literal SQLSTATE
+   `'P0001'` in the cycle-guard `resolve_merged` raises.
+4. **The merge-inverse was silently lossy on a re-merge — the most serious finding.**
+   `mergePerson`/`mergeOrganization`/`mergeProject` originally used `RETURNING *` on the UPDATE,
+   which yields post-update state, so the captured "previous" pointer was already the *new*
+   value — undoing a second merge (A→B, then A→C) would have restored `NULL` instead of B. Per
+   `DECISIONS.md` #6/#9, a wrong merge inverse is the worst failure mode in this system. Fixed
+   with a self-join capturing `prev_merged_into_id`/`prev_t_invalid` in the same statement, and
+   `unmerge*` now takes both captured values as explicit parameters rather than defaulting them
+   — a default would silently un-merge a chain instead of restoring one link.
+5. **`invalidateCommitment`/`invalidatePerson` overwrote an already-set `t_invalid` with
+   `now()`**, destroying the recorded moment a fact actually stopped being true — a correctness
+   bug in the bitemporal design's own core promise (§2.1). Fixed to
+   `COALESCE($2::timestamptz, t_invalid, now())`, which preserves an existing invalidation while
+   still letting an explicit correction timestamp win. Note the asymmetry with `merge_person`'s
+   own timestamp columns, which correctly overwrite unconditionally — the two functions do
+   opposite things for a reason specific to each, annotated at both call sites so a later
+   "consistency fix" doesn't reintroduce either bug.
+6. **The `toThrow` false alarm.** A reviewer initially reported vitest 4.1.11's `toThrow`
+   broken for regex/string matchers repo-wide. Root cause: the reviewer's isolating probe held
+   the same (buggy) error-message string constant across all three matcher-form variants it
+   tested, so it read "one string bug reproduced three ways" as "three independent matcher
+   failures." Retracted after a properly varied re-test. No vitest issue exists; kept here as a
+   reminder that varying the wrong variable in an isolation test manufactures false generality.
+7. **CI gap from the `ci.yml:71` deletion.** Removing the explicit `CREATE EXTENSION vector`
+   step (per decision #8 above) left nothing running migrations in CI. Fixed: `pnpm db:migrate`
+   added to the integration job, and `packages/db` gained its own `test:integration` script so
+   `pnpm -r --if-present run test:integration` (also added to CI) exercises the merge-resolution
+   regression suite there, not just `apps/api`'s.
+8. **No SQL has executed anywhere in this build.** No Docker and a hanging WSL Ubuntu blocked
+   every attempt (three independent agents reproduced the same hang), so all of the above is
+   verified by reading and by static typecheck/lint/unit tests only — never against a live
+   Postgres. The integration test files hard-fail (not silently skip) when `CI=true` and
+   `DATABASE_URL` is unset, specifically so this gap cannot masquerade as a pass. **CI's first
+   run of `pnpm db:migrate` against the real service container is the first actual execution of
+   any of this SQL — treat that run's result, not this locally-green report, as the real Phase 1
+   gate.**
+
 ## Open questions (do not block Phase 1)
 
 1. Who has ADMIN on `batoredev/OurGlass`? Needed for branch protection and repo security

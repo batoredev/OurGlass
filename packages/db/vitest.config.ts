@@ -1,11 +1,12 @@
 import { defineConfig } from "vitest/config";
 
-// Phase 0: this package is a placeholder (see src/index.ts). Real tests
-// arrive in Phase 1 alongside the bitemporal schema and migrations.
-// passWithNoTests avoids a false-red CI until then.
+// Unit tests run everywhere. Integration tests (*.integration.test.ts) skip
+// themselves when DATABASE_URL is unset, keeping the fast lane Docker-free per
+// docs/PHASE-1-DESIGN.md §5 — a skip is expected locally, a FAILURE would be wrong
+// in CI's integration job, which does set DATABASE_URL.
 export default defineConfig({
   test: {
     environment: "node",
-    passWithNoTests: true,
+    include: ["test/**/*.test.ts"],
   },
 });

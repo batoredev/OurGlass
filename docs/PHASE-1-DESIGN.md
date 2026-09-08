@@ -780,7 +780,7 @@ agent-teams.md` §3). Never `/unfreeze` to reach across a boundary — message t
 
 | Role | Owns (glob) | Notes |
 |---|---|---|
-| `database-data-engineer` | `migrations/**`, `packages/db/**` | **Sole owner** of schema. Runs `/careful`. Publishes final table shape to `backend-lead` **before** backend starts. |
+| `database-data-engineer` | `packages/db/**` (migrations live at `packages/db/migrations/**`, not repo-root `migrations/**` — corrected during the build: co-locating with `node-pg-migrate` and its config is the more conventional layout for this tool, and it's still entirely inside the one owned glob) | **Sole owner** of schema. Runs `/careful`. Publishes final table shape to `backend-lead` **before** backend starts. |
 | `backend-lead` | `apps/api/src/**` | Tool registry, executor, repositories, undo. Excludes `apps/api/src/assistant/**` (reserved for `ai-agent-engineer`, idle in Phase 1). |
 | `backend-lead` | `packages/shared/src/**` | Shared types — the tool contract. Publish the moment it settles. |
 | *(unassigned)* | `apps/web/**` | **No frontend work in Phase 1.** Do not spawn `frontend-lead`. |

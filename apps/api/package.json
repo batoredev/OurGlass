@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@ourglass/shared": "workspace:*",
+    "@ourglass/db": "workspace:*",
     "@anthropic-ai/sdk": "0.124.0",
     "fastify": "^5.0.0",
     "pg": "^8.13.0"
