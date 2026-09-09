@@ -431,10 +431,11 @@ and the ingestion trust boundary in Phase 6.
 
 1. **Who has ADMIN on `batoredev/OurGlass`?** Branch protection and the security toggles are
    blocked without them. Everything else proceeds regardless — this gates step 7, not the build.
-2. **Model tier for extraction.** Opus asks for missing parameters; Sonnet may infer them.
-   Spec §27 demands "never guess when guessing can cause a meaningful mistake" — a documented
-   behavioural difference with a real cost delta. *Recommend Opus for extraction, a cheaper
-   tier for response generation.*
+2. ~~**Model tier for extraction.**~~ **Resolved: Sonnet and Haiku only, no Opus** (owner
+   decision). Extractor defaults to `claude-sonnet-5`. Spec §27's "never guess when guessing
+   can cause a meaningful mistake" is now enforced by the eval harness asserting
+   UNCERTAIN-when-ambiguous, rather than by relying on Opus's stronger tendency to ask. See
+   `docs/DECISIONS.md` for the full trade-off.
 3. **Timezone scope.** Single-timezone team, or multi-timezone from day one? Changes the schema.
 4. **Cost budget per message.** Unstated in the spec, and §22 means *every* message triggers
    extraction.

@@ -283,9 +283,15 @@ new callers make exactly these paths reachable:
 
 1. Who has ADMIN on `batoredev/OurGlass`? Needed for branch protection and repo security
    toggles.
-2. Model tier for the extraction stage — Opus asks for missing parameters, Sonnet may infer
-   them; spec §27 favors the model that asks. Recommend Opus for extraction, a cheaper tier for
-   response generation.
+2. ~~Model tier for the extraction stage~~ — **resolved by owner decision: Sonnet and Haiku
+   only, no Opus, anywhere in this product.** The extractor defaults to `claude-sonnet-5`
+   (`apps/api/src/assistant/extract.ts`), injectable so a Haiku cost experiment stays cheap.
+   The trade-off is recorded rather than hidden: Opus asks for a missing parameter where Sonnet
+   is likelier to infer one, and spec §27 ("never guess when guessing can cause a meaningful
+   mistake") is the reason that mattered. Since the model is no longer the safeguard, the eval
+   harness has to be — `packages/evals` must assert UNCERTAIN-when-ambiguous as a *behaviour*,
+   not assume the model volunteers it. If the live lane shows Sonnet inferring where it should
+   ask, the fix is a sharper system prompt and a fixture that pins it, not an Opus escalation.
 3. ~~Timezone scope~~ — **resolved, not blocking.** `timestamptz` everywhere plus
    `users.timezone` (default `Asia/Kolkata`) makes the schema indifferent to single- vs
    multi-timezone; that becomes a Phase 2 behaviour question, not a migration.

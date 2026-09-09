@@ -9,6 +9,7 @@
     "test:live": "vitest run --config vitest.live.config.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.124.0",
     "@ourglass/shared": "workspace:*"
   },
   "devDependencies": {
