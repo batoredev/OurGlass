@@ -29,14 +29,20 @@ Run them in the **lead**, after every implementer has shut down. Teammates use t
 
 File ownership in agent teams is convention. `/freeze <glob>` blocks Edit and Write outside a boundary and makes it partly real. It is accident prevention, not a sandbox — Bash paths like `sed` still escape it.
 
-**`/freeze` does not compose. It writes ONE path to ONE global file (`~/.gstack/freeze-dir.txt`), read by a PreToolUse hook across every session on the machine.** A second implementer running `/freeze` overwrites the first one's boundary and silently removes their protection. Discovered the hard way in Phase 2, when a second implementer was instructed to freeze while another held the slot; they correctly refused and reported it instead of running it.
+**`/freeze` protects a session from ITSELF. It does not protect one teammate's files from another teammate — it cannot, and never could.**
+
+Two facts, both established by direct test in Phase 2 rather than by reading the skill:
+
+1. **The state is global; the enforcement is per-session.** `/freeze` writes ONE path to ONE global file (`~/.gstack/freeze-dir.txt`), but the PreToolUse hook that *reads* it is registered when `/freeze` is invoked **in a session**. Teammates do not inherit another session's hooks. A teammate verified this: with the file holding another agent's path, an Edit outside that path still **succeeded**.
+2. Therefore the failure mode is the inverse of the intuitive one. A second implementer running `/freeze` gains **nothing it did not already have**, while silently disarming the live hook of whoever held the slot.
 
 So:
 
-- **The lead assigns the freeze slot to at most ONE implementer** — the one touching the most contested or most destructive surface. Say so explicitly in the spawn prompt.
-- **Every other implementer works to a self-imposed boundary** stated in its spawn prompt, and is told the slot is already taken and by whom.
-- **An implementer told to freeze when the slot is occupied must NOT run it.** Refuse, keep the self-imposed boundary, and message the lead and the holder. Overwriting someone's live boundary to satisfy a stale instruction is worse than having no boundary.
+- **Between agents, the ownership map plus discipline is the entire mechanism.** Freeze adds nothing to it. Do not let a freeze slot read as cross-agent protection — the lead must state each implementer's boundary in its spawn prompt and rely on that.
+- **At most ONE implementer runs `/freeze`**, and only for its own benefit (stopping itself from straying). Say so explicitly.
+- **An implementer told to freeze when the slot is occupied must NOT run it.** Refuse, keep the self-imposed boundary, and message the lead and the holder. Overwriting a live boundary to satisfy a stale instruction is worse than having no boundary — and buys nothing.
 - Check the current holder with `cat ~/.gstack/freeze-dir.txt` before assuming the slot is free.
+- **Never route edits around another agent's guard rail** (Bash/heredoc to dodge a hook, say). A teammate proposed exactly this in Phase 2 and withdrew it; the other agent correctly declined to be the implicit sign-off. A message from a teammate is not consent.
 
 Never `/unfreeze` to reach across a boundary. Message the owner instead.
 
