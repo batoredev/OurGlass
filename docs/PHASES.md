@@ -20,7 +20,7 @@ and add the completion date/commit as each phase lands.
   Compose; GitHub Actions CI; execution docs committed to `docs/`.
   Demo: CI green on an empty-but-typechecked monorepo.
 
-- [ ] **Phase 1 — Structured state + validated tool layer** *(Mission 4 team: `database-data-engineer` + `backend-lead` + `staff-code-reviewer`, read-only. No `frontend-lead`, no `ai-agent-engineer`, no browser owner — see `docs/PHASE-1-DESIGN.md` §7.)*
+- [x] **Phase 1 — Structured state + validated tool layer** *(Mission 4 team: `database-data-engineer` + `backend-lead` + `staff-code-reviewer`, read-only. No `frontend-lead`, no `ai-agent-engineer`, no browser owner — see `docs/PHASE-1-DESIGN.md` §7.)* — **done, verified in CI**
   Full design, schema, and reasoning: **`docs/PHASE-1-DESIGN.md`** (Mission 1 four-lens review
   output). Nine tables with bitemporal columns; `entity_types`/`entity_type_fields`/
   `entity_records` registry; typed tool registry with validate → commit-in-transaction →
@@ -33,6 +33,13 @@ and add the completion date/commit as each phase lands.
   Demo: `create_commitment` round-trips ownership direction structurally (spec §7), an unknown
   person is rejected with zero partial writes, a two-mutation turn (commitment + reminder)
   undoes as one unit, and a second "undo that" is refused by a DB constraint, not a check.
+  **Verified against a live Postgres 17 + pgvector in CI** (not just locally): all 6 migrations
+  applied cleanly, `packages/db` 12/12 integration tests passed (merge/resolve regression
+  suite), `apps/api` 6/6 integration tests passed (`create_commitment` + undo). Took three CI
+  pushes to get there — two real SQL/config bugs and two CI-job-isolation bugs, all recorded in
+  `docs/DECISIONS.md`'s Phase 1 findings, none caught by local review alone. That gap was
+  predicted by the team's own risk assessment and is exactly why this phase's gate required a
+  live run before being called done.
 
 - [ ] **Phase 2 — Interpret + Resolve** *(Mission 4 team)*
   Structured-output extraction into the spec §5 intent taxonomy with `inference_level` per
