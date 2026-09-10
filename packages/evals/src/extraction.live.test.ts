@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { Tool } from "@anthropic-ai/sdk/resources/messages";
 import {
   EXTRACTION_INPUT_SCHEMA,
+  EXTRACTION_MODEL,
   EXTRACTION_SYSTEM_PROMPT,
   EXTRACTION_TOOL_NAME,
   isExtraction,
@@ -23,7 +24,10 @@ describe.skipIf(!apiKey)("Phase 2 live extraction evals", () => {
     const failures: string[] = [];
     for (const fixture of EXTRACTION_FIXTURES) {
       const response = await client.messages.create({
-        model: "claude-sonnet-5",
+        // Imported, never a literal: this pin drifted twice in one session when the
+        // API and the eval lane each held their own copy. Eval numbers are
+        // unattributable if the two lanes measure different models.
+        model: EXTRACTION_MODEL,
         max_tokens: 1_200,
         system: EXTRACTION_SYSTEM_PROMPT,
         messages: [{ role: "user", content: fixture.utterance }],

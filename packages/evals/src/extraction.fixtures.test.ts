@@ -18,7 +18,7 @@
  * fixture set's own integrity and coverage.
  */
 import { describe, expect, it } from "vitest";
-import { INTENT_KINDS, isExtraction } from "@ourglass/shared";
+import { INTENT_KINDS, isExtraction, validateIntentCompleteness } from "@ourglass/shared";
 import type { IntentKind, TimeReferenceKind } from "@ourglass/shared";
 import { EXTRACTION_FIXTURES } from "./fixtures.js";
 import { matchesExpected } from "./match.js";
@@ -205,5 +205,73 @@ describe("comparator behaviour on the real fixture set", () => {
       const dropped = { intents: fixture.expected.intents.slice(1) };
       expect(matchesExpected(dropped, fixture.expected), fixture.id).toBe(false);
     }
+  });
+});
+
+describe("actionability (validateIntentCompleteness)", () => {
+  // This validator is the layer that now carries the weight the stronger model's
+  // ask-tendency used to (DECISIONS.md open question 2). It returns issues rather
+  // than throwing because the right response to a missing owner is to ASK the user
+  // (spec §11), not to error.
+
+  it("flags every UNCERTAIN-and-incomplete fixture as needing a question, never a silent write", () => {
+    // The pairing that matters: an intent that is both incomplete AND uncertain is
+    // exactly the shape Phase 3 must turn into a clarifying question.
+    for (const fixture of EXTRACTION_FIXTURES) {
+      for (const issue of validateIntentCompleteness(fixture.expected)) {
+        const intent = fixture.expected.intents[issue.intentIndex];
+        expect(intent, `${fixture.id}: issue points at a real intent`).toBeDefined();
+        expect(issue.sourceText, fixture.id).toBe(intent?.sourceText);
+      }
+    }
+  });
+
+  it("keeps commitment-bearing fixtures fully actionable", () => {
+    // Any fixture asserting a real commitment — both ownership slots filled — must
+    // carry everything Phase 1's NOT NULL columns need. If one of these ever goes
+    // incomplete, we would be asserting the model may emit an unwritable commitment.
+    const commitments = EXTRACTION_FIXTURES.filter((fixture) =>
+      fixture.expected.intents.some((intent) => intent.owner !== undefined && intent.recipient !== undefined),
+    );
+    expect(commitments.length).toBeGreaterThanOrEqual(8);
+
+    for (const fixture of commitments) {
+      const blocking = validateIntentCompleteness(fixture.expected).filter((issue) => {
+        const intent = fixture.expected.intents[issue.intentIndex];
+        // UNCERTAIN intents are exempt: being incomplete is the POINT of them.
+        // "Barkha finally sent it after dinner" has both ownership slots but an
+        // unresolved "it", so it is correctly incomplete AND correctly UNCERTAIN —
+        // Phase 3 asks what "it" was rather than writing a commitment with no object.
+        return intent?.owner !== undefined && intent.inferenceLevel !== "UNCERTAIN";
+      });
+      expect(blocking, `${fixture.id} asserts an unwritable CONFIRMED commitment`).toEqual([]);
+    }
+  });
+
+  it("documents the ownerless-information tension rather than hiding it", () => {
+    // KNOWN CONTRACT TENSION, deliberately asserted so it cannot drift silently.
+    //
+    // REQUIRED_INTENT_FIELDS marks `owner` required for ALL `information` intents,
+    // derived from `commitments.owner_id NOT NULL`. But not every `information`
+    // intent is a commitment: "The Hult meeting is cancelled" and "The CRM project
+    // needs a backend review" are ownerless statements of fact with no one who owes
+    // anything. They are correctly labelled and correctly ownerless.
+    //
+    // So these report a completeness issue while being RIGHT. Phase 3 must not treat
+    // an ownerless `information` intent as a failed extraction to re-ask about; it
+    // should record the fact and move on. If Phase 3 instead asks "who owns 'the
+    // Hult meeting is cancelled'?", this test is where the mismatch was written down.
+    const ownerlessInformation = EXTRACTION_FIXTURES.filter((fixture) =>
+      fixture.expected.intents.some(
+        (intent) => intent.kind === "information" && intent.owner === undefined,
+      ),
+    ).map((fixture) => fixture.id);
+
+    expect(ownerlessInformation).toEqual([
+      "blocked-dependency",
+      "project-information",
+      "cancelled-meeting",
+      "yesterday-context",
+    ]);
   });
 });
