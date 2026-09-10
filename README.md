@@ -98,9 +98,10 @@ because it needs a live database.
 ## Project status
 
 Phased build, features before UI. Current phase and full checklist:
-[`docs/PHASES.md`](docs/PHASES.md). Phase 0 (this scaffold + CI) is done; Phase 1 (schema +
-validated tool layer) is in progress — design in
-[`docs/PHASE-1-DESIGN.md`](docs/PHASE-1-DESIGN.md).
+[`docs/PHASES.md`](docs/PHASES.md). Phases 0 and 1 are done. Phase 2 provides the
+non-mutating interpretation and resolution layers; see
+[`docs/PHASE-2-DESIGN.md`](docs/PHASE-2-DESIGN.md). The end-to-end conversational loop and UI
+remain later phases.
 
 ## Contributing
 

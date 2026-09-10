@@ -12,9 +12,10 @@
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
-    "@ourglass/shared": "workspace:*",
-    "@ourglass/db": "workspace:*",
     "@anthropic-ai/sdk": "0.124.0",
+    "@ourglass/db": "workspace:*",
+    "@ourglass/shared": "workspace:*",
+    "chrono-node": "2.10.1",
     "fastify": "^5.0.0",
     "pg": "^8.13.0"
   },

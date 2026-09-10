@@ -70,6 +70,21 @@ export async function list(tx: Queryable): Promise<Person[]> {
 }
 
 /**
+ * Case-insensitive current-person lookup for Phase 2's resolver. This is a
+ * candidate lookup, not a claim that a display name is globally unique: callers
+ * must still apply the three-band policy before they use an id.
+ */
+export async function findByDisplayName(tx: Queryable, displayName: string): Promise<Person[]> {
+  const { rows } = await tx.query<Person>(
+    `SELECT * FROM people_current
+      WHERE lower(display_name) = lower($1)
+      ORDER BY display_name`,
+    [displayName.trim()],
+  );
+  return rows;
+}
+
+/**
  * READ SHAPE 2 — DEREFERENCE BY ID. "Who is this UUID?"
  *
  * Follows `merged_into_id` transitively to the survivor. A merged UUID returns the
