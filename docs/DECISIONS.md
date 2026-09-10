@@ -279,6 +279,41 @@ new callers make exactly these paths reachable:
    job is false in GitHub Actions — each job is a clean runner. Verify a fix by asking "does the
    *specific job* that fails have this step," not "does CI have this step anywhere."
 
+## Truncate-per-test isolation requires `fileParallelism: false`
+
+`PHASE-1-DESIGN.md` §5 chose TRUNCATE-between-tests over transaction-per-test, for a good
+reason: the tool layer's contract *is* "commit in a transaction", so wrapping each test in an
+outer transaction would test savepoint semantics rather than the shipped path.
+
+What that reasoning did not carry is a second, non-obvious constraint: **truncate-per-test is
+only safe within ONE file's serial `beforeEach` chain.** Vitest's `fileParallelism` defaults to
+`true`, so the moment a second integration file shares a `DATABASE_URL`, one file's
+table-clearing statement can fire between another file's commit and its own read-back.
+
+That is exactly what broke `main` after Phase 2. `apps/api` gained
+`resolve.integration.test.ts` as its second such integration file, and the ownership-direction
+assertion — the test that proves spec §7's core differentiator — began failing intermittently
+with `rows[0]` undefined **while `expect(result.ok).toBe(true)` passed on the line above**. The
+insert genuinely committed; the row was removed out from under the SELECT.
+
+**Two things this cost, both worth remembering:**
+
+1. **It looked like a date bug.** The failing test hardcodes `expected_at: "2026-09-07"`, and
+   the failure appeared on the 11th with no relevant intervening diff. That is a plausible
+   signature for the ambient-time class this repo had already hit twice (`forwardDate`, DST).
+   The lead's first hypothesis was the calendar, and it was **wrong** — a race is intermittent,
+   so "green on the 9th, red on the 11th" was scheduling luck, not the clock. The tell that
+   should have come first: `result.ok === true` with an empty read-back is a concurrency
+   signature, not a data one. Check concurrency before the calendar.
+2. **Grep found it; a reproduction proved it.** The mechanism was isolated with a two-file
+   timing probe run through the real config — file B observably started while file A was still
+   running, and strictly after it once `fileParallelism: false` was set. Same config, same
+   binary, before and after.
+
+Set on both `apps/api` and `packages/db` integration configs — the latter pre-emptively, since
+it has one integration file today and would inherit the hazard silently on gaining a second.
+Per-file schema isolation was considered and rejected as unwarranted machinery at this size.
+
 ## The recurring defect class: schema with no code path
 
 Five times now, a plan claim has turned out to be unsupported by the code, and every
