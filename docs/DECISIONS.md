@@ -279,6 +279,37 @@ new callers make exactly these paths reachable:
    job is false in GitHub Actions — each job is a clean runner. Verify a fix by asking "does the
    *specific job* that fails have this step," not "does CI have this step anywhere."
 
+## The recurring defect class: schema with no code path
+
+Five times now, a plan claim has turned out to be unsupported by the code, and every
+instance had the same shape: **a schema object that exists and typechecks, with nothing
+reaching it.** Typecheck passes, lint passes, tests pass — because no code references it,
+there is nothing to fail.
+
+Found so far (F1 by the Phase 3 scope review, F2–F5 while writing `PHASE-3-DESIGN.md`):
+
+| # | The claim | The reality |
+|---|---|---|
+| F1 | Phase 3 completes commitments | No tool completes one; `completed_at` and `completed_late` unreachable since migration 003 |
+| F2 | The assistant knows the user's timezone | Nothing reads `users.timezone`; no users repository, no seed row. Every test passes a literal |
+| F3 | "me" resolves to the user | `users` and `people` are unrelated tables — no FK, no `is_self`. **First-person pronouns are unresolvable**, and the demo sentence says "me" twice |
+| F4 | §20 context attaches to a commitment | `commitments` has no `notes` column; people/orgs/projects all do |
+| F5 | Messages and reminders have a repository layer | Neither does; `create-reminder.ts` writes raw SQL and says so in its own header |
+
+**Why this keeps happening:** the schema was designed in one pass (Phase 1) against the
+whole spec, while code arrives phase by phase. So unreferenced schema is the *expected*
+steady state, and "the column exists" reads as "the feature exists" to anyone reading the
+migration rather than the callers.
+
+**What actually catches it:** reading the code for the callers, not the schema for the
+columns. Grep for who *references* a table before assuming a phase can use it. This is now
+worth a `tools/` script — `ceo3` reached the same conclusion independently, noting that
+diffing registered tools against the mutations a phase's demo sentence implies would have
+caught F1 mechanically. That check would generalise to all five.
+
+**The rule for future phases:** before a build team spawns, verify each prerequisite the
+phase's demo sentence implies by finding the code path, not the schema object.
+
 ## Open questions (do not block Phase 1)
 
 1. Who has ADMIN on `batoredev/OurGlass`? Needed for branch protection and repo security
