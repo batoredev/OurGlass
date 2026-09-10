@@ -41,13 +41,33 @@ and add the completion date/commit as each phase lands.
   predicted by the team's own risk assessment and is exactly why this phase's gate required a
   live run before being called done.
 
-- [ ] **Phase 2 — Interpret + Resolve** *(Mission 4 team)*
+- [x] **Phase 2 — Interpret + Resolve** *(Mission 4 team)* — **done, verified in CI**
   Structured-output extraction into the spec §5 intent taxonomy with `inference_level` per
   intent. `chrono-node` time resolution, three-tier split. Entity resolution, three-band
   policy with hard vetoes. Duplicate detection (§23). Eval harness (`packages/evals/`) built
-  here, not deferred.
+  here, not deferred. Design: `docs/PHASE-2-DESIGN.md`.
   Demo: "Barkha needs to give me the article by 6. Remind me at 5 to ask her." produces one
   commitment and one reminder, correctly owned and correctly timed.
+  **A read-only staff review found 11 issues — 3 confirmed blockers — while all 8 of the
+  original unit tests passed.** That is `PHASE-1-DESIGN.md` §4.3's warning happening in
+  practice, and it is the strongest argument in this repo for the independent-review gate:
+  (1) `resolvePersonMention` auto-resolved "Arun" to one of two Aruns because the exact-match
+  query *replaced* rather than joined the fuzzy candidates — the wrong-merge direction
+  `DECISIONS.md` #9 names as the worst failure in the system, and the existing test passed
+  only because it bypassed the broken function; (2) a DST bug in the very code written to
+  prevent DST bugs, latent only because `Asia/Kolkata` has no DST; (3) `forwardDate: true`
+  dated past-tense completions into the future — spec §5's own completion example resolved
+  to *tomorrow*, and §20 computes lateness against it.
+  Verified in CI against live Postgres: `apps/api` integration went 6 → 11 tests, the 5 new
+  ones being the two-Aruns regression suite executing for the first time. 104 tests green
+  locally; typecheck, lint, and full build clean.
+  **The eval harness was rebuilt because the first one was hollow** — its fixture test
+  compared a value to itself, and its comparator treated a *fully reversed* owner/recipient
+  as a match. Now 69 hand-labelled fixtures and a comparator verified by mutation (reverting
+  it to the old logic fails 11 tests; restoring passes 37).
+  **Standing caveat:** none of this says anything about model behaviour. There is no recorded
+  model output in the repo. Only `pnpm test:live` (paid, manual, 69 calls) speaks to whether
+  Sonnet actually extracts correctly — and it has never been run.
 
 - [ ] **Phase 3 — Conversational loop + reminders** *(Mission 4 team)*
   Full four-stage orchestrator (Interpret → Resolve → Mutate → Respond). Reminder-firing
