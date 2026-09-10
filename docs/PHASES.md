@@ -75,6 +75,34 @@ and add the completion date/commit as each phase lands.
   (verified from the image's Dockerfile); default is an in-process poller, see
   `docs/DECISIONS.md`. Conditional rules (§25), flattened, evaluated against live state.
   Completion updates and late-completion context (§20, §21). Concise response style (§30, §31).
+
+  **Scope fixed by the Phase 3 review (`ceo3`), HOLD SCOPE mode.** Explicitly OUT: proactive
+  behaviour (§26) → Phase 4, it keys off "actual relevance" which is Phase 4's retrieval layer;
+  conflict detection (§24) → Phase 4; all UI (§29) → Phase 5; memory and §16/§17 correction →
+  Phase 4 (§17 *looks* conversational but is a memory mutation); §28 inspection queries —
+  classify the `question` intent and decline honestly rather than build lexical retrieval that
+  gets thrown away; §34 `execution` → Phase 7, gated by §35.
+
+  **Explicitly IN, because the demo sentence below is unreachable without them:**
+  `complete_commitment` and `update_commitment` tools, lateness derived in the tool layer
+  (never from model output), and context attachment (§20) as a note with message provenance.
+
+  > ⚠️ **The stated demo is unimplementable as of Phase 2.** Verified against the code, not the
+  > plan: `apps/api/src/tools/index.ts` registers only `create_commitment`, `create_reminder`,
+  > and `define_entity_type`; `packages/db/src/repositories/commitments.ts` exports no function
+  > that writes `completed_at` or transitions status. The `completed_late` enum value and the
+  > `completed_at` column exist (migration 003) with **no code path reaching them**. Building
+  > `complete_commitment` is therefore the first task of Phase 3, not an assumed prerequisite.
+  > Its inverse must capture pre-update status and `completed_at` via the self-join pattern —
+  > Phase 1 build finding #4 is exactly this bug.
+
+  **Respond stage decision (`ceo3`):** one Haiku call, tightly constrained — no tools, no DB
+  handle, so a hallucination produces a wrong sentence and never a wrong row. Templating alone
+  fails the two places the spec is most insistent, both inside this phase's demo: §20's optional
+  late-completion prompt (whose "don't keep asking" clause is conversational state, not string
+  formatting) and §30's "Karthik from Hult?" (choosing the natural disambiguating attribute is
+  judgement). A deterministic template fallback is **mandatory** — the mutation has already
+  committed, so a cosmetic model failure must not 500.
   Demo: the spec's own Barkha/Hult/Arun narratives end-to-end, including "Barkha gave the
   article at 11" correctly producing `completed_late` with a 5-hour delay.
 
