@@ -724,9 +724,22 @@ match nothing. This is the SQL-level twin of the `?? null` fix already commented
 
 | Outcome | Behaviour |
 |---|---|
-| `auto_match` (≥0.92) | Complete it. Reply per §31: *"Got it — Hult poster marked complete."* |
+| `auto_match` (≥0.92) | Complete it. Reply per §31: *"Got it — Hult poster marked complete."* **Near-unreachable by construction — see the note below. Do not plan on it firing.** |
 | `ask` (0.65–0.92, or several in band) | **Ask, commit nothing for this intent.** *"Which one — the Hult poster or the CRM deck?"* Per §3.3 this intent is blocked; anything depending on it is blocked too. |
 | `create` / zero candidates | **Do not create a completed commitment. Ask.** See below. |
+
+> **`auto_match` almost never fires for completions, and that is deliberate.** It requires
+> the two content-token sets to be **identical** — one extra content token caps a two-token
+> match at `0.7·1.0 + 0.3·(2/3) = 0.900`, below the 0.92 threshold. Measured against the
+> real scorer: `"give me the article"` vs `"the article"` scores **0.850**, and
+> `"the Hult poster"` vs `"the poster"` also **0.850**. Both ask.
+>
+> So **`ask` is the expected band for completion matching**, not an edge case, and §10's
+> demo is two turns because of it. Do not "fix" this by lowering `AUTO_THRESHOLD` (§4.1
+> forbids it) or by auto-completing a lone surviving candidate (§10 rejects it — the vetoes
+> narrow the field, they do not confirm intent, and a wrongly-completed commitment fails
+> silently by vanishing from *"what am I waiting on"*). The band table above is pinned as a
+> unit test; change it deliberately, never to make a test pass.
 
 **Zero matches is the interesting case, and the answer is "ask", not "create".**
 
@@ -1358,6 +1371,56 @@ thorough review; that has now happened in both prior schema phases.
 The phase demo is the spec's own Barkha narrative end-to-end, with
 *"Barkha gave the article at 11"* producing `completed_late` and a five-hour delay —
 **run by a human through §9's endpoint, not only asserted in CI.**
+
+**The completion is TWO turns, and that is the correct behaviour — not a degraded demo.**
+
+```
+> Barkha needs to give me the article by 6. Remind me at 5 to ask her.
+  Noted - Barkha owes you the article by 6 PM. Reminder set for 5 PM.
+
+> Barkha gave the article at 11.
+  Which one - "give me the article", due 6 PM?
+
+> Yes.
+  Got it - marked complete, five hours late.
+```
+
+The middle turn is not a bug to be tuned away. Completion `auto_match` requires the two
+content-token sets to be **identical**, so it fires only when the user repeats the stored
+`object_text` verbatim modulo stopwords. Measured against the real scorer (§4.2's pinned
+test records these):
+
+| stored `object_text` | user says | score | band |
+|---|---|---|---|
+| `the article` | `the article` | 1.000 | `auto_match` |
+| `give me the article` | `the article` | 0.850 | **`ask`** |
+| `the Hult poster` | `the poster` | 0.850 | **`ask`** |
+| `the article by 6` | `the article` | 0.800 | **`ask`** |
+| `the piece` | `the article` | 0.000 | `create` |
+
+One extra content token caps a two-token match at `0.7·1.0 + 0.3·(2/3) = 0.900`, under the
+0.92 threshold. Since the demo's own first sentence plausibly stores `"give me the
+article"`, **the ask path is the expected path**, not an edge case.
+
+Asking here is spec §27 working, not failing: *"Infer when safe. Ask when necessary. Never
+guess when guessing can cause a meaningful mistake."* Marking the wrong commitment complete
+is a meaningful mistake, and a near-invisible one — a wrongly-completed commitment silently
+stops appearing in *"what am I waiting on"*, the §28 surface a user would rely on to catch it.
+
+> **Rejected: auto-completing when exactly one candidate survives the vetoes.** Tempting —
+> the owner/recipient vetoes already did the hard discrimination, so "there is nothing else
+> it could mean" feels safe. It is still a guessed write. The vetoes narrowed the field;
+> they did not confirm intent. `DECISIONS.md` #9 is unambiguous that a wrong write is the
+> worst outcome in this system, and this one fails silently. Do **not** implement it, and
+> do **not** lower `AUTO_THRESHOLD` to make the demo one turn — §4.1 already forbids
+> exactly that, and the demo script above is the honest alternative.
+>
+> Found during the build by `ai-agent-engineer` and `staff-code-reviewer` independently,
+> and re-derived by the lead before the decision. The code was never wrong; §4.2 presented
+> `auto_match` as a live band when the arithmetic makes it near-unreachable, and this
+> section's acceptance criterion was written as though the auto path would fire. **A
+> threshold band that is unreachable by construction is a documentation defect even when
+> every line of code is correct.**
 
 **Standing caveat, carried forward from Phase 2 and still true:** none of the above says
 anything about model behaviour. There is still no recorded model output in the repo, and
