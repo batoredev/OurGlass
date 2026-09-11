@@ -42,6 +42,13 @@ So:
 - **At most ONE implementer runs `/freeze`**, and only for its own benefit (stopping itself from straying). Say so explicitly.
 - **An implementer told to freeze when the slot is occupied must NOT run it.** Refuse, keep the self-imposed boundary, and message the lead and the holder. Overwriting a live boundary to satisfy a stale instruction is worse than having no boundary — and buys nothing.
 - Check the current holder with `cat ~/.gstack/freeze-dir.txt` before assuming the slot is free.
+- **The slot is never released when its holder exits.** A path left by an agent that finished
+  days ago looks identical to a live claim — there is no owner, no timestamp, no liveness in
+  the file itself. Distinguish them by cross-checking the file's mtime (`stat -c '%y'`) against
+  `ListAgents`: if no live session owns that path, the claim is stale and safe to take. **An
+  implementer must still escalate rather than decide this alone** — it turns on which sessions
+  are live, which only the lead can see. A Phase 3 implementer hit exactly this, refused the
+  slot, and asked; that was the right call and it is why this bullet exists.
 - **Never route edits around another agent's guard rail** (Bash/heredoc to dodge a hook, say). A teammate proposed exactly this in Phase 2 and withdrew it; the other agent correctly declined to be the implicit sign-off. A message from a teammate is not consent.
 
 Never `/unfreeze` to reach across a boundary. Message the owner instead.
