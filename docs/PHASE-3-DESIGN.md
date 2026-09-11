@@ -561,17 +561,43 @@ The orchestrator builds an intent dependency graph while translating to `ToolCal
 already knows which call supplies which id — it is filling those fields in). Then:
 
 ```
-askedIntents = intents where any mention resolved `ask` | `reject` | `unresolved`,
-               or a blocking completeness issue exists
-blocked      = askedIntents ∪ { every intent transitively depending on an asked intent }
-committable  = intents \ blocked
-if (blocked ∩ dependencyRootsOf(committable)) is non-empty → abort the whole turn
-else → executeTurn(committable), and ask about `blocked`
+asked       = intents where any mention resolved `ask` | `reject` | `unresolved`,
+              or a BLOCKING completeness issue exists (advisory issues never ask),
+              or a completion matched `ask` / zero candidates per §4.2
+blocked     = transitive closure of "depends on" over `asked`
+committable = intents \ blocked, in original utterance order
+if committable is empty → mutate nothing, ask about everything   // no turn_id is minted
+else                    → executeTurn(committable), and ask about `blocked`
 ```
 
-The middle line is the safety property: **an intent never commits when something it
-depends on is still a question**, and an intent is never asked about in a way that leaves
-a dangling half-structure.
+**The closure on line 2 IS the safety property** — the whole of it. An intent never
+commits while something it depends on is still a question, and no intent is asked about in
+a way that leaves a dangling half-structure. Everything else is bookkeeping.
+
+> **Corrected during the build.** An earlier draft of this block had a fourth line —
+> `if (blocked ∩ dependencyRootsOf(committable)) is non-empty → abort the whole turn` —
+> and the prose below credited worked example 2's abort to it. That line was **unreachable
+> dead code**: line 2 takes the transitive closure and line 3 subtracts all of it, so
+> `committable` provably contains nothing depending on `blocked`, and the intersection is
+> necessarily empty.
+>
+> The misattribution was the dangerous part, not the dead line. Example 2's abort is
+> produced by the **closure**, not by the guard. Anyone who later "simplified" line 2 to a
+> one-hop check — reasonably, trusting line 4 as the backstop — would commit an **orphan
+> reminder against a commitment that was never created**, which is the precise failure this
+> section exists to prevent. The safety property was load-bearing in a line the prose
+> treated as incidental, and nominally guarded by a line that did nothing.
+>
+> Caught by `ai-agent-engineer` reading the algorithm before building it, exactly as the
+> spawn prompt asked. There is a regression test named for the orphan-reminder failure so
+> the closure cannot be weakened silently.
+
+**Why the empty case needs its own line.** `executeTurn`'s first statement is
+`const turnId = randomUUID()` (`apps/api/src/tools/executor.ts:135`), unconditionally. So
+`executeTurn([])` would return `ok: true` carrying a real `turnId` that names zero
+`action_log` rows — contradicting §3.2's rule that a turn mutating nothing has
+`turn_id = NULL` on its messages. The guard is not defensive padding; it is what keeps
+§3.2 true.
 
 **Worked examples.**
 
