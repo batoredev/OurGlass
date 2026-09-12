@@ -628,13 +628,46 @@ suite("Phase 3 schema and repositories", () => {
     });
 
     it("listRecent returns the NEWEST messages, oldest-first", async () => {
-      await withTransaction(pool, async (tx) => {
-        for (const body of ["one", "two", "three"]) {
-          await messages.createMessage(tx, { role: "user", body });
-        }
-      });
+      // ONE TRANSACTION PER MESSAGE, and that is not incidental setup.
+      //
+      // `t_created` defaults to `now()`, which in Postgres is TRANSACTION
+      // start time, not statement time. Three inserts inside one transaction
+      // therefore share a byte-identical `t_created`, the `ORDER BY t_created
+      // DESC, id DESC` tiebreak falls through to random UUID order, and the
+      // assertion below becomes a coin flip. It failed in CI exactly that way
+      // (returned ["three","one"]) while passing every local reasoning check.
+      //
+      // Separate transactions is also what PRODUCTION does: runTurn writes the
+      // user message and the assistant message in two distinct
+      // `withTransaction` calls (orchestrator.ts §3.2 steps 1 and 7), so this
+      // now exercises the real ordering rather than an arrangement the app
+      // never creates. See the ordering caveat on `listRecent` itself.
+      for (const body of ["one", "two", "three"]) {
+        await withTransaction(pool, (tx) => messages.createMessage(tx, { role: "user", body }));
+      }
       const recent = await messages.listRecent(pool, 2);
       expect(recent.map((m) => m.body)).toEqual(["two", "three"]);
+    });
+
+    it("orders messages written in ONE transaction by id, not by time", async () => {
+      // The honest statement of the limitation above, asserted rather than
+      // only commented. A same-transaction batch shares one `t_created`, so
+      // the only remaining order is `id DESC` — arbitrary, since ids are
+      // random UUIDs. This test does not claim an order; it claims the SET is
+      // right and the count is right, which is all `listRecent` can promise
+      // for a batch the caller wrote atomically.
+      const bodies = ["alpha", "beta", "gamma"];
+      await withTransaction(pool, async (tx) => {
+        for (const body of bodies) await messages.createMessage(tx, { role: "user", body });
+      });
+      const recent = await messages.listRecent(pool, 3);
+      expect(recent).toHaveLength(3);
+      expect([...recent.map((m) => m.body)].sort()).toEqual([...bodies].sort());
+      // All three share one t_created — this is the property that makes the
+      // order arbitrary, stated directly so a future change to the default
+      // (statement_timestamp(), say) fails here and prompts a re-read.
+      const stamps = new Set(recent.map((m) => m.t_created.toISOString()));
+      expect(stamps.size).toBe(1);
     });
   });
 

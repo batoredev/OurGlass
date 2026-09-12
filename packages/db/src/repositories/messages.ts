@@ -124,7 +124,21 @@ export async function setTurnId(
   return { message: message as Message, previousTurnId: prev_turn_id };
 }
 
-/** Recent conversation, newest last — the shape a transcript is rendered in. */
+/**
+ * Recent conversation, newest last — the shape a transcript is rendered in.
+ *
+ * ORDERING CAVEAT, found in CI rather than review: `t_created` defaults to
+ * `now()`, which in Postgres is TRANSACTION start time, not statement time.
+ * Messages inserted inside ONE transaction therefore share a byte-identical
+ * `t_created`, and the `id DESC` tiebreak below is arbitrary because ids are
+ * random UUIDs — so a same-transaction batch comes back in no meaningful
+ * order. This is not a bug to fix here: production never creates that
+ * arrangement (runTurn writes the user and assistant messages in two separate
+ * transactions, orchestrator.ts §3.2 steps 1 and 7), and changing the shared
+ * bitemporal default to `statement_timestamp()` would alter every table in
+ * the schema to serve one read. Callers batching messages atomically and
+ * needing a stable order must supply it themselves.
+ */
 export async function listRecent(
   tx: Queryable,
   limit = 50,
