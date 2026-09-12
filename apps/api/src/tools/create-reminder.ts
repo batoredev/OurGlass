@@ -16,6 +16,7 @@
  */
 import type { LoggedMutation, Result, ToolContext, ToolDefinition, ToolError } from "@ourglass/shared";
 import { err, ok } from "@ourglass/shared";
+import { reminders } from "@ourglass/db";
 import { registerInverseHandler } from "./inverses.js";
 
 export interface CreateReminderRawInput {
@@ -175,12 +176,55 @@ export const createReminderTool: ToolDefinition<CreateReminderInput, CreateRemin
   commit,
 };
 
-registerInverseHandler("reminders", async (tx, targetId) => {
+// ---------------------------------------------------------------------------
+// The `reminders` inverse handler — ONE registration for the whole table.
+//
+// `registerInverseHandler` THROWS on a duplicate table key, so this is a
+// startup crash rather than a test failure if two tools each register one.
+// fire_reminder (Phase 3) mutates this same table, so the handler branches on
+// the SHAPE of inversePatch, exactly as create-commitment.ts §1.3 does for
+// `commitments` and for the same recorded reason: undoTurn reads
+// `target_table` out of action_log and never passes `tool_name`, so re-keying
+// by tool name would both touch CI-verified Phase 1 executor code and couple
+// undo to tool NAMES — renaming a tool later would silently orphan historical
+// action_log rows.
+//
+//   `{ firedAt }` -> fire_reminder's inverse: reset fired_at to the prior value.
+//   `{ id }`      -> create_reminder's inverse: invalidate.
+//
+// An unrecognised shape THROWS. A silent no-op here would report a successful
+// undo having reversed nothing, which is worse than a loud failure.
+// ---------------------------------------------------------------------------
+registerInverseHandler("reminders", async (tx, targetId, inversePatch) => {
   if (!targetId) return;
-  // INVALIDATE, NEVER DELETE — no reminders repository exists yet to call,
-  // so this issues the same UPDATE pattern commitments.invalidateCommitment
-  // uses (packages/db/src/repositories/commitments.ts).
-  await tx.query(`UPDATE reminders SET t_invalid = COALESCE(t_invalid, now()) WHERE id = $1`, [
-    targetId,
-  ]);
+  if (inversePatch === null || typeof inversePatch !== "object") {
+    throw new Error(
+      `Unrecognized reminders inverse_patch for target ${targetId}: ${JSON.stringify(inversePatch)}`,
+    );
+  }
+  const patch: object = inversePatch;
+
+  if ("firedAt" in patch) {
+    // fire_reminder's inverse. The prior value is applied with NO DEFAULT:
+    // defaulting to null would restore "never fired", which is correct only
+    // for undoing a FIRST firing, not a re-firing after an earlier undo.
+    const { firedAt } = patch as { readonly firedAt: string | null };
+    await reminders.unfireReminder(tx, targetId, firedAt === null ? null : new Date(firedAt));
+    return;
+  }
+
+  if ("id" in patch) {
+    // create_reminder's inverse: invalidate. Now goes through the repository
+    // — this previously issued raw SQL with a comment saying no reminders
+    // repository existed yet. It does (packages/db, Phase 3), and
+    // invalidateReminder is idempotent on an already-invalid row, so a second
+    // undo reaching here is a no-op rather than an overwrite of a legitimate
+    // earlier t_invalid.
+    await reminders.invalidateReminder(tx, targetId);
+    return;
+  }
+
+  throw new Error(
+    `Unrecognized reminders inverse_patch shape for target ${targetId}: ${JSON.stringify(inversePatch)}`,
+  );
 });

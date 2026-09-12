@@ -10,6 +10,7 @@ import { createReminderTool } from "./create-reminder.js";
 import { defineEntityTypeTool } from "./define-entity-type.js";
 import { completeCommitmentTool } from "./complete-commitment.js";
 import { updateCommitmentTool } from "./update-commitment.js";
+import { fireReminderTool } from "./fire-reminder.js";
 
 /**
  * EVERY tool the orchestrator can emit must appear here.
@@ -31,6 +32,11 @@ export function buildToolRegistry(): ToolRegistry {
   registry.register(defineEntityTypeTool);
   registry.register(completeCommitmentTool);
   registry.register(updateCommitmentTool);
+  // Called only by the reminder poller (src/reminders/poller.ts), never from a
+  // conversational turn — but registered here like any other tool, because the
+  // poller drives it through the same executeTurn path so the firing lands in
+  // action_log with an inverse (§6.3).
+  registry.register(fireReminderTool);
   return registry;
 }
 
