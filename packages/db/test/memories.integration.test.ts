@@ -200,25 +200,61 @@ suite("memories (integration)", () => {
       });
     });
 
-    it("returns the FULL filtered set, not the ~4 rows the default would give", async () => {
-      // ⚠ THE TEST THE PHASE TURNS ON.
+    it("actually uses the HNSW index — otherwise the recall test below is vacuous", async () => {
+      // ⚠ THE GUARD ON THE GUARD, and it exists because the obvious version of
+      // this suite was PROVEN DECORATIVE.
       //
-      // Without `SET LOCAL hnsw.iterative_scan`, pgvector scans the index for
+      // The recall test below was first written with a 200-row fixture and no
+      // plan assertion. A deliberate mutation — removing `SET LOCAL
+      // hnsw.iterative_scan` from `searchSemantic` — was pushed to CI to
+      // confirm the test caught it. CI STAYED GREEN. The test was passing for
+      // the wrong reason: at that size Postgres ignores the HNSW index and
+      // sequential-scans, which filters correctly and returns all 20 rows
+      // whether or not iterative_scan is set.
+      //
+      // So recall alone cannot prove the setting matters. This asserts the
+      // PLAN first: if the query is not going through the index, the test
+      // below is measuring nothing and must fail loudly rather than pass
+      // quietly. `enable_seqscan = off` forces the planner's hand so the
+      // assertion is about capability, not about cost estimates that shift
+      // with table size and planner version.
+      const plan = await withTransaction(pool, async (tx) => {
+        await tx.query(`SET LOCAL enable_seqscan = off`);
+        await tx.query(`SET LOCAL hnsw.iterative_scan = 'relaxed_order'`);
+        const { rows } = await tx.query<{ "QUERY PLAN": string }>(
+          `EXPLAIN SELECT id FROM memories_current
+            WHERE embedding IS NOT NULL AND subject_kind = 'person' AND subject_id = $1::uuid
+            ORDER BY embedding <=> $2::vector
+            LIMIT 20`,
+          [SUBJECT_ID, JSON.stringify(syntheticVector(0))],
+        );
+        return rows.map((r) => r["QUERY PLAN"]).join("\n");
+      });
+
+      expect(plan).toMatch(/Index Scan using memories_embedding_idx/i);
+    });
+
+    it("returns the FULL filtered set under the index, not the ~4 rows the default gives", async () => {
+      // THE RECALL CLAIM, now made against a plan the test above pins to the
+      // index. `enable_seqscan = off` is what makes the assertion meaningful
+      // at this fixture size: with a sequential scan the filter is applied
+      // per-row and recall is trivially perfect, which is exactly how the
+      // first version of this test passed with the setting removed.
+      //
+      // With the index and WITHOUT iterative_scan, pgvector collects
       // ef_search (40) candidates and only THEN applies `subject_id = $1`.
-      // With 10% selectivity that leaves ~4 rows — returned successfully, so
-      // nothing anywhere reports a problem.
-      //
-      // Verified by mutation: removing the SET LOCAL from searchSemantic must
-      // make this go red. If it does not, the fixture is too small and this
-      // test is decorative.
-      const found = await withTransaction(pool, (tx) =>
-        memories.searchSemantic(
+      // At 10% selectivity that leaves ~4 of the 20 — returned successfully,
+      // with no error and nothing to distinguish it from "there is nothing
+      // here".
+      const found = await withTransaction(pool, async (tx) => {
+        await tx.query(`SET LOCAL enable_seqscan = off`);
+        return memories.searchSemantic(
           tx,
           syntheticVector(0),
           { subjectKind: "person", subjectId: SUBJECT_ID },
           20,
-        ),
-      );
+        );
+      });
 
       expect(found).toHaveLength(20);
       expect(found.every((m) => m.subject_id === SUBJECT_ID)).toBe(true);
