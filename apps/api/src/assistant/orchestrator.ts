@@ -533,11 +533,15 @@ async function planOneIntent(
       declined.push("I can't do things outside this conversation yet.");
       break;
 
-    case "context":
-      // F4 (commitment_notes / attach_context) is api3's tool and is not
-      // wired here yet. Declining honestly beats silently dropping it.
-      declined.push("I've noted that, but I can't attach context to a commitment yet.");
+    case "context": {
+      // §20 context attachment: "She had a family emergency."
+      const plan = await planContext(intent, ctx);
+      questions.push(...plan.questions);
+      calls.push(...plan.calls);
+      facts.push(...plan.facts);
+      declined.push(...(plan.declined ?? []));
       break;
+    }
 
     case "completion_update": {
       const plan = await planCompletion(intent, ctx);
@@ -591,6 +595,13 @@ async function planOneIntent(
 }
 
 interface IntentPlan {
+  /**
+   * Honest declines this plan produced. Only `context` uses it today: an
+   * unattachable note is NOT a question (asking "which commitment?" about a
+   * passing remark is the over-asking §27 forbids) and NOT a silent drop
+   * either — the user said something and deserves to know it did not land.
+   */
+  readonly declined?: readonly string[];
   readonly calls: readonly ToolCall[];
   readonly facts: readonly CommittedFact[];
   readonly questions: readonly string[];
@@ -715,6 +726,92 @@ async function planCompletion(intent: ExtractedIntent, ctx: PlanContext): Promis
         latenessMs: null,
       },
     ],
+  };
+}
+
+/**
+ * A `context` intent: "She had a family emergency." (§20, finding F4.)
+ *
+ * Attaches the user's words VERBATIM to the commitment they are about. The
+ * matching reuses `decideCompletion` — the same owner/recipient/object
+ * scorer the completion path uses — rather than a second, subtly different
+ * matcher. One scorer means one set of thresholds to reason about, and it
+ * inherits the hard vetoes (DECISIONS.md #6) for free.
+ *
+ * AN UNMATCHED NOTE DECLINES; IT DOES NOT ASK. Context arrives as an aside
+ * ("she had a family emergency") far more often than as a command, so
+ * interrogating the user about which commitment a passing remark belongs to
+ * is exactly the confirmation fatigue §27 forbids. But it is not dropped
+ * silently either: the user said something, and the reply says plainly that
+ * it was not attached.
+ *
+ * Contrast with `planCompletion`, which DOES ask on a miss — and correctly,
+ * because a completion is a WRITE to an existing commitment's status. Getting
+ * that wrong silently stops something appearing in "what am I waiting on".
+ * A note that failed to attach costs nothing but the note.
+ */
+async function planContext(intent: ExtractedIntent, ctx: PlanContext): Promise<IntentPlan> {
+  if (!intent.objectText) {
+    // Nothing to match on. The note text itself lives in sourceText, but
+    // without an object there is no commitment to hang it from.
+    return {
+      calls: [],
+      facts: [],
+      questions: [],
+      declined: ["I noted that, but I'm not sure which commitment it's about."],
+    };
+  }
+
+  const owner = await resolveParty(intent.owner, ctx);
+  const recipient = await resolveParty(intent.recipient, ctx);
+  if (!owner.id) {
+    return {
+      calls: [],
+      facts: [],
+      questions: [],
+      declined: ["I noted that, but I'm not sure who it's about."],
+    };
+  }
+
+  const open = await commitments.listOpenForOwner(ctx.tx, owner.id, recipient.id);
+  const match = decideCompletion(
+    { ownerId: owner.id, recipientId: recipient.id, objectText: intent.objectText },
+    open,
+  );
+
+  if (match.kind === "ask") {
+    return {
+      calls: [],
+      facts: [],
+      questions: [],
+      declined: ["I noted that, but I'm not sure which commitment it's about."],
+    };
+  }
+
+  return {
+    questions: [],
+    calls: [
+      {
+        name: "attach_context",
+        input: {
+          commitment_id: match.commitmentId,
+          // sourceText, NOT objectText: §3 says a content field is stored
+          // verbatim. The user's own sentence is the note; objectText is only
+          // what we matched ON.
+          body: intent.sourceText,
+          // Provenance is filled in by the orchestrator, which is the only
+          // layer holding the message id. Null here rather than a fabricated
+          // id — provenance that cannot be followed is worse than none.
+          source_message_id: null,
+        },
+      },
+    ],
+    // No CommittedFact kind exists for a note, and inventing one would put a
+    // second sentence in every reply about context ("Noted: she had a family
+    // emergency") — §31 says be concise, and the user just said that
+    // sentence themselves. The attachment is silent by design; it surfaces on
+    // the commitment, not in the reply.
+    facts: [],
   };
 }
 
