@@ -20,7 +20,7 @@
  * start the loop and wait — this comment exists to stop that.
  */
 import type { DatabaseTransaction } from "@ourglass/shared";
-import { reminders, type DueReminder } from "@ourglass/db";
+import { reminders, workflows, type DueReminder, type DueWorkflow } from "@ourglass/db";
 import { executeTurn, type Deps as ExecutorDeps } from "../tools/index.js";
 
 export interface Clock {
@@ -41,16 +41,36 @@ export const systemClock: Clock = { now: () => new Date() };
  */
 export type OnFire = (reminder: DueReminder, tx: DatabaseTransaction) => Promise<void>;
 
+/**
+ * Called for a conditional rule whose condition HELD (§7.2's "emit the
+ * action"). Not called for a rule that was evaluated and correctly declined —
+ * that rule is deliberately silent.
+ *
+ * Same delivery caveat as `onFire`: Phase 3 has no notification channel, so
+ * this is the seam a future one attaches to rather than a mechanism invented
+ * here.
+ */
+export type OnRuleFired = (workflow: DueWorkflow, tx: DatabaseTransaction) => Promise<void>;
+
 export interface PollerDeps extends ExecutorDeps {
   readonly clock: Clock;
   readonly batchSize?: number;
   readonly onFire?: OnFire;
+  readonly onRuleFired?: OnRuleFired;
 }
 
 export interface PollResult {
   readonly fired: number;
   /** Reminders claimed but NOT fired — a lost race, or a validation refusal. */
   readonly skipped: number;
+  /** Conditional rules evaluated this pass (§7.2), whether or not they fired. */
+  readonly workflowsEvaluated: number;
+  /**
+   * Rules whose condition HELD. Strictly <= workflowsEvaluated: a rule whose
+   * subject completed early is evaluated and correctly declines (§7.3), which
+   * is a successful evaluation, not a skip.
+   */
+  readonly workflowsFired: number;
   /** The instant the pass ran at. Echoed so a caller can log it. */
   readonly asOf: Date;
 }
@@ -84,7 +104,6 @@ export async function pollOnce(deps: PollerDeps): Promise<PollResult> {
   const due = await deps.db.withTransaction((tx) =>
     reminders.claimDueReminders(tx, asOf, batchSize),
   );
-  if (due.length === 0) return { fired: 0, skipped: 0, asOf };
 
   let fired = 0;
   let skipped = 0;
@@ -122,7 +141,78 @@ export async function pollOnce(deps: PollerDeps): Promise<PollResult> {
     }
   }
 
-  return { fired, skipped, asOf };
+  const rules = await evaluateDueWorkflows(deps, asOf, batchSize);
+
+  return {
+    fired,
+    skipped,
+    workflowsEvaluated: rules.evaluated,
+    workflowsFired: rules.held,
+    asOf,
+  };
+}
+
+/**
+ * The second claim of the pass: conditional rules due for evaluation (§7.2).
+ *
+ * A SEPARATE CLAIM, not a merged one. Reminders and workflows are different
+ * tables with different idempotency keys (`fired_at` vs `evaluated_at`) and
+ * different partial indexes, and §7.1 explicitly rejected overloading
+ * `reminders` with a nullable condition for exactly this reason.
+ *
+ * EVALUATED AT `evaluate_at`, NEVER CONTINUOUSLY. "If Arun hasn't sent the
+ * schema BY FRIDAY" is a statement about Friday, not about Wednesday.
+ * Checking every pass whether the condition holds YET would fire on Wednesday
+ * when Arun simply has not gotten to it — the nagging spec §26 forbids, and
+ * out of scope besides.
+ */
+async function evaluateDueWorkflows(
+  deps: PollerDeps,
+  asOf: Date,
+  batchSize: number,
+): Promise<{ evaluated: number; held: number }> {
+  const due = await deps.db.withTransaction((tx) =>
+    workflows.claimDueWorkflows(tx, asOf, batchSize),
+  );
+  if (due.length === 0) return { evaluated: 0, held: 0 };
+
+  let evaluated = 0;
+  let held = 0;
+
+  for (const workflow of due) {
+    const outcome = await executeTurn(
+      [
+        {
+          name: "evaluate_workflow",
+          input: { workflow_id: workflow.id, evaluated_at: asOf.toISOString() },
+        },
+      ],
+      deps,
+      "scheduled_job",
+    );
+    if (!outcome.ok) continue;
+
+    evaluated += 1;
+
+    // Did the condition actually hold? The tool returns it rather than this
+    // layer re-deriving it — re-reading the commitment here would be a second
+    // read at a different instant, and §7.3's whole guarantee is that the
+    // condition is evaluated ONCE, against live state, inside the same
+    // transaction that records the outcome.
+    const result = outcome.results[0] as { fired?: unknown } | undefined;
+    if (result?.fired === true) {
+      held += 1;
+      if (deps.onRuleFired) {
+        await deps.db.withTransaction((tx) => deps.onRuleFired!(workflow, tx));
+      }
+    }
+    // A rule that did NOT fire is deliberately silent. It is still marked
+    // `evaluated_at` with `fired = false`, which is what makes §28's "why
+    // didn't you remind me?" answerable in Phase 4: the log says *evaluated
+    // on Friday, condition did not hold* rather than saying nothing at all.
+  }
+
+  return { evaluated, held };
 }
 
 export interface PollerHandle {

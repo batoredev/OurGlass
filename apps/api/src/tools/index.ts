@@ -11,6 +11,7 @@ import { defineEntityTypeTool } from "./define-entity-type.js";
 import { completeCommitmentTool } from "./complete-commitment.js";
 import { updateCommitmentTool } from "./update-commitment.js";
 import { fireReminderTool } from "./fire-reminder.js";
+import { createWorkflowTool, evaluateWorkflowTool } from "./workflow-tools.js";
 
 /**
  * EVERY tool the orchestrator can emit must appear here.
@@ -37,6 +38,10 @@ export function buildToolRegistry(): ToolRegistry {
   // poller drives it through the same executeTurn path so the firing lands in
   // action_log with an inverse (§6.3).
   registry.register(fireReminderTool);
+  registry.register(createWorkflowTool);
+  // Like fire_reminder: driven only by the poller, registered like any other
+  // tool so its evaluation lands in action_log with an inverse (§7.2).
+  registry.register(evaluateWorkflowTool);
   return registry;
 }
 

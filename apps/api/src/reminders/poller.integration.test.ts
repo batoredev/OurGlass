@@ -16,7 +16,15 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type pg from "pg";
-import { createPool, reminders, truncateAll, withTransaction } from "@ourglass/db";
+import {
+  commitments,
+  createPool,
+  people,
+  reminders,
+  truncateAll,
+  withTransaction,
+  workflows,
+} from "@ourglass/db";
 import { buildToolRegistry } from "../tools/index.js";
 import { undoTurn, type Deps } from "../tools/executor.js";
 import { TurnNotFoundError } from "../tools/errors.js";
@@ -194,6 +202,152 @@ suite("reminder poller (integration)", () => {
 
     expect(result.fired).toBe(1);
     expect(seen).toEqual(["ask Barkha for the article"]);
+  });
+
+  // -------------------------------------------------------------------------
+  // Conditional rules (§25, §7). "If Arun hasn't sent the schema by Friday,
+  // remind me."
+  //
+  // §7.3 IS THE CORRECTNESS REQUIREMENT OF THE WHOLE SECTION: early
+  // completion must NOT fire the rule. All three tests below use a fixed
+  // clock, like everything else in this file.
+  // -------------------------------------------------------------------------
+  describe("conditional rules (§7)", () => {
+    const EVALUATE_AT = "2026-09-11T11:00:00+05:30";
+
+    async function seedRule(opts: { completed?: boolean; invalidateSubject?: boolean } = {}) {
+      return withTransaction(pool, async (tx) => {
+        const arun = await people.createPerson(tx, { displayName: "Arun" });
+        const commitment = await commitments.createCommitment(tx, {
+          ownerId: arun.id,
+          objectText: "the schema",
+        });
+        if (opts.completed) {
+          await commitments.completeCommitment(tx, commitment.id, {
+            status: "completed",
+            // Wednesday: BEFORE the Friday evaluate_at. This is the scenario
+            // §7.3 exists for.
+            completedAt: new Date("2026-09-09T15:00:00+05:30"),
+          });
+        }
+        if (opts.invalidateSubject) {
+          await commitments.invalidateCommitment(tx, commitment.id);
+        }
+        const workflow = await workflows.createWorkflow(tx, {
+          conditionKind: "commitment_not_completed",
+          subjectCommitmentId: commitment.id,
+          evaluateAt: new Date(EVALUATE_AT),
+          actionKind: "remind",
+          actionBody: "chase Arun about the schema",
+          sourcePhrase: "if Arun hasn't sent the schema by Friday",
+        });
+        return { commitment, workflow };
+      });
+    }
+
+    it("fires when the commitment is still open at evaluate_at", async () => {
+      const { workflow } = await seedRule();
+      const result = await pollOnce(deps(AFTER));
+
+      expect(result.workflowsEvaluated).toBe(1);
+      expect(result.workflowsFired).toBe(1);
+
+      const after = await withTransaction(pool, (tx) => workflows.getById(tx, workflow.id));
+      expect(after?.evaluated_at).not.toBeNull();
+      expect(after?.fired).toBe(true);
+    });
+
+    it("does NOT fire when the commitment completed early", async () => {
+      // §7.3, THE REQUIREMENT. Arun sent the schema on Wednesday; on Friday
+      // the status is `completed`, the condition is false, and nothing is
+      // emitted. The user is never reminded about something that already
+      // happened.
+      const { workflow } = await seedRule({ completed: true });
+      const result = await pollOnce(deps(AFTER));
+
+      expect(result.workflowsEvaluated).toBe(1);
+      expect(result.workflowsFired).toBe(0);
+
+      const after = await withTransaction(pool, (tx) => workflows.getById(tx, workflow.id));
+      // EVALUATED, and correctly declined — not skipped, not left pending.
+      // That distinction is what makes §28's "why didn't you remind me?"
+      // answerable in Phase 4: the log says *evaluated on Friday, condition
+      // did not hold*.
+      expect(after?.evaluated_at).not.toBeNull();
+      expect(after?.fired).toBe(false);
+    });
+
+    it("does NOT fire when the subject commitment was invalidated", async () => {
+      // The zero-rows path. An absent subject means DO NOT FIRE. Getting this
+      // backwards ("it isn't completed, so the condition holds") would remind
+      // the user about a commitment that no longer exists — the most
+      // confusing possible output.
+      const { workflow } = await seedRule({ invalidateSubject: true });
+      const result = await pollOnce(deps(AFTER));
+
+      expect(result.workflowsEvaluated).toBe(1);
+      expect(result.workflowsFired).toBe(0);
+
+      const after = await withTransaction(pool, (tx) => workflows.getById(tx, workflow.id));
+      expect(after?.fired).toBe(false);
+    });
+
+    it("does not evaluate a rule before its evaluate_at", async () => {
+      // NEVER CONTINUOUSLY. "by Friday" is a statement about Friday, not
+      // about Wednesday — evaluating early fires while Arun simply has not
+      // gotten to it yet.
+      await seedRule();
+      const result = await pollOnce(deps(BEFORE));
+      expect(result.workflowsEvaluated).toBe(0);
+    });
+
+    it("does not evaluate the same rule twice", async () => {
+      await seedRule();
+      const first = await pollOnce(deps(AFTER));
+      const second = await pollOnce(deps(AFTER));
+      expect(first.workflowsEvaluated).toBe(1);
+      // `evaluated_at IS NOT NULL` excludes it from the claim entirely.
+      expect(second.workflowsEvaluated).toBe(0);
+    });
+
+    it("does not evaluate an invalidated rule", async () => {
+      const { workflow } = await seedRule();
+      await withTransaction(pool, (tx) => workflows.invalidateWorkflow(tx, workflow.id));
+      const result = await pollOnce(deps(AFTER));
+      expect(result.workflowsEvaluated).toBe(0);
+    });
+
+    it("logs the evaluation as scheduled_job, and undo REFUSES it", async () => {
+      await seedRule();
+      await pollOnce(deps(AFTER));
+
+      const { rows } = await pool.query<{ turn_id: string; actor_kind: string; tool_name: string }>(
+        `SELECT turn_id, actor_kind, tool_name FROM action_log ORDER BY seq`,
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.actor_kind).toBe("scheduled_job");
+      expect(rows[0]!.tool_name).toBe("evaluate_workflow");
+      await expect(undoTurn(rows[0]!.turn_id, base)).rejects.toThrow(TurnNotFoundError);
+    });
+
+    it("hands a rule whose condition held to onRuleFired, and a declining one not at all", async () => {
+      await seedRule();
+      await seedRule({ completed: true });
+      const seen: string[] = [];
+
+      const result = await pollOnce(
+        deps(AFTER, {
+          onRuleFired: async (workflow) => {
+            seen.push(workflow.action_body);
+          },
+        }),
+      );
+
+      expect(result.workflowsEvaluated).toBe(2);
+      expect(result.workflowsFired).toBe(1);
+      // ONE callback, not two. A rule that declined is deliberately silent.
+      expect(seen).toEqual(["chase Arun about the schema"]);
+    });
   });
 
   it("a pass with nothing due writes no action_log rows at all", async () => {
