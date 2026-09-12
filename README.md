@@ -54,16 +54,63 @@ pnpm typecheck && pnpm lint && pnpm test
 That sequence is the whole fresh-clone path — no other setup exists. If any step here doesn't
 work as described, that's a bug in this README or the scaffold, not a step you're missing.
 
-> `pnpm db:migrate` and `pnpm db:reset` land with Phase 1 (schema + migration tooling — see
-> `docs/PHASE-1-DESIGN.md`). Until then, `pnpm typecheck && pnpm lint && pnpm test` alone
-> exercises everything that exists.
-
 ### Running the API
 
 ```bash
 pnpm --filter @ourglass/api dev
 # GET http://localhost:3001/health  ->  { ok: true, service: "api", db: true }
 ```
+
+### Talking to the assistant (Phase 3 demo)
+
+There is no UI until Phase 5, so this is the only way to *read* the replies — and reading
+them matters: tone, brevity, and whether it asks instead of guessing are judgements no test
+suite can settle.
+
+**This endpoint is off by default and is a test surface, not a product surface.** It is
+unauthenticated and it spends model tokens on whatever it is sent, so when enabled it binds
+`127.0.0.1` only and refuses to start without an API key. Do not enable it on a shared host.
+
+```bash
+docker compose up -d postgres
+pnpm db:migrate
+
+# Needs a real key — this lane calls Sonnet (Interpret) and Haiku (Respond).
+ENABLE_DEMO_ENDPOINT=true pnpm --filter @ourglass/api dev
+```
+
+Then walk the spec's own Barkha narrative:
+
+```bash
+# 1. Create — one commitment and one reminder, correctly owned and timed.
+curl -s localhost:3001/turn -H 'content-type: application/json' \
+  -d '{"utterance":"Barkha needs to give me the article by 6. Remind me at 5 to ask her."}'
+
+# 2. Complete it, late. This takes TWO turns, and that is correct behaviour,
+#    not a degraded demo — see the note below.
+curl -s localhost:3001/turn -H 'content-type: application/json' \
+  -d '{"utterance":"Barkha gave the article at 11."}'
+curl -s localhost:3001/turn -H 'content-type: application/json' \
+  -d '{"utterance":"Yes."}'
+
+# 3. Undo — pass the turnId from any response above.
+curl -s localhost:3001/undo -H 'content-type: application/json' \
+  -d '{"turnId":"<turnId from step 1>"}'
+```
+
+**Why step 2 asks first.** Completion auto-matching requires the content-token sets to be
+identical, so it fires only when you repeat the stored wording verbatim. `"give me the
+article"` vs `"the article"` scores 0.850 against a 0.92 threshold — so it asks. That is spec
+§27 working ("never guess when guessing can cause a meaningful mistake"), not failing:
+marking the wrong commitment complete is both a real mistake and a near-invisible one.
+Full arithmetic in [`docs/PHASE-3-DESIGN.md`](docs/PHASE-3-DESIGN.md) §10.
+
+**On PowerShell**, `curl` is an alias for `Invoke-WebRequest` and the quoting differs — use
+`curl.exe` explicitly, or `Invoke-RestMethod -Method Post -ContentType application/json -Body '...'`.
+
+Reminders fire on a 30-second poll against real timestamps, so seeing one fire live means
+setting it a minute out and waiting. That is also why the poller's own tests inject a clock
+rather than sleeping.
 
 ### Running the web app
 
@@ -98,10 +145,16 @@ because it needs a live database.
 ## Project status
 
 Phased build, features before UI. Current phase and full checklist:
-[`docs/PHASES.md`](docs/PHASES.md). Phases 0 and 1 are done. Phase 2 provides the
-non-mutating interpretation and resolution layers; see
-[`docs/PHASE-2-DESIGN.md`](docs/PHASE-2-DESIGN.md). The end-to-end conversational loop and UI
-remain later phases.
+[`docs/PHASES.md`](docs/PHASES.md). Phases 0–2 are done and CI-verified. Phase 3 adds the
+end-to-end conversational loop (Interpret → Resolve → Mutate → Respond), the reminder poller,
+conditional rules, and the demo endpoint above; see
+[`docs/PHASE-3-DESIGN.md`](docs/PHASE-3-DESIGN.md). The UI remains Phase 5.
+
+**One standing caveat, carried since Phase 2 and still true:** there is no recorded model
+output in this repo. The eval harness has 69 hand-labelled fixtures and a comparator verified
+by mutation, but `pnpm test:live` — the only lane that speaks to whether the model actually
+extracts correctly — has never been run. Everything green here is evidence about the code,
+not about the model.
 
 ## Contributing
 
