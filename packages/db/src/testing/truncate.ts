@@ -43,6 +43,9 @@ export const TRUNCATABLE_TABLES = [
   // dependents first matches the existing convention in this list.
   "workflows",
   "commitment_notes",
+  // Phase 4 (migration 010). References `messages` for §16 provenance, so it
+  // is listed before it, matching the dependents-first convention above.
+  "memories",
   "reminders",
   "events",
   "messages",

@@ -48,6 +48,8 @@ describe("truncateAll", () => {
         "entity_type_fields",
         "entity_types",
         "events",
+        // Phase 4, migration 010.
+        "memories",
         "messages",
         "organizations",
         "people",

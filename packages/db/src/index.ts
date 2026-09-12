@@ -25,6 +25,7 @@ export * as reminders from "./repositories/reminders.js";
 export * as messages from "./repositories/messages.js";
 export * as commitmentNotes from "./repositories/commitment-notes.js";
 export * as workflows from "./repositories/workflows.js";
+export * as memories from "./repositories/memories.js";
 
 export type { Person, CreatePersonInput } from "./repositories/people.js";
 export type { Organization } from "./repositories/organizations.js";
@@ -67,5 +68,13 @@ export type {
   WorkflowConditionKind,
   WorkflowActionKind,
 } from "./repositories/workflows.js";
+export type {
+  Memory,
+  CreateMemoryInput,
+  MemoryKind,
+  MemorySubjectKind,
+  ScoredMemory,
+  SearchFilter,
+} from "./repositories/memories.js";
 
 export { truncateAll, TRUNCATABLE_TABLES } from "./testing/truncate.js";
