@@ -330,20 +330,88 @@ Found so far (F1 by the Phase 3 scope review, F2–F5 while writing `PHASE-3-DES
 | F3 | "me" resolves to the user | `users` and `people` are unrelated tables — no FK, no `is_self`. **First-person pronouns are unresolvable**, and the demo sentence says "me" twice |
 | F4 | §20 context attaches to a commitment | `commitments` has no `notes` column; people/orgs/projects all do |
 | F5 | Messages and reminders have a repository layer | Neither does; `create-reminder.ts` writes raw SQL and says so in its own header |
+| F6 | Phase 3's tools are callable | `complete_commitment` and `update_commitment` were written, typechecked and unit-tested while **absent from `buildToolRegistry`**. Found during the Phase 3 build, in the tool layer rather than the schema |
 
 **Why this keeps happening:** the schema was designed in one pass (Phase 1) against the
 whole spec, while code arrives phase by phase. So unreferenced schema is the *expected*
 steady state, and "the column exists" reads as "the feature exists" to anyone reading the
 migration rather than the callers.
 
+F6 shows the class is **not confined to schema**. Its shape is identical — an object that
+exists and compiles with nothing reaching it — but the object was a `ToolDefinition`, and
+what hid it was that its unit tests imported it *directly* while the only registry test
+exercised a Phase 1 tool. The first symptom would have been a runtime *unknown tool* on the
+one utterance Phase 3 exists to support.
+
 **What actually catches it:** reading the code for the callers, not the schema for the
-columns. Grep for who *references* a table before assuming a phase can use it. This is now
-worth a `tools/` script — `ceo3` reached the same conclusion independently, noting that
-diffing registered tools against the mutations a phase's demo sentence implies would have
-caught F1 mechanically. That check would generalise to all five.
+columns. Grep for who *references* a table before assuming a phase can use it.
+
+**This is now automated for the tool layer.** `apps/api/src/tools/registry.coverage.test.ts`
+scans `orchestrator.ts`'s **source** for every `name: "..."` a `ToolCall` literal emits and
+asserts each is registered — exactly the mechanical check `ceo3` proposed independently for
+F1. Two properties make it worth more than the assertion it looks like:
+
+- It reads the **source**, not the running orchestrator. Calling `runTurn` to discover the
+  emitted names would need a database, an extractor, and one utterance per branch — and it
+  would cover only the branches the fixtures happen to reach. A source scan covers every
+  literal unconditionally, which is the property that was missing.
+- It **guards its own guard**: an assertion that the scan found at least three names, so a
+  future refactor that moves tool names behind a helper fails loudly instead of making the
+  test vacuously pass. That hollow-test failure mode has already happened once in this repo,
+  in the first eval harness.
+
+Verified by mutation (un-registering the two tools fails it with `expected
+['complete_commitment'] to deeply equal []`), and it then caught `attach_context`
+automatically two commits later **with no edit to the test** — the first new tool since it
+was written.
 
 **The rule for future phases:** before a build team spawns, verify each prerequisite the
 phase's demo sentence implies by finding the code path, not the schema object.
+
+## Graphify findings (standing rule: `/graphify --update` after every feature)
+
+Recorded per phase so the graph is *read*, not merely regenerated. A stale graph is worse
+than none; an unread one is only marginally better.
+
+### Phase 3 pass — 1403 nodes, 1794 edges, 143 communities
+
+Graph health clean: no dangling endpoints, no missing endpoints, no self-loops, no collapsed
+edges, **no import cycles**. Phase 3 added 295 nodes and 485 edges.
+
+**God Nodes.** `runTurn()` and `undoTurn()` both land in the top ten (12 edges each). That is
+the intended shape, not a smell: they are the two entry points the design names — one turn
+in, one undo out — so centrality there is the architecture working. Worth re-checking each
+phase; a *third* comparably central function in `apps/api` would be the signal.
+
+**The one finding worth acting on: `pg` has betweenness 0.146**, bridging the reminder poller
+to the DB client layer — by a wide margin the highest in the graph. That is the structural
+place §37 could erode, so it was checked rather than assumed:
+
+- `poller.ts` imports `reminders` and `workflows` — but only for the **claim queries**
+  (`claimDueReminders`, `claimDueWorkflows`). Every firing is `executeTurn(..., "scheduled_job")`.
+- `orchestrator.ts` imports `commitments`, `people`, `users` — all **Resolve-stage reads**,
+  which §3.1's table explicitly permits. `messages` is the §8 trace write: a conversation
+  record, not domain state.
+
+**Conclusion: the boundary holds — no domain mutation bypasses the tool layer.** But nothing
+*enforces* that, and the graph is right that this is where it would go wrong first. A
+`/graphify path` check, or a lint rule forbidding repository imports outside `tools/` and the
+Resolve stage, is the obvious hardening. **Logged for the Phase 4 Mission 1 plan review
+rather than done here** — it is a new constraint, not a Phase 3 defect.
+
+**Surprising connection worth keeping:** `live job (manual workflow_dispatch only, costs
+tokens)` ⟶ `Paid calls need approval` links `.github/workflows/evals.yml` to
+`.claude/rules/wat.md`. The graph found the cost rule and its one enforcement point
+independently of each other — a good sign that the manual-dispatch gate on the live eval lane
+is real and not merely documented.
+
+**One honest limitation of this pass.** The semantic extraction ran **inline in the lead
+session** rather than in a subagent, because the dispatched subagent hit a session rate limit
+before writing its chunk. The extraction itself is complete (38 concept nodes, 40 edges, 3
+hyperedges across the five changed docs, all five cached), but per-chunk token counts were
+unavailable, so `cost.json` records this run as 0/0 with a note rather than an invented
+estimate. Cumulative cost figures are therefore an undercount, and the note in `cost.json`
+says so.
 
 ## Open questions (do not block Phase 1)
 

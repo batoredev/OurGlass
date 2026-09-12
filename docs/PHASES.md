@@ -69,12 +69,55 @@ and add the completion date/commit as each phase lands.
   model output in the repo. Only `pnpm test:live` (paid, manual, 69 calls) speaks to whether
   Sonnet actually extracts correctly — and it has never been run.
 
-- [ ] **Phase 3 — Conversational loop + reminders** *(Mission 4 team)*
-  Full four-stage orchestrator (Interpret → Resolve → Mutate → Respond). Reminder-firing
-  mechanism is an **open decision** — `pg_cron` is absent from `pgvector/pgvector:pg17`
-  (verified from the image's Dockerfile); default is an in-process poller, see
-  `docs/DECISIONS.md`. Conditional rules (§25), flattened, evaluated against live state.
+- [x] **Phase 3 — Conversational loop + reminders** *(Mission 4 team)* — **built, verified in CI**
+  Full four-stage orchestrator (Interpret → Resolve → Mutate → Respond). Reminder firing is
+  an **in-process poller** — `pg_cron` is absent from `pgvector/pgvector:pg17` (verified from
+  the image's Dockerfile) and the custom-image path needs GHCR publish rights we do not hold.
+  Conditional rules (§25), flattened, evaluated against live state at the deadline.
   Completion updates and late-completion context (§20, §21). Concise response style (§30, §31).
+
+  All 11 tasks of `PHASE-3-DESIGN.md` §10's build order are done. **93 integration tests pass
+  against live Postgres 17 + pgvector in CI** (56 in `packages/db`, 37 in `apps/api`), plus
+  147 unit tests. Migrations 007, 008 and 009 applied cleanly on the first run — the first
+  schema phase here without a syntax-level surprise, though the phase found three other
+  defects instead.
+
+  **Three defects this phase found in its own work, none visible to a green local suite:**
+
+  1. **F6 — `complete_commitment` and `update_commitment` were written, typechecked and
+     unit-tested while absent from `buildToolRegistry`.** The fifth instance of the class
+     `DECISIONS.md` records as *"schema with no code path"*, in its tool-layer form. Nothing
+     failed: their unit tests import them directly, and the only registry test exercised a
+     Phase 1 tool. `runTurn` emits `complete_commitment` for the phase demo, so the first
+     symptom would have been a runtime *unknown tool* on the one utterance Phase 3 exists to
+     support. Closed permanently by `registry.coverage.test.ts`, which scans the orchestrator
+     source for emitted tool names and asserts each is registered — verified by mutation, and
+     it caught `attach_context` automatically two commits later with no edit to the test.
+  2. **A duplicate inverse-handler registration that would have been a startup crash, not a
+     test failure.** `registerInverseHandler` throws on a duplicate table key, and
+     `fire_reminder` initially registered its own `reminders` handler alongside
+     `create_reminder`'s. Consolidated to one handler per TABLE dispatching on patch shape —
+     the pattern `create-commitment.ts` §1.3 established for `commitments`, now used for
+     `reminders`, `workflows` and `commitment_notes` too.
+  3. **`listRecent`'s ordering was undefined for a same-transaction batch.** `t_created`
+     defaults to `now()`, which in Postgres is TRANSACTION start time, so rows inserted in one
+     transaction share a byte-identical timestamp and the `id DESC` tiebreak is arbitrary. The
+     test was a coin flip; it failed in CI. Fixed in the test — production writes the two
+     messages in separate transactions — with the limitation now documented on `listRecent`
+     and pinned by a second test.
+
+  **`runTurn` itself had ZERO tests** until the end of the phase: every stage it wires had
+  passing unit tests while the wire between them had none — `PHASE-1-DESIGN.md` §4.3's warning
+  again. Now 11 integration tests covering §3.2's turn_id ordering, §3.3's partial-commit rule,
+  §8's trace persistence, §2's lateness reconciliation, and §3.4's honest degradation.
+
+  **Standing caveat, unchanged and now in `README.md` too:** there is still no recorded model
+  output in this repo. `pnpm test:live` (69 paid calls, manual) has never been run. Phase 3
+  adds a *second* model call (Respond), so the unmeasured surface grew. §5's mandatory template
+  fallback makes a Respond failure cosmetic — a mitigation, not evidence.
+
+  Not yet done for this phase: `/graphify --update` and the human demo run through §9's
+  endpoint (needs an API key the repo does not hold).
 
   **Scope fixed by the Phase 3 review (`ceo3`), HOLD SCOPE mode.** Explicitly OUT: proactive
   behaviour (§26) → Phase 4, it keys off "actual relevance" which is Phase 4's retrieval layer;
