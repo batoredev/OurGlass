@@ -216,7 +216,7 @@ export async function searchSemantic(
   filter: SearchFilter = {},
   limit = 20,
 ): Promise<Memory[]> {
-  await tx.query(`SET LOCAL hnsw.iterative_scan = 'relaxed_order'`);
+  // MUTATION PROBE: iterative_scan deliberately removed to prove the test catches it.
   const { sql, params } = whereClause(filter, 3);
   const { rows } = await tx.query<Memory>(
     `SELECT * FROM memories_current
