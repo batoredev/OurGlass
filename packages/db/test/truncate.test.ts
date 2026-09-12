@@ -42,6 +42,7 @@ describe("truncateAll", () => {
     expect([...TRUNCATABLE_TABLES].sort()).toEqual(
       [
         "action_log",
+        "commitment_notes",
         "commitments",
         "entity_records",
         "entity_type_fields",
@@ -54,6 +55,7 @@ describe("truncateAll", () => {
         "relationships",
         "reminders",
         "users",
+        "workflows",
       ].sort(),
     );
   });

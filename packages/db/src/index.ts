@@ -20,6 +20,11 @@ export * as people from "./repositories/people.js";
 export * as organizations from "./repositories/organizations.js";
 export * as projects from "./repositories/projects.js";
 export * as commitments from "./repositories/commitments.js";
+export * as users from "./repositories/users.js";
+export * as reminders from "./repositories/reminders.js";
+export * as messages from "./repositories/messages.js";
+export * as commitmentNotes from "./repositories/commitment-notes.js";
+export * as workflows from "./repositories/workflows.js";
 
 export type { Person, CreatePersonInput } from "./repositories/people.js";
 export type { Organization } from "./repositories/organizations.js";
@@ -30,5 +35,37 @@ export type {
   CommitmentStatus,
   CreateCommitmentInput,
 } from "./repositories/commitments.js";
+export type {
+  User,
+  UserWithPerson,
+  EnsureUserInput,
+} from "./repositories/users.js";
+export type {
+  CompleteCommitmentResult,
+  UpdateCommitmentResult,
+  CommitmentFieldPatch,
+  UpdatableField,
+} from "./repositories/commitments.js";
+export type {
+  Reminder,
+  CreateReminderInput,
+  DueReminder,
+} from "./repositories/reminders.js";
+export type {
+  Message,
+  MessageRole,
+  CreateMessageInput,
+} from "./repositories/messages.js";
+export type {
+  CommitmentNote,
+  CreateCommitmentNoteInput,
+} from "./repositories/commitment-notes.js";
+export type {
+  Workflow,
+  CreateWorkflowInput,
+  DueWorkflow,
+  WorkflowConditionKind,
+  WorkflowActionKind,
+} from "./repositories/workflows.js";
 
 export { truncateAll, TRUNCATABLE_TABLES } from "./testing/truncate.js";

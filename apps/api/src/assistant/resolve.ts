@@ -49,7 +49,70 @@ export function resolveMention(
   return { band: "ask", candidates: contenders.map((entry) => entry.candidate), score: best.score };
 }
 
+/**
+ * First-person pronouns, which never reach name-similarity scoring.
+ *
+ * `nameSimilarity("me", <any real name>)` is ~0, so before this existed every
+ * first-person mention landed in `reject` — and the demo sentence itself
+ * ("Barkha needs to give ME the article by 6") is a first-person mention.
+ * docs/PHASE-3-DESIGN.md F3 calls this the most serious of its four findings.
+ *
+ * The Phase 1 integration test hid it by seeding a person whose display_name
+ * is the literal string "User" and handing the tool a UUID directly, so "me"
+ * never reached the resolver at all. A green test over a path the product
+ * cannot take.
+ *
+ * "my"/"mine" are included because they appear as possessive mentions of the
+ * user ("my manager" extracts a relatedEntity, but "remind my self" and bare
+ * "my" do occur). They are matched only as a WHOLE normalized mention, never
+ * as a prefix — "mike" must not short-circuit because it starts with "mi".
+ */
+const FIRST_PERSON_MENTIONS: ReadonlySet<string> = new Set([
+  "me",
+  "i",
+  "myself",
+  "my",
+  "mine",
+]);
+
+export function isFirstPersonMention(name: string): boolean {
+  return FIRST_PERSON_MENTIONS.has(normalize(name));
+}
+
 export async function resolvePersonMention(
+  tx: DatabaseTransaction,
+  mention: Pick<EntityMention, "name">,
+  /**
+   * The user's own person row id, already merge-resolved by the caller via
+   * `users.getUserWithPerson` — NOT the raw `users.person_id`, which still
+   * points at the loser after a merge (packages/db's people.ts READ SHAPE
+   * 1-vs-2 trap, on the single most load-bearing id in the system).
+   *
+   * Optional, and `null` is a supported state rather than an error: a user row
+   * with no linked person is half-built, and the honest outcome is that "me"
+   * falls through to similarity scoring, rejects, and becomes a question.
+   * Never a crash — a missing USER row is a deployment fault the orchestrator
+   * throws on before Interpret; an unlinked person is not.
+   *
+   * Passed in rather than looked up here so the resolver stays pure with
+   * respect to identity and packages/db's config boundary is not crossed
+   * twice per mention.
+   */
+  selfPersonId?: string | null,
+): Promise<EntityResolution> {
+  // BEFORE candidates are fetched, let alone scored. Ordering is the whole
+  // fix: no real person's name should ever be allowed to compete with the
+  // user's own identity for the word "me", and a person genuinely named "Mi"
+  // would otherwise be a live wrong-merge risk on the most common mention in
+  // the product.
+  if (selfPersonId && isFirstPersonMention(mention.name)) {
+    return { band: "auto", id: selfPersonId, score: 1 };
+  }
+
+  return resolvePersonMentionByName(tx, mention);
+}
+
+async function resolvePersonMentionByName(
   tx: DatabaseTransaction,
   mention: Pick<EntityMention, "name">,
 ): Promise<EntityResolution> {
@@ -125,6 +188,103 @@ export function detectDuplicate(
   // NOT "hard_veto" — reporting it as one would tell a debugger the direction or
   // state differed when in fact the text simply did not match.
   return { kind: "create", reason: "below_threshold", score: best.score };
+}
+
+/**
+ * Which existing commitment a completion statement refers to (§4.1).
+ *
+ * "Barkha gave the article at 11" must find the right OPEN commitment. That is
+ * the same scoring problem as duplicate detection, with one veto inverted.
+ *
+ * `detectDuplicate`'s third hard veto is
+ *   `isCompleted(proposal.status) !== isCompleted(candidate.status)`
+ * which is right for §23 (a completed commitment must never absorb a new
+ * pending one) and BACKWARDS here: the proposal's real status is `completed`
+ * and every open candidate is `pending`, so every candidate would be vetoed
+ * and the decision would come back `{ kind: "create", reason: "hard_veto" }`.
+ *
+ * "create" is catastrophic for this use. It would insert a SECOND,
+ * already-completed commitment beside the open one — §23's forbidden duplicate
+ * — and leave the real commitment open forever.
+ *
+ * So the probe carries `status: "pending"`, which makes that veto compare like
+ * with like. The caller has ALREADY filtered candidates to open commitments
+ * (`commitments.listOpenForOwner`), so the veto is a no-op here rather than
+ * inverted, and the owner/recipient direction vetoes — the ones that actually
+ * matter, since they are spec §7's central distinction — still fire normally.
+ *
+ * The scorer, the stopword list and the containment-vs-Jaccard weighting are
+ * reused rather than reimplemented: they were tuned against spec §23's own
+ * example ("finish the poster" vs "still need to finish that Hult poster":
+ * 0.250 -> 0.900) and a second copy would drift from the first.
+ *
+ * INTERIM, and it will look dumb sometimes. The scorer is lexical, so "the
+ * article" vs "the piece" scores 0 and this returns `create`/`below_threshold`,
+ * which §4.2 requires the caller to turn into a QUESTION. Do NOT fix that by
+ * lowering ASK_THRESHOLD — asking is the correct failure direction under
+ * docs/DECISIONS.md #9 (a wrong write is the worst outcome in this system).
+ * The real fix is Phase 4's embeddings over `commitments.object_embedding`,
+ * which already ships NULLable for it.
+ */
+export function matchCompletionTarget(
+  proposal: Omit<CommitmentProposal, "status">,
+  openCommitments: readonly CurrentCommitment[],
+): DuplicateDecision {
+  return detectDuplicate({ ...proposal, status: "pending" }, openCommitments);
+}
+
+/**
+ * What the caller should DO about a completion match (§4.2).
+ *
+ * Separate from `matchCompletionTarget` because the mapping from
+ * `DuplicateDecision` to behaviour is NOT the identity here: `create` must
+ * become an ask, and that inversion is the section's main point. Returning the
+ * raw decision and letting each call site remember to invert it is how one of
+ * them forgets.
+ */
+export type CompletionMatch =
+  | { readonly kind: "matched"; readonly commitmentId: string; readonly score: number }
+  /**
+   * `reason` distinguishes "several plausible commitments" from "nothing close
+   * enough" from "nothing open at all", so the question can be honest about
+   * WHY — which feeds spec §28's "why did you do that?" surface in Phase 4.
+   */
+  | {
+      readonly kind: "ask";
+      readonly candidateIds: readonly string[];
+      readonly score: number;
+      readonly reason: "ambiguous" | "no_candidates" | "hard_veto" | "below_threshold";
+    };
+
+export function decideCompletion(
+  proposal: Omit<CommitmentProposal, "status">,
+  openCommitments: readonly CurrentCommitment[],
+): CompletionMatch {
+  const decision = matchCompletionTarget(proposal, openCommitments);
+  if (decision.kind === "auto_match") {
+    return { kind: "matched", commitmentId: decision.commitmentId, score: decision.score };
+  }
+  if (decision.kind === "ask") {
+    return {
+      kind: "ask",
+      candidateIds: decision.commitmentIds,
+      score: decision.score,
+      reason: "ambiguous",
+    };
+  }
+  // THE INVERSION. `create` from detectDuplicate means "no existing commitment
+  // matched" — and for a COMPLETION that must never become a create.
+  //
+  // "Barkha gave the article at 11" with no match means one of: it was never
+  // recorded, it is recorded under the other owner direction, or the object
+  // text is too different. Creating a retroactive already-completed commitment
+  // would write a row the user never asked for, with a fabricated expected_at
+  // (or none — making §20's lateness, the very thing the sentence is about,
+  // unreachable), and would silently hide the real still-open commitment if
+  // the miss was a text-similarity failure rather than a genuine absence.
+  //
+  // §27 says infer when safe. This is not safe. Ask.
+  return { kind: "ask", candidateIds: [], score: decision.score, reason: decision.reason };
 }
 
 function hasHardVeto(proposal: CommitmentProposal, candidate: CurrentCommitment): boolean {

@@ -1,0 +1,87 @@
+-- 007 — link the account (`users`) to its person row (`people`).
+--
+-- Fixes docs/PHASE-3-DESIGN.md §0 finding F3, the most serious of the five: the
+-- demo sentence is "Barkha needs to give ME the article by 6", and before this
+-- migration there was NO path from the first-person pronoun to a `people.id`.
+--
+-- `users` and `people` were unrelated tables — no FK, no person_id, no is_self.
+-- `resolvePersonMention` scores a mention against people.list() by name
+-- similarity, so "me" scored ~0 against every real person and landed in `reject`.
+-- The Phase 1 integration test only passed because it created a person literally
+-- named "User" and handed the tool a UUID, so "me" never reached the resolver
+-- (apps/api/src/tools/create-commitment.integration.test.ts). A green test over a
+-- path the product cannot take — the same shape as F1.
+--
+-- `commitments.owner_id` and `recipient_id` are NOT NULL / FK to people(id), so the
+-- user MUST be a person to be either side of a commitment. That is the structural
+-- reason this is an FK on `users` and not a flag.
+--
+-- Forward-only; `pnpm db:reset` is the rollback model (migration 001's header,
+-- PHASE-1-DESIGN §5).
+
+ALTER TABLE users ADD COLUMN person_id uuid REFERENCES people(id);
+
+-- UNIQUE so exactly one account can claim a given person, and (via the repository's
+-- single-row bootstrap) exactly one person is "self".
+--
+-- Partial on NOT NULL because the column is nullable and Postgres treats NULLs as
+-- distinct in a plain unique index anyway — the partial states the intent
+-- explicitly and keeps the index the size of the linked rows rather than of all
+-- users. Same reasoning as people_merged_into_idx in migration 002.
+CREATE UNIQUE INDEX users_person_idx ON users(person_id) WHERE person_id IS NOT NULL;
+
+-- ---------------------------------------------------------------------------
+-- REBUILD `users_current`. THIS IS NOT OPTIONAL AND IT IS NOT COSMETIC.
+-- ---------------------------------------------------------------------------
+-- Postgres expands `SELECT *` in a view AT CREATE VIEW TIME into a fixed column
+-- list stored in the rewrite rule. `users_current` was created in migration 002
+-- (line 77) with the columns that existed then; the ALTER above does NOT
+-- propagate into it. Without this rebuild the view keeps returning the old column
+-- set and `person_id` is simply absent from every row it yields.
+--
+-- WHY THAT WOULD HAVE BEEN THE WORST POSSIBLE FAILURE SHAPE — nothing errors:
+--   * `SELECT * FROM users_current` succeeds and returns a row with no
+--     `person_id` key at all.
+--   * `tx.query<User>(...)` in the repository is an UNCHECKED CAST, so the
+--     compiler is satisfied while the runtime value is `undefined`.
+--   * `getUserWithPerson`'s `user.person_id === null` guard does NOT fire
+--     (`undefined === null` is false), so it queries `resolve_person(NULL)`,
+--     gets an all-NULL composite, and returns `self: null` FOR A USER THAT IS
+--     CORRECTLY LINKED IN THE TABLE.
+--   * Every first-person mention then misses the §3.2.1 short-circuit and falls
+--     into name-similarity scoring, where `nameSimilarity("me", <any name>)` is
+--     ~0 and the mention lands in `reject` — FINDING F3 REINTRODUCED, by the very
+--     migration that exists to fix it.
+--   * `ensureUser` inverts worse: `undefined !== null` is TRUE, so it takes the
+--     "already linked" branch, fails to resolve, falls through, and inserts a NEW
+--     `people` row on EVERY call. Idempotency becomes unbounded person-row growth.
+--
+-- Found in review by `rev3` before this migration ever ran. Invisible to
+-- typecheck (the cast lies), to lint, and to any test that does not assert the
+-- column is actually present.
+--
+-- DROP + CREATE, not CREATE OR REPLACE: replacement may only APPEND columns to
+-- the end of the existing list, and `person_id` lands before the four bitemporal
+-- columns (migration 002 called add_bitemporal_columns at line 18, BEFORE
+-- creating the view at line 77), so a replace errors rather than reorders.
+-- Nothing else in the repo references `users_current` — verified by grep, the
+-- only two readers are in packages/db/src/repositories/users.ts — so the DROP has
+-- no cascade.
+--
+-- STANDING HAZARD FOR EVERY FUTURE PHASE: this is the FIRST ALTER in this repo
+-- against a table that already has a `SELECT *` _current view, so no precedent
+-- would have caught it. Any later `ALTER TABLE <t> ADD COLUMN` must rebuild
+-- `<t>_current` in the same migration. Migration 009 does exactly this for
+-- `messages`.
+DROP VIEW users_current;
+CREATE VIEW users_current AS SELECT * FROM users WHERE t_invalid IS NULL;
+
+-- REJECTED: `is_self boolean` on `people` instead of this FK (PHASE-3-DESIGN §3.2.1).
+-- A flag on the entity table permits two selves, has no FK back to the account, and
+-- reads in the wrong direction. The question actually asked is "who is this account,
+-- as a person?", which is a column on `users`.
+--
+-- REJECTED: making person_id NOT NULL. It cannot be: `people` rows are created after
+-- the `users` row in any bootstrap that does not hand-write UUIDs, and a NOT NULL FK
+-- would make the two inserts mutually blocking. ensureUser() closes the window in
+-- application code inside one transaction instead.

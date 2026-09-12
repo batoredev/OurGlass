@@ -38,6 +38,11 @@ export const TRUNCATABLE_TABLES = [
   "entity_type_fields",
   "entity_types",
   "relationships",
+  // Phase 3 (migrations 008, 009). Both reference `commitments`, so they are
+  // listed BEFORE it — CASCADE makes the order not strictly matter, but keeping
+  // dependents first matches the existing convention in this list.
+  "workflows",
+  "commitment_notes",
   "reminders",
   "events",
   "messages",

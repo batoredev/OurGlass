@@ -23,3 +23,4 @@ export interface HealthCheck {
 export * from "./tool-contract.js";
 export * from "./assistant-contract.js";
 export * from "./extraction-schema.js";
+export * from "./respond-contract.js";
