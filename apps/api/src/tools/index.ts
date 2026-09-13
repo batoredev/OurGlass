@@ -13,6 +13,11 @@ import { updateCommitmentTool } from "./update-commitment.js";
 import { fireReminderTool } from "./fire-reminder.js";
 import { createWorkflowTool, evaluateWorkflowTool } from "./workflow-tools.js";
 import { attachContextTool } from "./attach-context.js";
+import {
+  correctRelationshipTool,
+  forgetMemoryTool,
+  rememberTool,
+} from "./memory-tools.js";
 
 /**
  * EVERY tool the orchestrator can emit must appear here.
@@ -44,6 +49,11 @@ export function buildToolRegistry(): ToolRegistry {
   // tool so its evaluation lands in action_log with an inverse (§7.2).
   registry.register(evaluateWorkflowTool);
   registry.register(attachContextTool);
+  // Phase 4 (§16, §17, §28). remember writes the row with a NULL embedding on
+  // purpose: embedding is a third-party network hop and must not gate a write.
+  registry.register(rememberTool);
+  registry.register(forgetMemoryTool);
+  registry.register(correctRelationshipTool);
   return registry;
 }
 
