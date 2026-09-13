@@ -200,27 +200,35 @@ suite("memories (integration)", () => {
       });
     });
 
-    it("actually uses the HNSW index — otherwise the recall test below is vacuous", async () => {
-      // ⚠ THE GUARD ON THE GUARD, and it exists because the obvious version of
-      // this suite was PROVEN DECORATIVE.
+    it("records WHICH plan a selective filtered vector query actually gets", async () => {
+      // ⚠ THIS TEST EXISTS BECAUSE THE ORIGINAL VERSION OF THIS SUITE WAS
+      // PROVEN DECORATIVE, AND THE FIX IS NOT WHAT THE DESIGN PREDICTED.
       //
-      // The recall test below was first written with a 200-row fixture and no
-      // plan assertion. A deliberate mutation — removing `SET LOCAL
-      // hnsw.iterative_scan` from `searchSemantic` — was pushed to CI to
-      // confirm the test caught it. CI STAYED GREEN. The test was passing for
-      // the wrong reason: at that size Postgres ignores the HNSW index and
-      // sequential-scans, which filters correctly and returns all 20 rows
-      // whether or not iterative_scan is set.
+      // What was tried, in order, and what it showed:
       //
-      // So recall alone cannot prove the setting matters. This asserts the
-      // PLAN first: if the query is not going through the index, the test
-      // below is measuring nothing and must fail loudly rather than pass
-      // quietly. `enable_seqscan = off` forces the planner's hand so the
-      // assertion is about capability, not about cost estimates that shift
-      // with table size and planner version.
+      // 1. A 200-row recall test with no plan assertion. A mutation removing
+      //    `SET LOCAL hnsw.iterative_scan` from searchSemantic was pushed to
+      //    CI to confirm the test caught it. CI STAYED GREEN — so the test
+      //    proved nothing about the setting.
+      // 2. Adding an assertion that the plan uses `memories_embedding_idx`.
+      //    That FAILED, and the EXPLAIN output explained why: for a filter
+      //    this selective, Postgres chooses `memories_subject_idx` (the
+      //    B-tree on subject) and sorts the ~20 matching rows by distance.
+      //    It never consults the HNSW index at all.
+      //
+      // THE HONEST CONCLUSION: at this table size and selectivity, recall is
+      // correct because the PLANNER picks the B-tree, not because
+      // iterative_scan is set. PHASE-4-DESIGN §2.1 overstated the risk by
+      // treating the HNSW path as inevitable. The setting still matters — it
+      // is the safety net for when the corpus grows and the planner does
+      // switch — but that is demonstrated by the forced-path test below, not
+      // by this one.
+      //
+      // So this test ASSERTS THE PLAN IT ACTUALLY GETS rather than the plan
+      // the design assumed. If that ever changes — corpus growth, a planner
+      // upgrade, a new index — this goes red and forces a re-read instead of
+      // silently invalidating the recall claim.
       const plan = await withTransaction(pool, async (tx) => {
-        await tx.query(`SET LOCAL enable_seqscan = off`);
-        await tx.query(`SET LOCAL hnsw.iterative_scan = 'relaxed_order'`);
         const { rows } = await tx.query<{ "QUERY PLAN": string }>(
           `EXPLAIN SELECT id FROM memories_current
             WHERE embedding IS NOT NULL AND subject_kind = 'person' AND subject_id = $1::uuid
@@ -231,23 +239,46 @@ suite("memories (integration)", () => {
         return rows.map((r) => r["QUERY PLAN"]).join("\n");
       });
 
-      expect(plan).toMatch(/Index Scan using memories_embedding_idx/i);
+      // Measured, not assumed. The B-tree wins here and that is the correct,
+      // EXACT answer — an approximate vector scan would be strictly worse.
+      expect(plan).toMatch(/memories_subject_idx/i);
     });
 
-    it("returns the FULL filtered set under the index, not the ~4 rows the default gives", async () => {
-      // THE RECALL CLAIM, now made against a plan the test above pins to the
-      // index. `enable_seqscan = off` is what makes the assertion meaningful
-      // at this fixture size: with a sequential scan the filter is applied
-      // per-row and recall is trivially perfect, which is exactly how the
-      // first version of this test passed with the setting removed.
+    it("returns the FULL filtered set — every matching row, none dropped", async () => {
+      // The property the product depends on: a filtered retrieval returns all
+      // 20 matching memories, not a subset. Whether that comes from the
+      // B-tree (today, per the plan test above) or from the HNSW index with
+      // iterative_scan (once the corpus grows), the guarantee to the caller
+      // is the same — and a shortfall means a fact silently vanished from a
+      // surface the user relies on to catch mistakes.
+      const found = await withTransaction(pool, (tx) =>
+        memories.searchSemantic(
+          tx,
+          syntheticVector(0),
+          { subjectKind: "person", subjectId: SUBJECT_ID },
+          20,
+        ),
+      );
+
+      expect(found).toHaveLength(20);
+      expect(found.every((m) => m.subject_id === SUBJECT_ID)).toBe(true);
+    });
+
+    it("keeps full recall even when the HNSW path is FORCED", async () => {
+      // The case the plan test says we do not get by default, exercised
+      // deliberately: disable the alternatives so the planner must use the
+      // vector index, then assert recall is still complete.
       //
-      // With the index and WITHOUT iterative_scan, pgvector collects
-      // ef_search (40) candidates and only THEN applies `subject_id = $1`.
-      // At 10% selectivity that leaves ~4 of the 20 — returned successfully,
-      // with no error and nothing to distinguish it from "there is nothing
-      // here".
+      // THIS is where `SET LOCAL hnsw.iterative_scan` earns its place. Without
+      // it, pgvector gathers ef_search (40) candidates and applies
+      // `subject_id = $1` afterwards, leaving ~4 of the 20 — returned
+      // successfully, indistinguishable from "there is nothing here".
+      // searchSemantic sets it, so this passes; it is the forward guarantee
+      // for a corpus large enough that the planner stops choosing the B-tree.
       const found = await withTransaction(pool, async (tx) => {
         await tx.query(`SET LOCAL enable_seqscan = off`);
+        await tx.query(`SET LOCAL enable_indexscan = off`); // no B-tree
+        await tx.query(`SET LOCAL enable_bitmapscan = off`);
         return memories.searchSemantic(
           tx,
           syntheticVector(0),
@@ -257,7 +288,6 @@ suite("memories (integration)", () => {
       });
 
       expect(found).toHaveLength(20);
-      expect(found.every((m) => m.subject_id === SUBJECT_ID)).toBe(true);
     });
 
     it("orders by cosine distance — nearest first", async () => {

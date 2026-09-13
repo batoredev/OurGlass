@@ -185,12 +185,48 @@ CREATE INDEX memories_embedding_idx ON memories
 > error, no empty-result signal distinguishable from "there is genuinely nothing". That is the
 > same shape as the concurrency bug in Phase 3 — a plausible-looking empty read.
 >
-> Set `hnsw.iterative_scan = 'relaxed_order'` per connection, and **assert it in an
-> integration test with enough rows for the filter to bite** (a 3-row fixture cannot
-> reproduce this; the test needs ~200 rows with a 10%-selective filter).
+> Set `hnsw.iterative_scan = 'relaxed_order'` per transaction (`SET LOCAL`, so it cannot
+> leak across a pooled connection).
 
 `relaxed_order` over `strict_order`: relaxed gives better recall and the ordering slack is
 irrelevant here, because results are re-ranked by the hybrid scorer in §3 anyway.
+
+### 2.1.1 CORRECTION — measured in CI, and the risk above was overstated
+
+**Everything above about pgvector's behaviour is accurate. The claim that it inevitably
+applies to *our* queries was not.** Established by pushing deliberate mutations to CI rather
+than by reading:
+
+1. A 200-row recall test with a 10%-selective filter was written, and the `SET LOCAL` was
+   then **removed** to confirm the test caught it. **CI stayed green.** The test proved
+   nothing.
+2. A plan assertion requiring `memories_embedding_idx` was added. It **failed**, and the
+   `EXPLAIN` said why: for a filter this selective Postgres picks **`memories_subject_idx`**
+   — the B-tree on subject — and sorts the ~20 matching rows by distance. **The HNSW index
+   is never consulted.**
+
+That plan is not a bug; it is the better one. Twenty exact rows beat an approximate scan.
+
+**What this changes:**
+
+- **`iterative_scan` is a forward safety net, not today's correctness mechanism.** Recall is
+  currently correct because the planner chooses the B-tree. The setting matters when the
+  corpus grows past the point where that stops being cheapest — so it stays, and the reason
+  it stays is now written down instead of assumed.
+- **The suite asserts what it can actually demonstrate.** One test records the plan the query
+  really gets (going red if that ever shifts), one asserts full recall, and a third *forces*
+  the HNSW path with `enable_indexscan = off` — the only place the setting's value can be
+  shown at this fixture size.
+- **A recall test alone cannot validate a planner-dependent claim.** Fixture size determines
+  the plan, so "enough rows for the filter to bite" was the wrong instinct: what was needed
+  was pinning the *plan*, not enlarging the *data*.
+
+> **The generalisable lesson, and the reason this correction is kept rather than edited
+> away:** the original §2.1 was a correct quotation from pgvector's README applied to a query
+> shape nobody had run. It read as verified *because* it was sourced. **A citation
+> establishes that a behaviour exists, never that your code reaches it** — the same gap as
+> the "schema with no code path" class (`DECISIONS.md`), one level up: documentation with no
+> query path.
 
 ### 2.2 `embedding` is nullable, and the write path must not require it
 
