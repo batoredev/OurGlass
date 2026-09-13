@@ -222,6 +222,54 @@ export async function listOpenForOwner(
   return rows;
 }
 
+/** One newly-overdue commitment, with its owner's name for the reply. */
+export interface OverdueCommitment {
+  id: string;
+  object_text: string;
+  expected_at: Date;
+  owner_name: string | null;
+}
+
+/**
+ * Commitments whose deadline fell inside `(since, now]` and which are still
+ * open — spec §26's proactive trigger.
+ *
+ * ⚠ A HALF-OPEN WINDOW, NOT "is overdue", and the difference is the whole of
+ * §26's good/bad distinction. "Is overdue" stays true every turn until the
+ * thing is completed, so surfacing it repeatedly is the nagging §26 forbids.
+ * Crossing the deadline happens EXACTLY ONCE, and this window catches only
+ * that crossing. A caller that cannot supply a real `since` must pass `now`,
+ * which yields nothing — silence is correct when we cannot tell whether the
+ * user has already been told.
+ *
+ * `expected_at > $1 AND <= $2` — exclusive at the lower bound so consecutive
+ * calls cannot report the same crossing twice.
+ *
+ * The join is LEFT: an owner row could be invalidated after the commitment
+ * was created, and losing the whole notice because a name is missing would be
+ * worse than rendering it without one.
+ */
+export async function listOverdueBetween(
+  tx: Queryable,
+  since: Date,
+  now: Date,
+  limit = 10,
+): Promise<OverdueCommitment[]> {
+  const { rows } = await tx.query<OverdueCommitment>(
+    `SELECT c.id, c.object_text, c.expected_at, p.display_name AS owner_name
+       FROM commitments_current c
+       LEFT JOIN people_current p ON p.id = c.owner_id
+      WHERE c.expected_at IS NOT NULL
+        AND c.expected_at > $1::timestamptz
+        AND c.expected_at <= $2::timestamptz
+        AND c.status NOT IN ('completed','completed_late','cancelled','superseded')
+      ORDER BY c.expected_at
+      LIMIT $3`,
+    [since, now, limit],
+  );
+  return rows;
+}
+
 /** The terminal statuses. A commitment in one of these cannot be completed again. */
 export const TERMINAL_STATUSES = [
   "completed",
