@@ -368,6 +368,45 @@ was written.
 **The rule for future phases:** before a build team spawns, verify each prerequisite the
 phase's demo sentence implies by finding the code path, not the schema object.
 
+## A second defect class: a citation is not a verification
+
+Found in Phase 4, and distinct from "schema with no code path" above — that one is about
+objects nothing reaches; this one is about **claims nothing tests**.
+
+`PHASE-4-DESIGN.md` §2.1 quoted pgvector's README correctly: *"filtering is applied after the
+index is scanned… only 4 rows will match on average."* It concluded that
+`hnsw.iterative_scan` was mandatory for our filtered queries, and a 200-row integration test
+was written to defend it. **The quotation was accurate and the conclusion did not hold.**
+
+Two mutation probes, pushed to CI as a throwaway PR rather than reasoned about:
+
+| Probe | Expected | Actual |
+|---|---|---|
+| Remove `SET LOCAL hnsw.iterative_scan` | Recall test fails | **CI green.** The test proved nothing. |
+| Assert the plan uses `memories_embedding_idx` | Passes | **Failed** — Postgres picks `memories_subject_idx` (the B-tree) and sorts. The HNSW index is never consulted. |
+
+The planner's choice is *correct*: twenty exact rows beat an approximate scan. So recall was
+right for a reason the design had not identified, and the test defending it could not fail.
+
+**Why this is worth recording as a class.** The §2.1 text read as verified precisely
+*because* it carried a citation — a primary source, quoted accurately, applied to a query
+shape nobody had run. That is the same shape as F1–F6 one level up: **documentation with no
+query path**. A citation establishes that a behaviour *exists*; only running the code
+establishes that yours *reaches* it.
+
+**Two rules that follow:**
+
+1. **A test defending a specific mechanism must be proven to fail when that mechanism is
+   removed.** Not reasoned about — run. This repo has now produced three hollow tests (the
+   Phase 2 eval comparator, the Phase 2 live lane, this one) and mutation caught all three.
+2. **For anything planner-dependent, assert the plan, not just the result.** Fixture size
+   determines the plan, so "add more rows until it bites" is the wrong instinct — the plan
+   is the thing to pin, and it should go red when it shifts.
+
+One incidental hazard, cheap to repeat: `git show main:path > path` **truncates the target
+before git reads it**. A probe ran against a zero-byte test file and reported "No test suite
+found"; that result was discarded rather than read as a pass. Redirect to a temp file first.
+
 ## Graphify findings (standing rule: `/graphify --update` after every feature)
 
 Recorded per phase so the graph is *read*, not merely regenerated. A stale graph is worse
