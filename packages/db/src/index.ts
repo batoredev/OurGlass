@@ -26,6 +26,7 @@ export * as messages from "./repositories/messages.js";
 export * as commitmentNotes from "./repositories/commitment-notes.js";
 export * as workflows from "./repositories/workflows.js";
 export * as memories from "./repositories/memories.js";
+export * as relationships from "./repositories/relationships.js";
 
 export type { Person, CreatePersonInput } from "./repositories/people.js";
 export type { Organization } from "./repositories/organizations.js";
@@ -76,5 +77,11 @@ export type {
   ScoredMemory,
   SearchFilter,
 } from "./repositories/memories.js";
+export type {
+  Relationship,
+  CreateRelationshipInput,
+  RelationshipObjectKind,
+  SupersedeResult,
+} from "./repositories/relationships.js";
 
 export { truncateAll, TRUNCATABLE_TABLES } from "./testing/truncate.js";
