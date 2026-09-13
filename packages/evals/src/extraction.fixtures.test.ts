@@ -75,7 +75,9 @@ describe("fixture set integrity", () => {
 });
 
 describe("fixture set coverage", () => {
-  it("represents all six spec §5 intent kinds", () => {
+  it("represents every intent kind in the taxonomy", () => {
+    // Derived from INTENT_KINDS, never a hardcoded count — this test caught
+    // `inspection` the moment it was added, which is the whole point.
     const covered = new Set<IntentKind>(allIntents.map((intent) => intent.kind));
     for (const kind of INTENT_KINDS) expect(covered, `missing intent kind: ${kind}`).toContain(kind);
   });

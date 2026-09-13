@@ -13,6 +13,23 @@ export const INTENT_KINDS = [
   "context",
   "question",
   "execution",
+  /**
+   * §28 — "What am I waiting on?", "What does Barkha owe me?", "What do you
+   * know about Arun?"
+   *
+   * DISTINCT FROM `question`, and the distinction is load-bearing. `question`
+   * is the honest-decline path for anything the assistant cannot answer;
+   * `inspection` is a request for STRUCTURED STATE it can answer exactly, from
+   * a `WHERE` clause. Collapsing them would either decline answerable
+   * questions or route answerable ones through an approximate index — and a
+   * vector search can MISS a row that SQL returns, which for "what does
+   * Barkha owe me" means a commitment silently vanishing from the surface the
+   * user relies on to catch mistakes (PHASE-4-DESIGN §5, finding F11).
+   *
+   * An inspection turn MUTATES NOTHING: no tool call, no turn_id, no
+   * action_log row.
+   */
+  "inspection",
 ] as const;
 
 export type IntentKind = (typeof INTENT_KINDS)[number];
@@ -170,6 +187,19 @@ const REQUIRED_INTENT_FIELDS: Readonly<Record<IntentKind, readonly FieldRequirem
   context: [],
   question: [],
   execution: [],
+  /**
+   * NOTHING IS REQUIRED, and that is deliberate rather than an omission.
+   *
+   * An inspection is a READ. "What am I waiting on?" carries no owner, no
+   * objectText and no time, and demanding any of them would turn the most
+   * natural §28 question into a clarification — the over-asking §27 forbids.
+   *
+   * The planner narrows an under-specified inspection by ASKING only when the
+   * utterance genuinely names a person it cannot resolve; an unresolvable
+   * query degrades to "nothing outstanding" or an honest decline, never to a
+   * blocked turn. A read that returns nothing costs the user nothing.
+   */
+  inspection: [],
 };
 
 /**

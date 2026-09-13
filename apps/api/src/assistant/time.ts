@@ -36,6 +36,13 @@ const DIRECTION_BY_INTENT_KIND: Readonly<Record<IntentKind, TimeDirection>> = {
   context: "none",
   question: "none",
   execution: "forward",
+  /**
+   * "none", for the same reason as `question`. An inspection may reference
+   * either direction — "what was I waiting on last week" versus "what's due
+   * tomorrow" — and there is no phrase-level signal distinguishing them.
+   * Guessing forward would silently pick the wrong year for "in March".
+   */
+  inspection: "none",
 };
 
 export function timeDirectionForIntent(kind: IntentKind): TimeDirection {

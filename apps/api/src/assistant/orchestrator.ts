@@ -30,6 +30,7 @@ import { commitments, messages, people, users, type CurrentCommitment } from "@o
 import type { DatabaseTransaction } from "@ourglass/shared";
 import { ExtractionError, type Extractor } from "./extract.js";
 import { decideCompletion, resolvePersonMention, type EntityResolution } from "./resolve.js";
+import { renderInspection, runInspection, type InspectionQuery } from "./inspect.js";
 import type { RespondTrace } from "./respond.js";
 import { resolveTime, timeDirectionForIntent, type ResolvedTime } from "./time.js";
 import { executeTurn, type Deps as ExecutorDeps } from "../tools/index.js";
@@ -112,6 +113,16 @@ interface PlannedIntent {
   readonly declined: readonly string[];
   /** Facts to hand Respond if the calls commit. Parallel to `calls`. */
   readonly facts: readonly CommittedFact[];
+  /**
+   * Answers to §28 inspection queries — statements of fact read from rows.
+   *
+   * A SEPARATE CHANNEL from `declined`, deliberately. Both end up in the
+   * reply, so routing an answer through `declined` would work — and would
+   * label "Barkha owes you the article" as a REFUSAL in the trace, making
+   * §8's persisted history lie about what the assistant did. Distinguishing
+   * "I answered" from "I could not" is the point of having a trace.
+   */
+  readonly answers: readonly string[];
 }
 
 export async function runTurn(req: TurnRequest, deps: OrchestratorDeps): Promise<TurnResponse> {
@@ -201,6 +212,8 @@ export async function runTurn(req: TurnRequest, deps: OrchestratorDeps): Promise
     .filter((entry) => blocked.has(entry.index))
     .flatMap((entry) => questionsFor(entry));
   const declined = planned.flatMap((entry) => entry.declined);
+  // §28 answers, kept OUT of the Respond call on purpose — see below.
+  const answers = planned.flatMap((entry) => entry.answers);
 
   // ---- Mutate -------------------------------------------------------------
   let turnId: string | null = null;
@@ -261,10 +274,26 @@ export async function runTurn(req: TurnRequest, deps: OrchestratorDeps): Promise
     questions: [...questions, ...failures],
     declined,
   };
-  const { reply, degraded, trace: respondTrace } = await respondWithTrace(
-    deps.responder,
-    respondInput,
-  );
+  const {
+    reply: modelReply,
+    degraded,
+    trace: respondTrace,
+  } = await respondWithTrace(deps.responder, respondInput);
+
+  // ---- §28 answers are PREPENDED VERBATIM, never paraphrased --------------
+  //
+  // An inspection answer is a list of FACTS read from rows. Handing it to
+  // Haiku to reword adds a way for the content to come out wrong — a dropped
+  // item, a softened "about three things" — while adding nothing, because
+  // there is no judgement to make about what the rows say. §31 conciseness is
+  // already satisfied by the deterministic renderer.
+  //
+  // The model still runs for the rest of the turn (a mixed utterance can both
+  // ask and commit), so its reply is appended after, not discarded.
+  const reply =
+    answers.length > 0
+      ? [answers.join(" "), modelReply].filter((part) => part.trim() !== "").join(" ")
+      : modelReply;
 
   // ---- Step 7 (§8): the assistant message, with both stages traces --------
   //
@@ -498,6 +527,7 @@ async function planOneIntent(
 ): Promise<PlannedIntent> {
   const questions: string[] = [];
   const declined: string[] = [];
+  const answers: string[] = [];
   const calls: ToolCall[] = [];
   const facts: CommittedFact[] = [];
   const dependsOn: number[] = [];
@@ -519,12 +549,22 @@ async function planOneIntent(
 
   switch (intent.kind) {
     case "question":
-      // §3.4: classified, then declined honestly. Building lexical retrieval
-      // that Phase 4 throws away is worse than an honest gap. A question
-      // intent NEVER blocks the mutating intents in the same utterance —
-      // which is why this is a `declined`, not a `question`.
-      declined.push("I can't look things up yet.");
+      // Anything the assistant cannot answer from structured state. Phase 4
+      // narrowed this considerably: what used to fall here now mostly routes
+      // to `inspection` below. What remains — "what happened with the
+      // article?" — is genuinely open-ended, and declining is honest.
+      declined.push("I can't look that up yet.");
       break;
+
+    case "inspection": {
+      // §28. A READ: no tool call, no turn_id, no action_log row. The answer
+      // is a fact from a WHERE clause, never an approximate index (§5, F11).
+      const plan = await planInspection(intent, ctx);
+      questions.push(...plan.questions);
+      declined.push(...(plan.declined ?? []));
+      answers.push(...(plan.answers ?? []));
+      break;
+    }
 
     case "execution":
       // Spec §5: a request for an external action is not permission to carry
@@ -590,6 +630,7 @@ async function planOneIntent(
     dependsOn,
     questions,
     declined,
+    answers,
     facts: questions.length > 0 ? [] : facts,
   };
 }
@@ -602,6 +643,8 @@ interface IntentPlan {
    * either — the user said something and deserves to know it did not land.
    */
   readonly declined?: readonly string[];
+  /** §28 answers — see PlannedIntent.answers for why this is not `declined`. */
+  readonly answers?: readonly string[];
   readonly calls: readonly ToolCall[];
   readonly facts: readonly CommittedFact[];
   readonly questions: readonly string[];
@@ -812,6 +855,72 @@ async function planContext(intent: ExtractedIntent, ctx: PlanContext): Promise<I
     // sentence themselves. The attachment is silent by design; it surfaces on
     // the commitment, not in the reply.
     facts: [],
+  };
+}
+
+/**
+ * An `inspection` intent: §28's "What am I waiting on?".
+ *
+ * Maps the utterance onto ONE of `InspectionQuery`'s five closed shapes and
+ * runs it. Read-only — nothing here emits a ToolCall, so an inspection turn
+ * mints no turn_id and writes no action_log row.
+ *
+ * SHAPE SELECTION IS STRUCTURAL, from the resolved owner/recipient the
+ * extractor already produced, not from re-reading the sentence. "What does
+ * Barkha owe me" has owner=Barkha and recipient=me; "what do I owe Hult" has
+ * the reverse. Those two columns ARE the question (spec §7), which is why the
+ * two-column schema exists — a keyword match on "owe" would have to guess the
+ * direction, and guessing it wrong returns a confidently incorrect list.
+ *
+ * An unresolvable subject DECLINES rather than asking. An inspection that
+ * cannot be run costs the user nothing to retry, and interrogating them about
+ * a question they asked is the over-asking §27 forbids.
+ */
+async function planInspection(intent: ExtractedIntent, ctx: PlanContext): Promise<IntentPlan> {
+  const empty = { calls: [], facts: [], questions: [] } as const;
+
+  if (!ctx.selfPersonId) {
+    // F3's half-provisioned state: no linked person, so "me" cannot resolve
+    // and every §28 query is about "me". Honest rather than empty-and-wrong.
+    return { ...empty, declined: ["I can't tell who you are yet."] };
+  }
+  const self = ctx.selfPersonId;
+
+  const owner = await resolveParty(intent.owner, ctx);
+  const recipient = await resolveParty(intent.recipient, ctx);
+  const about = await resolveParty(intent.relatedEntity, ctx);
+
+  const query = ((): InspectionQuery | null => {
+    // "What do you know about Arun?" — a named subject with no direction.
+    if (about.id && !owner.id && !recipient.id) {
+      return { kind: "about_entity", subjectKind: "person", subjectId: about.id };
+    }
+    // "What does Barkha owe me?" — someone else owes me.
+    if (owner.id && owner.id !== self) {
+      return { kind: "owed_to_me", personId: owner.id, selfPersonId: self };
+    }
+    // "What do I owe Hult?" — I owe someone else.
+    if (owner.id === self && recipient.id && recipient.id !== self) {
+      return { kind: "i_owe", personId: recipient.id, selfPersonId: self };
+    }
+    // "What am I waiting on?" — the default read, and the most common §28
+    // question. Reached when nothing more specific was named.
+    if (!owner.id) {
+      return { kind: "waiting_on", selfPersonId: self };
+    }
+    // owner === self with no recipient: "what do I need to do today". Still a
+    // waiting_on read from the other side — everything I owe anyone.
+    return { kind: "i_owe", personId: self, selfPersonId: self };
+  })();
+
+  if (!query) {
+    return { ...empty, declined: ["I'm not sure what to look up."] };
+  }
+
+  const result = await runInspection(ctx.tx, query);
+  return {
+    ...empty,
+    answers: [renderInspection(result, (iso) => formatLocal(iso, ctx.timezone))],
   };
 }
 

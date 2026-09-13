@@ -409,20 +409,42 @@ export const EXTRACTION_FIXTURES: readonly ExtractionFixture[] = [
     utterance: "What happened with Barkha's article?",
     expected: { intents: [intent("question", "What happened with Barkha's article", "CONFIRMED", { relatedEntity: person("Barkha"), objectText: "article" })] },
   },
+  // ---------------------------------------------------------------------------
+  // Inspections (spec §28) — RECLASSIFIED FROM `question`.
+  //
+  // These three were labelled `question` before the `inspection` kind existed,
+  // and they are precisely what §28 asks for: structured state the assistant
+  // can answer EXACTLY from a WHERE clause. Leaving them as `question` would
+  // have trained the model to decline answerable questions, which is finding
+  // F11 showing up in the fixture set rather than in the code.
+  //
+  // The distinction the model must learn: `inspection` = show me what you
+  // already know; `question` = anything else.
+  // ---------------------------------------------------------------------------
   {
-    id: "question-waiting",
+    id: "inspection-waiting",
     utterance: "What am I waiting on?",
-    expected: { intents: [intent("question", "What am I waiting on", "CONFIRMED", { recipient: me })] },
+    expected: { intents: [intent("inspection", "What am I waiting on", "CONFIRMED", { recipient: me })] },
   },
   {
-    id: "question-owes",
+    id: "inspection-owes",
     utterance: "What does Barkha owe me?",
-    expected: { intents: [intent("question", "What does Barkha owe me", "CONFIRMED", { owner: person("Barkha"), recipient: me })] },
+    expected: { intents: [intent("inspection", "What does Barkha owe me", "CONFIRMED", { owner: person("Barkha"), recipient: me })] },
   },
   {
-    id: "question-today",
+    id: "inspection-today",
     utterance: "What do I need to do today?",
-    expected: { intents: [intent("question", "What do I need to do today", "CONFIRMED", { owner: me, time: deterministic("today") })] },
+    expected: { intents: [intent("inspection", "What do I need to do today", "CONFIRMED", { owner: me, time: deterministic("today") })] },
+  },
+  {
+    id: "inspection-i-owe",
+    utterance: "What do I owe Hult?",
+    expected: { intents: [intent("inspection", "What do I owe Hult", "CONFIRMED", { owner: me, recipient: org("Hult") })] },
+  },
+  {
+    id: "inspection-about-person",
+    utterance: "What do you know about Arun?",
+    expected: { intents: [intent("inspection", "What do you know about Arun", "CONFIRMED", { relatedEntity: person("Arun") })] },
   },
   {
     id: "question-person",
