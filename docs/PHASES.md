@@ -149,11 +149,47 @@ and add the completion date/commit as each phase lands.
   Demo: the spec's own Barkha/Hult/Arun narratives end-to-end, including "Barkha gave the
   article at 11" correctly producing `completed_late` with a 5-hour delay.
 
-- [ ] **Phase 4 — Understanding over time** *(Mission 4 team)*
+- [x] **Phase 4 — Understanding over time** *(Mission 4 team)* — **all 8 tasks built, CI-verified;
+  demo NOT runnable (see below)**
   Semantic memory, hybrid retrieval (HNSW + BM25). Memory provenance and conversational
   correction (§16, §17). Conflict detection (§24). Proactive behaviour with a relevance gate
-  (§26). Inspection queries (§28).
-  Demo: "Schedule Arun at 5 tomorrow" surfaces the Hult conflict and asks rather than choosing.
+  (§26). Inspection queries (§28). Design: `docs/PHASE-4-DESIGN.md`.
+
+  **118 integration tests** against live Postgres 17 + pgvector, **176 unit tests**, migration 010
+  applied cleanly on the first run.
+
+  **Five prerequisites were schema-only when the phase opened** (F7–F11, `DECISIONS.md`), which is
+  why the design doc was written before any code: `object_embedding` had existed since migration
+  003 with nothing ever writing to it; no embedding provider had been chosen, so `vector(1024)` was
+  a guess (correct — Voyage's default — by luck, not derivation); `relationships` had a table,
+  indexes, a view and a comment describing §17 correction, and no repository; `memories` did not
+  exist; and every §28 example in the spec turned out to be a *structured* query, not semantic
+  search. `events` was found to be a sixth instance mid-build.
+
+  **The retrieval test was proven decorative by mutation, and the design was wrong about why.**
+  A probe removing `SET LOCAL hnsw.iterative_scan` left CI green; a second probe asserting the plan
+  used the HNSW index *failed*, because for a filter this selective Postgres picks the B-tree on
+  subject and sorts. Recall is correct today because of the **planner**, not the setting. Recorded
+  in `DECISIONS.md` as a second defect class — *a citation is not a verification*: §2.1 quoted
+  pgvector's README accurately and applied it to a query shape nobody had run. The suite now
+  records the actual plan, asserts full recall, and separately **forces** the HNSW path, which is
+  the only honest demonstration of the setting's value at this fixture size.
+
+  > ⚠️ **THE DEMO DOES NOT RUN.** Verified against the code, not assumed. Two gaps, both the
+  > "schema with no code path" class recurring inside this phase's own work:
+  > **(1)** `events.createEvent` exists and **no tool calls it**, so there is never a Hult meeting
+  > to conflict with. **(2)** `detectTimeConflicts` and `selectProactiveLine` are **never called by
+  > the orchestrator** — both are unit-tested in isolation and unreachable from a turn.
+  > *"Schedule Arun at 5 tomorrow"* therefore surfaces nothing.
+  >
+  > Closing this out is the user's call, taken deliberately. What it costs: §24 and §26 are built
+  > and tested but **not wired**, so no user-facing behaviour exists for either. Finishing needs a
+  > `create_event` tool, two call sites in `runTurn`, and one end-to-end test.
+
+  **Standing caveat, now in its third phase:** `pnpm test:live` has still never run. Phase 4 adds a
+  *third* model dependency (Voyage), and unlike Sonnet and Haiku its failure mode is silent — a
+  wrong `input_type` or a degraded model returns 1024 plausible floats and worse recall, with
+  nothing to fail. **Retrieval quality is unmeasured.**
 
 - [ ] **Phase 5 — Dynamic entities + minimal UI** *(Mission 4 team)*
   `entity_types` registry, schema-driven frontend rendering. Bare inspection surfaces:

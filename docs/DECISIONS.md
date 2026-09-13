@@ -412,6 +412,34 @@ found"; that result was discarded rather than read as a pass. Redirect to a temp
 Recorded per phase so the graph is *read*, not merely regenerated. A stale graph is worse
 than none; an unread one is only marginally better.
 
+### Phase 4 pass — 1526 nodes, 1983 edges, 151 communities
+
+Graph health clean: no dangling endpoints, no missing endpoints, no self-loops, no collapsed
+edges, no import cycles. Phase 4 added **140 nodes and 218 edges**.
+
+**`Queryable` climbed to #3 among God Nodes (16 edges), and that is the correct shape.** The
+three repositories this phase added — `memories`, `relationships`, `events` — all depend on
+it, which is exactly what a shared transaction abstraction should look like. `runTurn` and
+`undoTurn` remain the two entry points at 12 edges each, unchanged from Phase 3.
+
+**No new architecture finding.** The `pg` betweenness bridge logged in the Phase 3 pass is
+still the one open structural item, and the hardening it calls for — a lint rule forbidding
+repository imports outside `tools/` and the Resolve stage — remains queued for a future plan
+review rather than done. Phase 4 did not worsen it: the new repositories are reached the same
+way as the existing ones.
+
+**What the graph does NOT show, and cannot.** It records that `detectTimeConflicts`,
+`selectProactiveLine` and `events.createEvent` exist and are internally connected. It does not
+show that **nothing calls them from a turn** — an unreferenced export is still a node. The
+Phase 4 demo gap was found by grepping for call sites, not by reading this graph, which is
+worth remembering before treating a clean graph as evidence that a feature is reachable.
+
+**Same limitation as the Phase 3 pass, for the same reason.** Semantic extraction ran inline
+in the lead session rather than in a subagent (the dispatched one hit a rate limit during the
+Phase 3 pass, and the inline path has been used since). The extraction is complete and cached,
+but per-chunk token counts are unavailable, so `cost.json` records 0/0 with a note rather than
+an invented estimate. Cumulative figures are an undercount and say so.
+
 ### Phase 3 pass — 1403 nodes, 1794 edges, 143 communities
 
 Graph health clean: no dangling endpoints, no missing endpoints, no self-loops, no collapsed
