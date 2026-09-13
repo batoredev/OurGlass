@@ -227,7 +227,11 @@ suite("runTurn (integration)", () => {
     );
     // §3.4: classified, then declined. A `question` is a `declined`, never a
     // `question` — it must not block mutating intents in the same utterance.
-    expect(calls[0]!.declined).toEqual(["I can't look things up yet."]);
+    //
+    // Phase 4 narrowed what reaches here: "what does Barkha owe me" is now an
+    // `inspection` and IS answered. What remains is genuinely open-ended,
+    // hence "that" rather than "things" — the assistant can look plenty up.
+    expect(calls[0]!.declined).toEqual(["I can't look that up yet."]);
     expect(calls[0]!.questions).toEqual([]);
   });
 
