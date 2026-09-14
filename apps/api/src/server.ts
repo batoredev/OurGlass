@@ -21,6 +21,7 @@ import { withTransaction } from "@ourglass/db";
 import { AnthropicExtractor, HaikuResponder, UnknownUserError, runTurn } from "./assistant/index.js";
 import { buildToolRegistry, undoTurn } from "./tools/index.js";
 import { TurnAlreadyUndoneError, TurnNotFoundError } from "./tools/errors.js";
+import { registerReadRoutes } from "./routes/read.js";
 
 export interface ServerOptions {
   /**
@@ -101,6 +102,12 @@ export function buildServer(pool: pg.Pool, options: ServerOptions = {}) {
       throw error;
     }
   });
+
+  // §29's read surfaces (Phase 5). Registered inside the SAME guard as /turn
+  // and /undo, deliberately: they serve personal data with no authentication,
+  // so they must not become reachable independently of the flag that the
+  // loopback binding is tied to.
+  registerReadRoutes(app, deps);
 
   app.post("/undo", async (request, reply) => {
     const body = (request.body ?? {}) as UndoBody;

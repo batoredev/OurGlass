@@ -192,6 +192,60 @@ export interface UndoResult {
   readonly undone: number;
 }
 
+/**
+ * One row of §29's Activity surface.
+ *
+ * NOT `readonly`, and carrying an index signature, because `tx.query<T>`
+ * constrains T to `Record<string, unknown>` — a readonly interface has no
+ * index signature and fails that constraint (TS2344). Same shape as the
+ * Phase 3 inverse-patch fix; the row types in packages/db are mutable for
+ * exactly this reason.
+ */
+export interface ActivityEntry {
+  [key: string]: unknown;
+  id: string;
+  turnId: string;
+  seq: number;
+  toolName: string;
+  actorKind: string;
+  targetTable: string;
+  targetId: string | null;
+  createdAt: Date;
+}
+
+/**
+ * Recent `action_log` entries — §29's Activity surface.
+ *
+ * Lives here rather than in a `packages/db` repository because `action_log`
+ * has no repository at all: this module is its only writer, and splitting one
+ * read into another package would put the ledger's shape in two places.
+ *
+ * READ-ONLY and DELIBERATELY UNFILTERED BY `actor_kind`. Undo filters to
+ * `user_turn` because a clock tick is not undoable (Phase 3 §6.3) — but the
+ * Activity surface is the opposite case: a reminder that fired is exactly
+ * what a user scanning "what happened" wants to see. Filtering here would
+ * hide the scheduled work that ran while they were away.
+ *
+ * `inverse_patch` is NOT selected. It is undo machinery, it can hold
+ * arbitrary row content, and a surface meant to be glanced at should not ship
+ * payloads nobody renders.
+ */
+export async function listRecentActivity(
+  tx: DatabaseTransaction,
+  limit = 100,
+): Promise<ActivityEntry[]> {
+  const { rows } = await tx.query<ActivityEntry>(
+    `SELECT id, turn_id AS "turnId", seq, tool_name AS "toolName",
+            actor_kind AS "actorKind", target_table AS "targetTable",
+            target_id AS "targetId", t_created AS "createdAt"
+       FROM action_log
+      ORDER BY t_created DESC, seq DESC
+      LIMIT $1`,
+    [limit],
+  );
+  return rows;
+}
+
 export async function undoTurn(turnId: string, deps: Deps): Promise<UndoResult> {
   return deps.db.withTransaction(async (tx) => {
     const { rows: entries } = await tx.query<ActionLogEntry>(

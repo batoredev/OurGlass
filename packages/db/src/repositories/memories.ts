@@ -128,6 +128,22 @@ export async function setEmbedding(
   return { memory: memory as Memory, previousEmbedding: prev_embedding };
 }
 
+/**
+ * Every current memory, newest first — §29's Memory inspection surface.
+ *
+ * A plain list rather than a search: this surface exists so the user can SEE
+ * what the assistant believes and correct it (§28), and a ranked or filtered
+ * view would hide exactly the wrong thing — the memory they came looking for
+ * because it is wrong.
+ */
+export async function listAll(tx: Queryable, limit = 200): Promise<Memory[]> {
+  const { rows } = await tx.query<Memory>(
+    `SELECT * FROM memories_current ORDER BY t_created DESC LIMIT $1`,
+    [limit],
+  );
+  return rows;
+}
+
 /** Rows still awaiting an embedding — the backfill query (§2.2). */
 export async function listUnembedded(tx: Queryable, limit = 100): Promise<Memory[]> {
   const { rows } = await tx.query<Memory>(
