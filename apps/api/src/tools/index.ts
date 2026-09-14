@@ -13,6 +13,7 @@ import { updateCommitmentTool } from "./update-commitment.js";
 import { fireReminderTool } from "./fire-reminder.js";
 import { createWorkflowTool, evaluateWorkflowTool } from "./workflow-tools.js";
 import { attachContextTool } from "./attach-context.js";
+import { createEntityRecordTool } from "./create-entity-record.js";
 import {
   correctRelationshipTool,
   forgetMemoryTool,
@@ -54,6 +55,9 @@ export function buildToolRegistry(): ToolRegistry {
   registry.register(rememberTool);
   registry.register(forgetMemoryTool);
   registry.register(correctRelationshipTool);
+  // Phase 5 (F12). The FIRST tool whose validate() reads its own schema at
+  // call time — which is why ToolDefinition.validate is a function.
+  registry.register(createEntityRecordTool);
   return registry;
 }
 
