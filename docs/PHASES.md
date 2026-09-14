@@ -191,8 +191,8 @@ and add the completion date/commit as each phase lands.
   wrong `input_type` or a degraded model returns 1024 plausible floats and worse recall, with
   nothing to fail. **Retrieval quality is unmeasured.**
 
-- [ ] **Phase 5 — Dynamic entities + minimal UI** *(Mission 4 team)* — **backend done (3/5
-  tasks), CI-verified; frontend not started**
+- [x] **Phase 5 — Dynamic entities + minimal UI** *(Mission 4 team)* — **all 5 tasks done,
+  CI-verified; not yet driven in a browser**
   `entity_types` registry, schema-driven frontend rendering. Bare inspection surfaces:
   conversation view plus Today / Commitments / People / Projects / Memory / Activity as
   read-only tables (§29). Deliberately unstyled. Design: `docs/PHASE-5-DESIGN.md`.
@@ -225,9 +225,36 @@ and add the completion date/commit as each phase lands.
   creates a second write path around validation, `action_log` and undo, with nothing else in
   the codebase failing.
 
-  **Remaining: tasks 4 and 5** — the web API client with the generic `field_kind` renderer,
-  and the §29 surfaces. The renderer's exhaustiveness check must be verified by mutation (add
-  a seventh `field_kind`; the build must fail).
+  **Tasks 4 and 5 are done** (192 unit tests, clean `next build`, nine routes). `apps/web` has
+  an API client, a generic renderer, and the §29 surfaces. **There is no `gym_session`
+  anywhere in the app** — `app/types/[key]/page.tsx` takes its columns from the type's own
+  `entity_type_fields` and its cells from `renderValue`, so a type defined thirty seconds ago
+  renders on the next page load. The exhaustiveness check makes that structural: a seventh
+  `field_kind` **fails the build** rather than rendering `[object Object]`. Verified by
+  mutation.
+
+  **A fourth hollow test, caught by that same mutation.** The drift check comparing `FieldKind`
+  to the Postgres enum used a plain `FieldKind[]` literal — and adding a seventh kind left it
+  GREEN, because a literal listing six values is a valid array of a seven-value union. It
+  compared the LIST to the schema and never the TYPE to the schema. Now
+  `satisfies Record<FieldKind, true>`, which requires a key per union member; the mutation goes
+  from 1 error to 2. Mutation has now caught every hollow test this repo has produced.
+
+  **`next build` caught what typecheck could not:** relative imports carried `.js` extensions —
+  correct for the Node-ESM packages, wrong for Turbopack, which resolves `.tsx` without them.
+  18 module-not-found errors, invisible to `tsc` under `moduleResolution: "bundler"`. Worth
+  remembering: in this monorepo the two module conventions differ by package, and only a build
+  distinguishes them.
+
+  > ⚠️ **NOT YET DRIVEN IN A BROWSER.** The pages typecheck, lint, unit-test and build, and the
+  > read routes are covered by integration tests — but nobody has loaded a page and looked at
+  > it. `qa-browser-lead` is the named browser owner for this phase (`PHASE-5-DESIGN.md` §5)
+  > and has not run. Every visual judgement here is therefore unverified, and the §29 demo
+  > ("the type appears in the UI immediately") is proven at the API layer, not the rendered one.
+  >
+  > **Also not built: the conversation view**, which §29 calls the primary surface. A chat UI
+  > is a real interactive feature and Phase 5's job was inspection; the home page says so and
+  > points at the demo endpoint rather than showing an empty box.
 
 - [ ] **Phase 6 — Ingestion** *(Mission 4 team)*
   Images and documents (§32, §33). Extract and associate with people/projects/commitments.
