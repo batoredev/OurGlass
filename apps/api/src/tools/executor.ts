@@ -203,6 +203,11 @@ export interface UndoResult {
  */
 export interface ActivityEntry {
   [key: string]: unknown;
+  /**
+   * `action_log.id` is `bigserial`, which `pg` returns as a STRING — a bigint
+   * does not fit a JS number safely, so the driver declines to guess. Typing
+   * it `number` would compile and then quietly compare wrong.
+   */
   id: string;
   turnId: string;
   seq: number;
@@ -234,12 +239,18 @@ export async function listRecentActivity(
   tx: DatabaseTransaction,
   limit = 100,
 ): Promise<ActivityEntry[]> {
+  // `created_at`, NOT `t_created`. Every other table in this schema has the
+  // four bitemporal columns, and action_log deliberately does not: migration
+  // 005's closing comment says it is a LEDGER, not a fact — an append-only
+  // record of mutations, which is never invalidated or superseded. Assuming
+  // the convention held cost a CI round trip ("column t_created does not
+  // exist"), so it is named here.
   const { rows } = await tx.query<ActivityEntry>(
     `SELECT id, turn_id AS "turnId", seq, tool_name AS "toolName",
             actor_kind AS "actorKind", target_table AS "targetTable",
-            target_id AS "targetId", t_created AS "createdAt"
+            target_id AS "targetId", created_at AS "createdAt"
        FROM action_log
-      ORDER BY t_created DESC, seq DESC
+      ORDER BY created_at DESC, seq DESC
       LIMIT $1`,
     [limit],
   );
