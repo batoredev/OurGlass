@@ -52,6 +52,67 @@ export interface EntityMention {
   readonly inferenceLevel: InferenceLevel;
 }
 
+/**
+ * A non-terminal status the user named. Mirrors `commitment_status` MINUS the
+ * two completed values and `superseded`.
+ *
+ * Completion has its own intent kind and its own tool, because lateness is
+ * derived there from two timestamptz columns (PHASE-3-DESIGN §2). Letting a
+ * status field say "completed" would create a second completion path that
+ * skips that derivation — so the type forbids it rather than the validator
+ * catching it later.
+ */
+export type CommitmentStatusHint =
+  | "pending"
+  | "in_progress"
+  | "waiting"
+  | "waiting_on_someone"
+  | "blocked"
+  | "cancelled";
+
+/**
+ * §25's conditional, FLATTENED to one level. "If Arun hasn't sent the schema
+ * by Friday, remind me."
+ *
+ * Not a tree: DECISIONS.md #2 records that recursive schemas are unsupported
+ * under Anthropic's strict subset, and a shape the model cannot emit is a
+ * shape we must not accept. Compound conditions ("if X and Y") are rejected
+ * at tool validation with a clean error rather than half-stored.
+ */
+export interface ConditionReference {
+  /** What is being waited on, in the user's words. Matched to a commitment. */
+  readonly subjectText: string;
+  /** The deadline phrase, VERBATIM. chrono resolves it; the model never does. */
+  readonly deadlinePhrase: string;
+  /** What to do when the condition holds. */
+  readonly action: "remind" | "ask";
+  /** The reminder or question text. */
+  readonly actionBody: string;
+}
+
+/** One field of a type the user asked to track. */
+export interface EntityFieldHint {
+  readonly fieldKey: string;
+  /** Must be one of the six closed kinds; validated at the tool boundary. */
+  readonly fieldKind: string;
+  readonly label: string;
+  readonly required: boolean;
+}
+
+/** §36 — "track my gym sessions with a date and a duration". */
+export interface EntityTypeDefinitionHint {
+  readonly typeKey: string;
+  readonly displayName: string;
+  readonly fields: readonly EntityFieldHint[];
+}
+
+/** §36 — one instance: "log a 45 minute gym session today". */
+export interface EntityRecordHint {
+  readonly typeKey: string;
+  /** Field key -> value, as the user stated it. Validated against the type. */
+  readonly values: Readonly<Record<string, string>>;
+}
+
 export interface ExtractedIntent {
   readonly kind: IntentKind;
   readonly inferenceLevel: InferenceLevel;
@@ -62,6 +123,42 @@ export interface ExtractedIntent {
   readonly time?: TimeReference;
   readonly reminderBody?: string;
   readonly relatedEntity?: EntityMention;
+
+  // -------------------------------------------------------------------------
+  // Fields added to make the built-but-unreachable tools reachable.
+  // See docs/PLANNER-WIRING-DESIGN.md.
+  //
+  // EVERY ONE IS OPTIONAL, deliberately. The 69 Phase 2 eval fixtures are the
+  // only evidence the extractor behaves at all, and a required field would
+  // invalidate all of them at once. They are also FIELDS rather than new
+  // intent kinds: "the poster is blocked" is an `information` intent with a
+  // status, not a different ACT. A kind per tool would turn IntentKind into a
+  // list of function names, which is exactly what a taxonomy should spare the
+  // model from choosing between.
+  // -------------------------------------------------------------------------
+
+  /** §22 — "the poster is blocked", "push that to Friday". update_commitment. */
+  readonly newStatus?: CommitmentStatusHint;
+
+  /** §16 — a durable fact to store, in the user's words. remember. */
+  readonly memoryBody?: string;
+
+  /**
+   * §17/§28 — what to stop treating as true: "forget that Arun works on
+   * backend", "no, Karthik handles it now". Drives forget_memory and
+   * correct_relationship, which differ only in whether a REPLACEMENT was also
+   * stated — a correction names both halves, a forget names one.
+   */
+  readonly correctionTarget?: string;
+
+  /** §25 — the flattened conditional. create_workflow. */
+  readonly condition?: ConditionReference;
+
+  /** §36 — a type the user asked to track. define_entity_type. */
+  readonly entityTypeDefinition?: EntityTypeDefinitionHint;
+
+  /** §36 — one instance of an existing type. create_entity_record. */
+  readonly entityRecord?: EntityRecordHint;
 }
 
 export interface Extraction {
@@ -258,10 +355,34 @@ export function isExtraction(value: unknown): value is Extraction {
     return [intent.owner, intent.recipient, intent.relatedEntity].every(isEntityMentionOrUndefined) &&
       isStringOrUndefined(intent.objectText) &&
       isStringOrUndefined(intent.reminderBody) &&
-      isTimeReferenceOrUndefined(intent.time);
+      isTimeReferenceOrUndefined(intent.time) &&
+      // The planner-wiring fields. Each is optional, so `undefined` passes —
+      // but a present value of the wrong shape must NOT, or a malformed
+      // condition reaches the tool layer disguised as a valid one.
+      isStatusHintOrUndefined(intent.newStatus) &&
+      isStringOrUndefined(intent.memoryBody) &&
+      isStringOrUndefined(intent.correctionTarget) &&
+      isConditionOrUndefined(intent.condition) &&
+      isTypeDefinitionOrUndefined(intent.entityTypeDefinition) &&
+      isEntityRecordOrUndefined(intent.entityRecord);
   });
 }
 
+/**
+ * ⚠ THE THIRD DECLARATION OF THE FIELD LIST, and the one that silently eats
+ * new fields.
+ *
+ * `hasOnlyKeys(intent, INTENT_KEYS)` REJECTS any intent carrying a key absent
+ * from this array. So adding a field to `ExtractedIntent` and to the JSON
+ * schema is still not enough: without a line here the extraction is discarded
+ * WHOLESALE — not the field, the whole intent — and the planner branch never
+ * fires. Nothing fails; extraction just quietly returns less.
+ *
+ * Three places must agree for one field to work: this list, the interface,
+ * and `extraction-schema.ts`'s `INTENT_SCHEMA`. That is one more than the two
+ * the planner-wiring design anticipated, and it is why the design's
+ * "verify the whole path" rule exists.
+ */
 const INTENT_KEYS = [
   "kind",
   "inferenceLevel",
@@ -272,7 +393,67 @@ const INTENT_KEYS = [
   "time",
   "reminderBody",
   "relatedEntity",
+  "newStatus",
+  "memoryBody",
+  "correctionTarget",
+  "condition",
+  "entityTypeDefinition",
+  "entityRecord",
 ] as const;
+
+const STATUS_HINTS: readonly string[] = [
+  "pending",
+  "in_progress",
+  "waiting",
+  "waiting_on_someone",
+  "blocked",
+  "cancelled",
+];
+
+function isStatusHintOrUndefined(value: unknown): boolean {
+  return value === undefined || (typeof value === "string" && STATUS_HINTS.includes(value));
+}
+
+function isConditionOrUndefined(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!isRecord(value) || !hasOnlyKeys(value, CONDITION_KEYS)) return false;
+  return (
+    typeof value.subjectText === "string" &&
+    typeof value.deadlinePhrase === "string" &&
+    (value.action === "remind" || value.action === "ask") &&
+    typeof value.actionBody === "string"
+  );
+}
+
+function isTypeDefinitionOrUndefined(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!isRecord(value) || !hasOnlyKeys(value, TYPE_DEF_KEYS)) return false;
+  if (typeof value.typeKey !== "string" || typeof value.displayName !== "string") return false;
+  if (!Array.isArray(value.fields)) return false;
+  return value.fields.every(
+    (field) =>
+      isRecord(field) &&
+      hasOnlyKeys(field, FIELD_KEYS) &&
+      typeof field.fieldKey === "string" &&
+      typeof field.fieldKind === "string" &&
+      typeof field.label === "string" &&
+      typeof field.required === "boolean",
+  );
+}
+
+function isEntityRecordOrUndefined(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!isRecord(value) || !hasOnlyKeys(value, ENTITY_RECORD_KEYS)) return false;
+  if (typeof value.typeKey !== "string" || !isRecord(value.values)) return false;
+  // Values are strings as the user stated them; the tool layer coerces per
+  // field_kind, where the schema is actually known.
+  return Object.values(value.values).every((entry) => typeof entry === "string");
+}
+
+const CONDITION_KEYS = ["subjectText", "deadlinePhrase", "action", "actionBody"] as const;
+const TYPE_DEF_KEYS = ["typeKey", "displayName", "fields"] as const;
+const FIELD_KEYS = ["fieldKey", "fieldKind", "label", "required"] as const;
+const ENTITY_RECORD_KEYS = ["typeKey", "values"] as const;
 
 const ENTITY_KEYS = ["name", "kind", "inferenceLevel"] as const;
 const TIME_KEYS = ["kind", "sourcePhrase"] as const;

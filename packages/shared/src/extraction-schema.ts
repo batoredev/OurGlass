@@ -30,6 +30,20 @@ replies" as event_trigger. Keep entity names as mentions, never IDs. A message t
 action is execution, not permission to carry it out.
 Use inspection when the user asks to SEE existing state — "what am I waiting on", "what does Barkha owe
 me", "what do I owe Hult", "what do you know about Arun". Use question only for something outside that.
+
+Set these OPTIONAL fields only when the utterance plainly calls for them; omitting one is always safe,
+and inventing one creates state the user did not ask for:
+- newStatus: the user changes an existing commitment's state ("the poster is blocked", "that's on hold").
+  NOT for completion — "the poster is done" is completion_update.
+- memoryBody: a durable fact worth keeping ("Arun handles the backend", "I prefer morning meetings").
+  NOT for a passing remark, and NOT for something the user asks you to DO.
+- correctionTarget: the user says something you hold is wrong ("no, Karthik handles it now", "forget
+  that Arun works on backend"). Only when correcting, never when stating something new.
+- condition: a conditional rule ("if Arun hasn't sent the schema by Friday, remind me"). deadlinePhrase
+  stays verbatim.
+- entityTypeDefinition: the user asks to start tracking a NEW kind of thing ("track my gym sessions with
+  a date and a duration").
+- entityRecord: the user logs one instance of a kind they already track ("log a 45 minute gym session").
 Do not invent commitments, people, dates, or context.`;
 
 const ENTITY_SCHEMA = {
@@ -53,6 +67,76 @@ const TIME_SCHEMA = {
   required: ["kind", "sourcePhrase"],
 } as const;
 
+/**
+ * Mirrors `CommitmentStatusHint`. The two completed values and `superseded`
+ * are ABSENT on purpose: completion has its own intent kind and its own tool,
+ * where lateness is derived from two timestamptz columns. A status field that
+ * could say "completed" would be a second completion path skipping that.
+ */
+const COMMITMENT_STATUS_HINTS = [
+  "pending",
+  "in_progress",
+  "waiting",
+  "waiting_on_someone",
+  "blocked",
+  "cancelled",
+] as const;
+
+/** §25's conditional, flattened — never a tree (DECISIONS.md #2). */
+const CONDITION_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    subjectText: { type: "string" },
+    // VERBATIM, like every other time phrase in this contract. chrono resolves
+    // it from (text, instant, timezone); the model never computes a timestamp.
+    deadlinePhrase: { type: "string" },
+    action: { enum: ["remind", "ask"] },
+    actionBody: { type: "string" },
+  },
+  required: ["subjectText", "deadlinePhrase", "action", "actionBody"],
+} as const;
+
+const ENTITY_FIELD_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    fieldKey: { type: "string" },
+    // The six closed kinds. An open kind space would let the model invent one
+    // the frontend has no renderer for — the exact failure the dynamic-entity
+    // requirement rules out.
+    fieldKind: { enum: ["text", "number", "bool", "date", "enum", "person_ref"] },
+    label: { type: "string" },
+    required: { type: "boolean" },
+  },
+  required: ["fieldKey", "fieldKind", "label", "required"],
+} as const;
+
+const ENTITY_TYPE_DEFINITION_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    typeKey: { type: "string" },
+    displayName: { type: "string" },
+    fields: { type: "array", items: ENTITY_FIELD_SCHEMA },
+  },
+  required: ["typeKey", "displayName", "fields"],
+} as const;
+
+const ENTITY_RECORD_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    typeKey: { type: "string" },
+    // A flat string map, NOT a typed object: the legal shape depends on rows
+    // in entity_type_fields that only the tool layer can read at call time.
+    // The model states values as the user said them; validation coerces and
+    // rejects there, where the schema is actually known.
+    values: { type: "object", additionalProperties: { type: "string" } },
+  },
+  required: ["typeKey", "values"],
+} as const;
+
 const INTENT_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -72,6 +156,20 @@ const INTENT_SCHEMA = {
     time: TIME_SCHEMA,
     reminderBody: { type: "string" },
     relatedEntity: ENTITY_SCHEMA,
+
+    // ⚠ `additionalProperties: false` ABOVE MAKES THIS LIST LOAD-BEARING.
+    // A field added to ExtractedIntent and NOT added here is not merely
+    // unpopulated — the API REJECTS a response containing it. So the planner
+    // branch that reads it can never fire, and nothing anywhere fails. That
+    // is the same dead-on-arrival shape the `kind` comment above describes,
+    // and it is why docs/PLANNER-WIRING-DESIGN.md orders the schema change
+    // BEFORE the planner branch.
+    newStatus: { enum: [...COMMITMENT_STATUS_HINTS] },
+    memoryBody: { type: "string" },
+    correctionTarget: { type: "string" },
+    condition: CONDITION_SCHEMA,
+    entityTypeDefinition: ENTITY_TYPE_DEFINITION_SCHEMA,
+    entityRecord: ENTITY_RECORD_SCHEMA,
   },
   required: ["kind", "inferenceLevel", "sourceText"],
 } as const;
