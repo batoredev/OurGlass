@@ -191,12 +191,43 @@ and add the completion date/commit as each phase lands.
   wrong `input_type` or a degraded model returns 1024 plausible floats and worse recall, with
   nothing to fail. **Retrieval quality is unmeasured.**
 
-- [ ] **Phase 5 — Dynamic entities + minimal UI** *(Mission 4 team)*
+- [ ] **Phase 5 — Dynamic entities + minimal UI** *(Mission 4 team)* — **backend done (3/5
+  tasks), CI-verified; frontend not started**
   `entity_types` registry, schema-driven frontend rendering. Bare inspection surfaces:
   conversation view plus Today / Commitments / People / Projects / Memory / Activity as
-  read-only tables (§29). Deliberately unstyled.
+  read-only tables (§29). Deliberately unstyled. Design: `docs/PHASE-5-DESIGN.md`.
   Demo: "track my gym sessions with a date and a duration" creates a new type that appears in
   the UI immediately, with no deploy.
+
+  **Four more prerequisites were schema-only** (F12–F15). The decisive one, F12: a type could
+  be *defined* and **nothing in the repo could create a record of it** — `entity_records`
+  appeared in exactly one place, a reserved-names list inside `define_entity_type`. So "track
+  my gym sessions" succeeded and the user had nowhere to put a session. F13: nothing could
+  read the registry either. F14: the API had three routes and none served data. F15:
+  `apps/web` is still a Phase 0 placeholder whose only link to the system is one constant.
+  **Phase 5 is therefore not "add a UI to a working backend" — it is "build the read layer,
+  then the UI"**, and the one-line description above hid that.
+
+  **Done and CI-verified (123 integration tests, 180 unit):** `entity_records` repository,
+  `create_entity_record` (the first tool whose `validate` reads its own schema at call time —
+  the reason `ToolDefinition.validate` is a function), the `entity_types` read layer, and the
+  eight §29 GET routes.
+
+  **The demo is proven end to end in CI**, which matters because a test asserting "the table
+  accepts an INSERT" would not have caught F12 — the table always did. One integration test
+  runs the whole path: define `gym_session` through the tool layer, confirm it appears in the
+  registry over HTTP with no deploy, record a session, read it back through the surface the
+  frontend will use.
+
+  **No mutation endpoint exists, and that is asserted mechanically.** `read.test.ts` inspects
+  Fastify's own route table for any POST/PUT/PATCH/DELETE under `/api`. Once a UI exists,
+  `POST /api/commitments` is the obvious shortcut — less code, feels RESTful, and silently
+  creates a second write path around validation, `action_log` and undo, with nothing else in
+  the codebase failing.
+
+  **Remaining: tasks 4 and 5** — the web API client with the generic `field_kind` renderer,
+  and the §29 surfaces. The renderer's exhaustiveness check must be verified by mutation (add
+  a seventh `field_kind`; the build must fail).
 
 - [ ] **Phase 6 — Ingestion** *(Mission 4 team)*
   Images and documents (§32, §33). Extract and associate with people/projects/commitments.
