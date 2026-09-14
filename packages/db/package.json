@@ -10,12 +10,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "migrate": "node --env-file-if-exists=.env scripts/migrate.mjs",
-    "reset": "node --env-file-if-exists=.env scripts/migrate.mjs --reset"
+    "migrate": "node --env-file-if-exists=../../.env scripts/migrate.mjs",
+    "reset": "node --env-file-if-exists=../../.env scripts/migrate.mjs --reset"
   },
   "dependencies": {
     "@ourglass/shared": "workspace:*",
-    "pg": "^8.13.0",
+    "pg": "^8.16.3",
     "node-pg-migrate": "9.0.0"
   },
   "devDependencies": {
