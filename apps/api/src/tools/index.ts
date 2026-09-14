@@ -62,5 +62,12 @@ export function buildToolRegistry(): ToolRegistry {
 }
 
 export { ToolRegistry } from "./registry.js";
-export { executeTurn, undoTurn, appendActionLog, type Deps } from "./executor.js";
+export {
+  executeTurn,
+  undoTurn,
+  appendActionLog,
+  listRecentActivity,
+  type ActivityEntry,
+  type Deps,
+} from "./executor.js";
 export * from "./errors.js";

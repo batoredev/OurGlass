@@ -106,7 +106,21 @@ export interface Today {
   readonly events: readonly TodayEvent[];
 }
 
-const API_BASE = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3001";
+/**
+ * SAME-ORIGIN by default.
+ *
+ * The API now lives in this app's own Route Handlers (docs/
+ * DEPLOYMENT-DESIGN.md §1), so there is no second host to point at — one
+ * Cloudflare Worker serves the UI and the API, which is also why there is no
+ * CORS configuration anywhere.
+ *
+ * Server components fetch during render, where a relative URL has no origin
+ * to resolve against, so an absolute base is still needed there. In the
+ * browser it stays empty and the path is relative.
+ */
+const API_BASE =
+  process.env["NEXT_PUBLIC_API_URL"] ??
+  (typeof window === "undefined" ? "http://localhost:3000" : "");
 
 /**
  * One fetch, with the failure mode named rather than swallowed.

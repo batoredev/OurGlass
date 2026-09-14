@@ -1,0 +1,56 @@
+#
+# Cloudflare Workers configuration (docs/DEPLOYMENT-DESIGN.md).
+#
+# ⚠ THIS FILE IS COMMITTED. NO SECRETS BELONG IN IT — not DATABASE_URL, not
+# ANTHROPIC_API_KEY, not VOYAGE_API_KEY. Set those with:
+#
+#     npx wrangler secret put DATABASE_URL
+#     npx wrangler secret put ANTHROPIC_API_KEY
+#     npx wrangler secret put VOYAGE_API_KEY        # optional
+#
+# `[vars]` below is for NON-secret configuration only, and the distinction
+# matters more than usual here: a live API key has already reached a tracked
+# file in this repo three times.
+#
+
+name = "ourglass"
+main = ".open-next/worker.js"
+
+# `nodejs_compat` is required for `pg` on compatibility dates before
+# 2026-08-04; on or after it, Workers enable nodejs_compat and
+# nodejs_compat_v2 by default. Declared explicitly so the behaviour does not
+# depend on which side of that date the project happens to sit.
+compatibility_date = "2026-09-14"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
+
+[vars]
+# NOT a secret — a feature flag. The read surfaces and /turn register only
+# when this is "true", because they serve personal data with no
+# authentication until Phase 7 owns the permission model (§35).
+ENABLE_DEMO_ENDPOINT = "true"
+
+#
+# The reminder poller, as a Cron Trigger (§3).
+#
+# EVERY MINUTE, which is Cloudflare's finest granularity and coarser than the
+# 30-second in-process interval it replaces. PHASE-3-DESIGN §6.4 already
+# recorded that interval as "deliberately coarse... a tunable, not a constant
+# of nature", because reminders in this product are set at human granularity
+# ("at 5"). A minute is still invisible.
+#
+# Two operational facts worth knowing before concluding a trigger is broken:
+#   - Cron expressions are UTC.
+#   - Changes take up to 15 MINUTES to propagate globally.
+#
+# Test locally with `wrangler dev` and its /cdn-cgi/local/scheduled endpoint
+# rather than waiting for a real tick.
+#
+[triggers]
+crons = ["*/1 * * * *"]
+
+[observability]
+enabled = true

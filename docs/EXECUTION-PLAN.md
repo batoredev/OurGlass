@@ -427,6 +427,53 @@ and the ingestion trust boundary in Phase 6.
 
 ---
 
+## Deployment — GitHub + Supabase + Cloudflare
+
+**Owner decision.** Code on GitHub, database on Supabase, hosting on Cloudflare. Full reasoning
+and the verified findings are in `docs/DEPLOYMENT-DESIGN.md`; the steps are here so the plan is
+self-contained.
+
+**This is not a config change.** Cloudflare Workers are V8 isolates, not Node, and three things
+this codebase did could not run there:
+
+| Broke | Fix | Status |
+|---|---|---|
+| **Fastify** — Workers are request/response then terminate; Fastify wants a persistent server owning a socket | Routes become Next.js **Route Handlers**; one Worker serves UI + API | in progress |
+| **`setInterval` poller** — timers *"don't persist across requests in the serverless context"* | **Cron Trigger** calling the existing `pollOnce`, unchanged | pending |
+| **`pg` `^8.13.0`** — Cloudflare requires ≥ **8.16.3**; the caret permitted it without requiring it, so it would fail *only on Workers* | Pinned `^8.16.3` | ✅ done |
+
+**Supabase: use the DIRECT connection (5432), never the transaction pooler (6543).** That pooler
+*"does not support prepared statements"*, and this codebase runs `SET LOCAL` inside transactions
+and holds a long-lived pool; migrations require direct access outright. 6543 is the tempting
+wrong choice because "serverless" describes Workers — and it fails *intermittently*.
+
+### Steps
+
+| # | Step | Owner |
+|---|---|---|
+| 1 | Pin `pg` ≥ 8.16.3 | ✅ done |
+| 2 | Move the 11 routes to `apps/web/app/api/**` | me — `/api/turn` done |
+| 3 | Retire Fastify from `apps/api`, keeping the tool/assistant source | me |
+| 4 | `wrangler.toml` + the Cloudflare Next.js adapter | me |
+| 5 | `scheduled()` cron handler calling `pollOnce` | me |
+| 6 | CI deploy step on push to `main` | me |
+| 7 | Supabase project, pgvector enabled, direct connection string | **you** |
+| 8 | `wrangler secret put` for `DATABASE_URL`, `ANTHROPIC_API_KEY` | **you** |
+| 9 | `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID` as GitHub repo secrets | **you** |
+
+**Secrets never enter the repo.** `wrangler.toml` is committed; keys go in via
+`wrangler secret put` and GitHub repository secrets. `ANTHROPIC_API_KEY` must never appear in a
+workflow a fork PR can trigger.
+
+**What this does NOT change:** the data model, the tool layer, the assistant. Phases 1, 2 and 4
+need no changes at all — because `PHASE-1-DESIGN.md` §5 put the repositories behind
+framework-agnostic interfaces for testability, and that is what makes them portable to a runtime
+nobody had considered when the decision was made.
+
+Your side of all of this is collected in **`docs/YOUR-ACTIONS.md`**.
+
+---
+
 ## Outstanding work, by phase
 
 **Verified against the code on 2026-09-14, not against the checklist.** Every claim below was
