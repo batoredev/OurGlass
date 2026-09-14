@@ -27,11 +27,33 @@ compatibility_flags = ["nodejs_compat"]
 directory = ".open-next/assets"
 binding = "ASSETS"
 
+#
+# ⚠ ENABLE_DEMO_ENDPOINT IS DELIBERATELY NOT SET HERE. DO NOT ADD IT.
+#
+# A security review of the first version of this file caught the mistake, and
+# it is worth stating plainly so nobody re-adds it:
+#
+#   The Fastify server bound 127.0.0.1 whenever the demo flag was on. That
+#   LOOPBACK BINDING — not the flag — was the actual protection. The flag only
+#   chose whether to register routes; the binding is what made them
+#   unreachable from off-machine.
+#
+#   A Cloudflare Worker has no loopback. It is a public URL the moment it
+#   deploys. Carrying the flag across without its binding turns "off by
+#   default, loopback when on" into "open to the internet" — publishing an
+#   unauthenticated endpoint that spends model tokens on whatever it is sent
+#   and serves one person's commitments, people and memories to anyone who
+#   finds the hostname.
+#
+# Until Phase 7 builds the permission model (§35), the demo endpoints stay OFF
+# in any deployed environment. Local development sets ENABLE_DEMO_ENDPOINT in
+# .env, where `next dev` binds localhost and the original guarantee holds.
+#
+# If you need them reachable before Phase 7, put Cloudflare Access in front of
+# the Worker — do not flip a flag.
+#
 [vars]
-# NOT a secret — a feature flag. The read surfaces and /turn register only
-# when this is "true", because they serve personal data with no
-# authentication until Phase 7 owns the permission model (§35).
-ENABLE_DEMO_ENDPOINT = "true"
+# Non-secret configuration only. Secrets go in via `wrangler secret put`.
 
 #
 # The reminder poller, as a Cron Trigger (§3).
