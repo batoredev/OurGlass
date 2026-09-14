@@ -427,6 +427,112 @@ and the ingestion trust boundary in Phase 6.
 
 ---
 
+## Outstanding work, by phase
+
+**Verified against the code on 2026-09-14, not against the checklist.** Every claim below was
+checked by finding the call site (or its absence), which is the rule `DECISIONS.md` records
+after six phases of "the schema exists" reading as "the feature exists".
+
+### The finding that dominates this list
+
+**Thirteen tools are registered. Four are reachable from a conversation.**
+
+```
+EMITTED by the orchestrator:  attach_context, complete_commitment,
+                              create_commitment, create_reminder
+
+REGISTERED but unreachable:   update_commitment, remember, forget_memory,
+                              correct_relationship, create_workflow,
+                              define_entity_type, create_entity_record
+
+Poller-only, correctly:       fire_reminder, evaluate_workflow
+```
+
+Each stranded tool is built, unit-tested, and CI-verified at the tool layer. What is missing is
+the **planner branch** that turns an utterance into that call — roughly one `case` per tool in
+`planOneIntent`, plus the extraction work to recognise the intent. This is why several phases
+below read "done" and still have user-facing gaps: the capability exists and nothing can ask
+for it.
+
+> **This is the F-class (schema with no code path) one level up.** Each phase was verified at
+> the layer it was built in. Nothing checked whether a *sentence* could reach it.
+
+### Phase 0 — Foundation *(done)*
+
+- **Branch protection on `main`.** Needs ADMIN; we hold WRITE
+  (`{"admin":false,...,"push":true}`, re-verified). Owner action, not ours.
+- **Secret scanning / push protection / Dependabot alerts** — cannot even be *read* without
+  ADMIN, so their state is assumed, not confirmed.
+
+### Phase 1 — Structured state + tool layer *(done)*
+
+- **`add_entity_field` was never built.** `PHASE-1-DESIGN.md` §2.8 specifies it and documents
+  its non-breaking rule (optional fields only). `entity_types.current_version` and
+  `entity_records.schema_version` exist to support it and, until it lands, can never differ.
+- **`update_commitment` is unreachable** — see the finding above. Spec §22's conversational
+  updates have no path.
+
+### Phase 2 — Interpret + Resolve *(done)*
+
+- **Duplicate detection (§23) is unwired.** `detectDuplicate` exists in `resolve.ts` with its
+  inverted-veto logic and is never called by the orchestrator. Saying the same thing twice
+  creates two commitments.
+- **`pnpm test:live` has never run.** 69 paid Sonnet calls, manual. There is still **no
+  recorded model output in the repo**, so every extraction claim is about the harness, not the
+  model. This is the single largest unmeasured surface in the project and has been open since
+  Phase 2.
+
+### Phase 3 — Conversational loop + reminders *(done)*
+
+- **Conditional rules (§25) cannot be created by talking.** `create_workflow` is registered and
+  the poller evaluates workflows correctly, but no planner branch emits it — so *"if Arun
+  hasn't sent the schema by Friday, remind me"* stores nothing.
+- **The human demo run** through `POST /turn` has never happened. Every §5 judgement —
+  conversational tone, §31 conciseness, §20's optional late prompt — is unfalsifiable by a test
+  suite and needs a person reading replies.
+
+### Phase 4 — Understanding over time *(done, with the largest gap)*
+
+- **The demo does not run.** `events.createEvent` has no calling tool, and
+  `detectTimeConflicts`/`selectProactiveLine` are never called from a turn. *"Schedule Arun at
+  5 tomorrow"* surfaces nothing. Needs: a `create_event` tool, two call sites in `runTurn`, one
+  end-to-end test.
+- **Hybrid retrieval is never called.** `searchHybrid`/`searchSemantic` are built, indexed, and
+  integration-tested — and no production code path invokes them. Semantic memory is storage
+  without recall.
+- **`remember`, `forget_memory`, `correct_relationship` are unreachable**, so §16 provenance
+  and §17 correction have no conversational path despite the repository and tools existing.
+- **Voyage has never been called with a real key.** The `input_type` asymmetry, the dimension
+  match, and recall quality are all unverified against the live API.
+
+### Phase 5 — Dynamic entities + minimal UI *(done)*
+
+- **Nobody has driven the UI in a browser.** Nine routes build and unit-test; every *visual*
+  judgement is unverified. `qa-browser-lead` is the named owner and has not run.
+- **The conversation view is not built** — §29 calls it the primary surface. Deliberate: a chat
+  UI is a real interactive feature and Phase 5's job was inspection.
+- **`define_entity_type` and `create_entity_record` are unreachable from a turn.** The demo
+  works through the tool layer and the UI renders it, but *"track my gym sessions"* typed at the
+  assistant does not currently reach either tool.
+
+### Phase 6 — Ingestion *(not started)*
+
+- No `documents` table, no migration, no ingestion code. `PHASE-1-DESIGN.md` names `documents`
+  as deferred to this phase, so this is expected rather than a gap.
+
+### Phases 7–8 — Integrations, permissions, voice *(not started)*
+
+- Permission model (§35) first, then Gmail/Calendar/Drive (§34). Voice deferred per spec §1.
+
+### If you fix one thing
+
+**Wire the planner.** Seven tools and the entire retrieval layer are one `case` branch each
+away from being reachable, and until then the product can create commitments and reminders and
+essentially nothing else by conversation. That is a smaller change than any remaining phase and
+unlocks more user-visible behaviour than all of them.
+
+---
+
 ## Open questions (do not block starting Phase 0)
 
 1. **Who has ADMIN on `batoredev/OurGlass`?** Branch protection and the security toggles are
