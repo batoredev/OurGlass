@@ -66,6 +66,12 @@ importers:
 
   apps/web:
     dependencies:
+      '@ourglass/api':
+        specifier: workspace:*
+        version: link:../api
+      '@ourglass/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@ourglass/shared':
         specifier: workspace:*
         version: link:../../packages/shared

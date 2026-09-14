@@ -25,5 +25,19 @@
     "tsx": "^4.19.0",
     "typescript": "6.0.3",
     "vitest": "4.1.11"
+  },
+  "exports": {
+    "./assistant": {
+      "types": "./dist/assistant/index.d.ts",
+      "default": "./dist/assistant/index.js"
+    },
+    "./tools": {
+      "types": "./dist/tools/index.d.ts",
+      "default": "./dist/tools/index.js"
+    },
+    "./reminders/poller": {
+      "types": "./dist/reminders/poller.d.ts",
+      "default": "./dist/reminders/poller.js"
+    }
   }
 }

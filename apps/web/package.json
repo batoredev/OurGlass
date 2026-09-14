@@ -14,7 +14,9 @@
     "@ourglass/shared": "workspace:*",
     "next": "16.3.4",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "@ourglass/api": "workspace:*",
+    "@ourglass/db": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
