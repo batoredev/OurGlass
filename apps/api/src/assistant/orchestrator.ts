@@ -37,7 +37,12 @@ import {
 } from "@ourglass/db";
 import type { DatabaseTransaction } from "@ourglass/shared";
 import { ExtractionError, type Extractor } from "./extract.js";
-import { decideCompletion, resolvePersonMention, type EntityResolution } from "./resolve.js";
+import {
+  decideCompletion,
+  detectDuplicate,
+  resolvePersonMention,
+  type EntityResolution,
+} from "./resolve.js";
 import { renderInspection, runInspection, type InspectionQuery } from "./inspect.js";
 import {
   detectTimeConflicts,
@@ -776,6 +781,74 @@ async function planCommitment(intent: ExtractedIntent, ctx: PlanContext): Promis
     return { calls: [], facts: [], questions };
   }
   const expectedAt = time?.tier === "deterministic" ? time.at : null;
+
+  // ┌─ §23: DO NOT CREATE THE SAME COMMITMENT TWICE ─────────────────────────┐
+  // │ detectDuplicate has existed since Phase 2, with its hard vetoes and    │
+  // │ three-band policy, and nothing called it. Saying the same thing twice  │
+  // │ produced two rows — and a duplicate is not cosmetic here: it doubles   │
+  // │ what the user believes they are waiting on, which is the one number    │
+  // │ this product exists to get right.                                      │
+  // │                                                                        │
+  // │ The bands are NOT symmetric, and DECISIONS.md #9 is why. A wrong MERGE │
+  // │ silently destroys a commitment; a wrong SPLIT leaves a visible         │
+  // │ duplicate the user can correct by saying so. So the auto band is       │
+  // │ deliberately near-unreachable (0.92 on content-token overlap), the     │
+  // │ ambiguous band ASKS, and everything else creates.                      │
+  // └────────────────────────────────────────────────────────────────────────┘
+  const open = await commitments.listOpenForOwner(ctx.tx, owner.id, recipient.id);
+  const duplicate = detectDuplicate(
+    {
+      ownerId: owner.id,
+      recipientId: recipient.id,
+      objectText: intent.objectText,
+      status: "pending",
+    },
+    open,
+  );
+
+  if (duplicate.kind === "ask") {
+    const candidate = open.find((row) => row.id === duplicate.commitmentIds[0]);
+    return {
+      calls: [],
+      facts: [],
+      questions: [
+        candidate
+          ? `Is that the same as "${candidate.object_text}", or something new?`
+          : "Is that the same thing you mentioned before, or something new?",
+      ],
+    };
+  }
+
+  if (duplicate.kind === "auto_match") {
+    const existing = open.find((row) => row.id === duplicate.commitmentId);
+    const priorExpectedAt = existing?.expected_at?.toISOString() ?? null;
+
+    // A RESTATEMENT WITH A NEW DEADLINE IS AN UPDATE, not a no-op: "the
+    // article by 6" then "the article by 8" is §22's conversational update,
+    // and treating it as a duplicate would silently keep the stale time.
+    if (expectedAt !== null && expectedAt !== priorExpectedAt) {
+      return {
+        questions: [],
+        calls: [
+          {
+            name: "update_commitment",
+            input: { commitment_id: duplicate.commitmentId, expected_at: expectedAt },
+          },
+        ],
+        facts: [{ kind: "commitment_updated", objectText: intent.objectText, status: null }],
+      };
+    }
+
+    // Nothing changed. `declined` rather than silence: the user said
+    // something and deserves to know it did not land as a new row — the same
+    // reasoning planContext uses for an unattachable note.
+    return {
+      calls: [],
+      facts: [],
+      questions: [],
+      declined: [`Already tracking ${intent.objectText}.`],
+    };
+  }
 
   // THE ID IS MINTED HERE, not read back from executeTurn.
   //

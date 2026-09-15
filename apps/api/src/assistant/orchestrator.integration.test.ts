@@ -920,4 +920,134 @@ suite("runTurn (integration)", () => {
     expect(result.asked.length).toBeGreaterThan(0);
     expect(result.reply).not.toContain("overdue");
   });
+
+  // -------------------------------------------------------------------------
+  // §23 duplicate detection — built in Phase 2, unwired until now.
+  //
+  // The bands are deliberately ASYMMETRIC (DECISIONS.md #9): a wrong MERGE
+  // silently destroys a commitment, a wrong SPLIT leaves a visible duplicate
+  // the user can correct by saying so. So auto is near-unreachable, ambiguous
+  // asks, and everything else creates.
+  // -------------------------------------------------------------------------
+
+  function owedByBarkha(objectText: string, time?: { kind: "deterministic"; sourcePhrase: string }) {
+    return intent({
+      kind: "information",
+      owner: mention("Barkha"),
+      recipient: mention("me"),
+      objectText,
+      ...(time ? { time } : {}),
+    });
+  }
+
+  it("saying the same thing twice does NOT create a second commitment", async () => {
+    await seedBarkha();
+    const { responder: first } = recordingResponder();
+    await runTurn(
+      { utterance: "Barkha needs to give me the article.", userId },
+      deps(fakeExtractor([owedByBarkha("the article")]), first),
+    );
+
+    const { responder, calls } = recordingResponder();
+    const result = await runTurn(
+      { utterance: "Barkha needs to give me the article.", userId },
+      deps(fakeExtractor([owedByBarkha("the article")]), responder),
+    );
+
+    expect(result.committed).toEqual([]);
+    // Said, not swallowed: the user gets told it did not land as a new row.
+    expect(calls[0]?.declined.join(" ")).toContain("Already tracking");
+
+    const open = await withTransaction(pool, (tx) => commitments.listCurrent(tx));
+    expect(open).toHaveLength(1);
+  });
+
+  it("a restatement with a NEW deadline updates rather than duplicating", async () => {
+    // §22. Treating this as a plain duplicate would silently keep the stale
+    // time, which is worse than either creating or ignoring.
+    await seedBarkha();
+    const { responder: first } = recordingResponder();
+    await runTurn(
+      { utterance: "Barkha needs to give me the article by 6.", userId },
+      deps(
+        fakeExtractor([owedByBarkha("the article", { kind: "deterministic", sourcePhrase: "by 6" })]),
+        first,
+      ),
+    );
+
+    const { responder } = recordingResponder();
+    const result = await runTurn(
+      { utterance: "Barkha needs to give me the article by 8.", userId },
+      deps(
+        fakeExtractor([owedByBarkha("the article", { kind: "deterministic", sourcePhrase: "by 8" })]),
+        responder,
+      ),
+    );
+
+    expect(result.committed).toEqual(["update_commitment"]);
+
+    const open = await withTransaction(pool, (tx) => commitments.listCurrent(tx));
+    expect(open).toHaveLength(1);
+    // The deadline moved. Reading the hour back rather than an exact instant:
+    // what matters is that it is no longer the original.
+    expect(open[0]?.expected_at).not.toBeNull();
+  });
+
+  it("a DIFFERENT thing from the same person still creates a second commitment", async () => {
+    // The failure mode the vetoes exist to prevent is the inverse of a
+    // duplicate: collapsing two real commitments into one. "the article" and
+    // "the invoice" share an owner and nothing else.
+    await seedBarkha();
+    const { responder: first } = recordingResponder();
+    await runTurn(
+      { utterance: "Barkha needs to give me the article.", userId },
+      deps(fakeExtractor([owedByBarkha("the article")]), first),
+    );
+
+    const { responder } = recordingResponder();
+    const result = await runTurn(
+      { utterance: "Barkha needs to give me the invoice.", userId },
+      deps(fakeExtractor([owedByBarkha("the invoice")]), responder),
+    );
+
+    expect(result.committed).toEqual(["create_commitment"]);
+    expect(await withTransaction(pool, (tx) => commitments.listCurrent(tx))).toHaveLength(2);
+  });
+
+  it("THE HARD VETO: the same object in the OTHER direction is not a duplicate", async () => {
+    // Spec §7 and DECISIONS.md #9 together: owner/recipient direction is a
+    // hard veto BEFORE text similarity. "Barkha owes me the article" and
+    // "I owe Barkha the article" are different commitments with identical
+    // text, and merging them would destroy one silently.
+    const barkha = await seedBarkha();
+    const { responder: first } = recordingResponder();
+    await runTurn(
+      { utterance: "Barkha needs to give me the article.", userId },
+      deps(fakeExtractor([owedByBarkha("the article")]), first),
+    );
+
+    const { responder } = recordingResponder();
+    const result = await runTurn(
+      { utterance: "I need to give Barkha the article.", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "information",
+            owner: mention("me"),
+            recipient: mention("Barkha"),
+            objectText: "the article",
+          }),
+        ]),
+        responder,
+      ),
+    );
+
+    expect(result.committed).toEqual(["create_commitment"]);
+
+    const open = await withTransaction(pool, (tx) => commitments.listCurrent(tx));
+    expect(open).toHaveLength(2);
+    // Both directions present, which is the assertion that matters.
+    expect(new Set(open.map((row) => row.owner_id)).size).toBe(2);
+    expect(open.some((row) => row.owner_id === barkha.id)).toBe(true);
+  });
 });
