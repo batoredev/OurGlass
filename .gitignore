@@ -19,3 +19,18 @@ graphify-out/graph.html
 graphify-out/cache/
 graphify-out/.graphify_python
 graphify-out/.graphify_root
+
+# Agent-runtime state. NOT project files — machine-local scratch written by the
+# agent tooling, swept in once by a careless `git add -A`.
+#
+# .claude/worktrees/ is the one that actually breaks things: each entry is its
+# own git repository, so committing it records a SUBMODULE (mode 160000)
+# pointing at a commit no remote has. Anyone cloning this public repo gets a
+# broken checkout for a directory that was never meant to leave this machine.
+#
+# .claude/ itself stays TRACKED — agents/, rules/ and skills/ are the project's
+# operating manual and belong in the repo.
+.claude-flow/
+.claude/worktrees/
+.claude/proven-config.json
+.claude/.proven-config-version
