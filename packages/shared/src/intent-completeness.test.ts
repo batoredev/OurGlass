@@ -78,6 +78,15 @@ describe("an action needs a body, from whichever field carries it", () => {
     expect(blockingFields(wrap(record))).toEqual([]);
   });
 
+  it("accepts an event to schedule", () => {
+    // Added AFTER this mechanism existed and STILL forgotten from the list, so
+    // every "schedule Arun at 5 tomorrow" answered "What should the reminder
+    // say?" and planEvent was unreachable. CI caught it; this pins it.
+    expect(blockingFields(wrap({ ...base, kind: "action", eventTitle: "the Hult review" }))).toEqual(
+      [],
+    );
+  });
+
   it("does NOT let an unrelated field satisfy the requirement", () => {
     // The mechanism must stay narrow. `memoryBody` is not a thing to DO, so an
     // action carrying only a memory is still missing its body — otherwise

@@ -321,15 +321,21 @@ const REQUIRED_INTENT_FIELDS: Readonly<Record<IntentKind, readonly FieldRequirem
     { field: "objectText", severity: "blocking" },
     { field: "owner", severity: "advisory" },
   ],
-  // An `action` is a request to do something INTERNAL, and four different
+  // An `action` is a request to do something INTERNAL, and FIVE different
   // fields can carry what to do: a plain reminder, a conditional rule, a new
-  // tracked type, or one record of one. Each feeds a different tool, and none
-  // of those tools reads the other three fields.
+  // tracked type, one record of one, or an event to schedule. Each feeds a
+  // different tool, and none of those tools reads the other four fields.
+  //
+  // ADD EVERY NEW ACTION-BODY FIELD HERE. `eventTitle` was added to the
+  // interface, the JSON schema, INTENT_KEYS and the planner, and forgotten
+  // here -- so every "schedule X" was reported incomplete and answered "What
+  // should the reminder say?", never reaching planEvent at all. The list is
+  // covered by intent-completeness.test.ts, one case per field.
   action: [
     {
       field: "reminderBody",
       severity: "blocking",
-      satisfiedBy: ["condition", "entityTypeDefinition", "entityRecord"],
+      satisfiedBy: ["condition", "entityTypeDefinition", "entityRecord", "eventTitle"],
     },
   ],
   completion_update: [{ field: "objectText", severity: "blocking" }],

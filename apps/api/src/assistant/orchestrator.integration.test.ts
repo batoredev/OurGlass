@@ -836,18 +836,27 @@ suite("runTurn (integration)", () => {
   });
 
   it("volunteers a newly-overdue commitment, once", async () => {
-    // RULE 2 is the whole point: "is overdue" stays true forever and nagging
-    // about it is §26's own "bad" column. "JUST became overdue" is true once.
+    // THE DEADLINE MUST FALL INSIDE THE WINDOW.
+    //
+    // Rule 2 is a half-open window (lastSpokeAt, now], not "is overdue". The
+    // first version of this test set the deadline an hour in the PAST, so it
+    // had already crossed before the priming turn and the gate correctly said
+    // nothing -- the test was wrong, not the code.
+    //
+    // `now` is injected so the window is exact rather than a race against the
+    // wall clock.
     const barkha = await seedBarkha();
-    const deadline = new Date(Date.now() - 60 * 60 * 1000);
 
-    // A prior assistant turn, so the rule-2 window has a left edge. Without
-    // one the window is empty and silence is correct.
+    // The left edge: without a prior assistant turn the window is empty and
+    // silence is the correct default.
     const { responder: priming } = recordingResponder();
     await runTurn(
       { utterance: "Hello.", userId },
       deps(fakeExtractor([intent({ kind: "context" })]), priming),
     );
+
+    const deadline = new Date(Date.now() + 60_000);
+    const afterDeadline = new Date(Date.now() + 120_000);
 
     await withTransaction(pool, (tx) =>
       commitments.createCommitment(tx, {
@@ -862,7 +871,7 @@ suite("runTurn (integration)", () => {
 
     const { responder } = recordingResponder();
     const result = await runTurn(
-      { utterance: "Thanks.", userId },
+      { utterance: "Thanks.", userId, now: afterDeadline },
       deps(fakeExtractor([intent({ kind: "context" })]), responder),
     );
 
@@ -883,12 +892,15 @@ suite("runTurn (integration)", () => {
       deps(fakeExtractor([intent({ kind: "context" })]), priming),
     );
 
+    const deadline = new Date(Date.now() + 60_000);
+    const afterDeadline = new Date(Date.now() + 120_000);
+
     await withTransaction(pool, (tx) =>
       commitments.createCommitment(tx, {
         ownerId: barkha.id,
         recipientId: null,
         objectText: "the article",
-        expectedAt: new Date(Date.now() - 60 * 60 * 1000),
+        expectedAt: deadline,
         status: "pending",
         projectId: null,
       }),
@@ -897,10 +909,14 @@ suite("runTurn (integration)", () => {
     const { responder } = recordingResponder();
     const result = await runTurn(
       // An information intent with no objectText asks a blocking question.
-      { utterance: "Barkha needs to give me something.", userId },
+      { utterance: "Barkha needs to give me something.", userId, now: afterDeadline },
       deps(fakeExtractor([intent({ kind: "information", owner: mention("Barkha") })]), responder),
     );
 
+    // The candidate EXISTS -- same window as the test above, which is what
+    // makes this a real rule-3 test rather than one passing because there was
+    // nothing to volunteer. The first version used an already-past deadline
+    // and would have passed even with rule 3 deleted.
     expect(result.asked.length).toBeGreaterThan(0);
     expect(result.reply).not.toContain("overdue");
   });
