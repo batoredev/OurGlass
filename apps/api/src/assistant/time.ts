@@ -92,11 +92,34 @@ export function resolveTime(
   // instant we are sampling. It is only wrong as the offset of the TARGET, which
   // is why we discard chrono's computed instant below and keep its civil fields.
   const referenceOffset = offsetMinutesAt(now, timezone);
-  const results = chrono.casual.parse(
-    phrase,
-    { instant: now, timezone: referenceOffset },
-    direction === "none" ? {} : { forwardDate: direction === "forward" },
-  );
+  const options = direction === "none" ? {} : { forwardDate: direction === "forward" };
+  const chronoReference = { instant: now, timezone: referenceOffset };
+
+  let results = chrono.casual.parse(phrase, chronoReference, options);
+
+  if (results.length === 0) {
+    // ┌─ "by 6" — THE SPEC'S OWN HEADLINE SENTENCE ─────────────────────────┐
+    // │ chrono parses "at 6" and does NOT parse "by 6", or bare "6". So     │
+    // │ *"Barkha needs to give me the article by 6"* — the sentence the     │
+    // │ product is specified around, and a Phase 2 fixture since — resolved │
+    // │ to `unresolved` and the assistant answered "When is 'by 6'?".       │
+    // │                                                                     │
+    // │ Nothing caught it: the eval fixtures assert the LABEL the model     │
+    // │ emits and never run the resolver, and time.test.ts happened to use  │
+    // │ phrases chrono likes. Two declarations of one capability with no    │
+    // │ cross-check — see resolution.test.ts, which is now that check.      │
+    // │                                                                     │
+    // │ ONLY A RETRY, never a rewrite of a phrase chrono already            │
+    // │ understands: "by Friday" parses fine and must not be touched. And   │
+    // │ `sourcePhrase` keeps the user's ORIGINAL words, so the resolution   │
+    // │ stays auditable.                                                    │
+    // └─────────────────────────────────────────────────────────────────────┘
+    const deadlineRetry = phrase.replace(/^(?:by|due(?:\s+by)?)\s+/i, "at ");
+    if (deadlineRetry !== phrase) {
+      results = chrono.casual.parse(deadlineRetry, chronoReference, options);
+    }
+  }
+
   const parsed = results[0];
   if (!parsed) return { tier: "unresolved", sourcePhrase: phrase, reason: "unparseable" };
 
