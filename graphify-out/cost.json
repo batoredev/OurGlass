@@ -31,8 +31,14 @@
       "output_tokens": 0,
       "files": 28,
       "note": "Phase 4 pass; semantic extraction ran inline in the host session, so per-chunk token counts are unavailable and recorded as 0 rather than estimated"
+    },
+    {
+      "date": "2026-09-15T19:24:04.145893+00:00",
+      "input_tokens": 284137,
+      "output_tokens": 0,
+      "files": 75
     }
   ],
-  "total_input_tokens": 0,
+  "total_input_tokens": 284137,
   "total_output_tokens": 0
 }
