@@ -79,6 +79,23 @@ export async function getById(tx: Queryable, id: string): Promise<Event | null> 
  *
  * Events with no `starts_at` are excluded: an unscheduled event cannot
  * overlap anything.
+ *
+ * A NULL `ends_at` IS A POINT, NOT AN EMPTY RANGE, and the bound style below
+ * is the whole reason this works.
+ *
+ * `tstzrange(t, t, '[)')` is EMPTY -- the lower bound is included, the upper
+ * excluded, and they are the same instant, so it contains nothing and `&&`
+ * matches nothing. The original version wrote exactly that for every event
+ * with no end time, which is EVERY event the assistant creates: it never
+ * invents a duration. So conflict detection silently returned nothing for the
+ * one shape it was built to catch, and nothing failed -- proactive.test.ts
+ * exercises detectTimeConflicts against a fake transaction and never reaches
+ * this SQL.
+ *
+ * `'[]'` makes it the single-instant range `[t, t]`, which overlaps anything
+ * containing t. Back-to-back meetings still do NOT conflict: a real range
+ * keeps `'[)'`, so `[t, t+1h)` excludes t+1h and the next meeting starting
+ * there is free.
  */
 export async function findOverlapping(
   tx: Queryable,
@@ -90,8 +107,10 @@ export async function findOverlapping(
     `SELECT * FROM events_current
       WHERE starts_at IS NOT NULL
         AND ($3::uuid IS NULL OR id <> $3::uuid)
-        AND tstzrange(starts_at, COALESCE(ends_at, starts_at), '[)')
-         && tstzrange($1::timestamptz, COALESCE($2::timestamptz, $1::timestamptz), '[)')
+        AND tstzrange(starts_at, COALESCE(ends_at, starts_at),
+                      CASE WHEN ends_at IS NULL THEN '[]' ELSE '[)' END)
+         && tstzrange($1::timestamptz, COALESCE($2::timestamptz, $1::timestamptz),
+                      CASE WHEN $2::timestamptz IS NULL THEN '[]' ELSE '[)' END)
       ORDER BY starts_at`,
     [startsAt, endsAt, excludeId ?? null],
   );
