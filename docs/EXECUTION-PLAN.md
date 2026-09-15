@@ -438,7 +438,7 @@ this codebase did could not run there:
 
 | Broke | Fix | Status |
 |---|---|---|
-| **Fastify** — Workers are request/response then terminate; Fastify wants a persistent server owning a socket | Routes become Next.js **Route Handlers**; one Worker serves UI + API | in progress |
+| **Fastify** — Workers are request/response then terminate; Fastify wants a persistent server owning a socket | Routes become Next.js **Route Handlers**; one Worker serves UI + API | done |
 | **`setInterval` poller** — timers *"don't persist across requests in the serverless context"* | **Cron Trigger** calling the existing `pollOnce`, unchanged | pending |
 | **`pg` `^8.13.0`** — Cloudflare requires ≥ **8.16.3**; the caret permitted it without requiring it, so it would fail *only on Workers* | Pinned `^8.16.3` | ✅ done |
 
@@ -453,7 +453,7 @@ wrong choice because "serverless" describes Workers — and it fails *intermitte
 |---|---|---|
 | 1 | Pin `pg` ≥ 8.16.3 | ✅ done |
 | 2 | Move the 11 routes to `apps/web/app/api/**` | me — `/api/turn` done |
-| 3 | Retire Fastify from `apps/api`, keeping the tool/assistant source | me |
+| 3 | ~~Retire Fastify from `apps/api`, keeping the tool/assistant source~~ **done** | me |
 | 4 | `wrangler.toml` + the Cloudflare Next.js adapter | me |
 | 5 | `scheduled()` cron handler calling `pollOnce` | me |
 | 6 | CI deploy step on push to `main` | me |

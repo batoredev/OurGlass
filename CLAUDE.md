@@ -194,7 +194,9 @@ spec in `docs/SPEC.md`, execution plan in `docs/EXECUTION-PLAN.md`, locked decis
 research findings in `docs/DECISIONS.md`, phase checklist in `docs/PHASES.md`.
 
 **Stack:** TypeScript end-to-end, pnpm monorepo. `apps/web` (Next.js 16.3.4), `apps/api`
-(Fastify + `pg`), `packages/shared` (shared types), `packages/db` (schema/migrations, Phase 1),
+(the assistant, tool layer and poller as a LIBRARY, imported by the web app; `pnpm dev` there
+runs the reminder poller, not a server), `packages/shared` (shared types), `packages/db`
+(schema/migrations, Phase 1),
 `packages/evals` (extraction eval harness, Phase 2). Postgres 17 + pgvector 0.8.6 via
 `docker-compose.yml`. See `docs/DECISIONS.md` for exact pinned versions and why (several
 depart from "latest" for verified compatibility reasons discovered at install/CI time).

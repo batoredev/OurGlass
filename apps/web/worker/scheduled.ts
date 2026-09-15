@@ -17,9 +17,14 @@
  * the function callable from a cron handler that owns no loop of its own. A
  * poller that read `new Date()` internally would need rewriting here.
  *
- * `startReminderPoller` stays in the codebase for local `pnpm dev`, where a
- * long-running Node process genuinely exists. It is simply unused in the
- * Cloudflare deployment.
+ * `startReminderPoller` runs locally instead, from apps/api/src/poller-main.ts
+ * under `pnpm dev`, where a long-running Node process genuinely exists.
+ *
+ * That entry point was written LATER than this comment. For two phases the
+ * sentence here claimed the function was kept for local dev while nothing
+ * anywhere called it, which is the documented-but-unreachable shape the tool
+ * audit kept finding. A comment asserting a call site is worth exactly as
+ * much as the call site existing.
  */
 import { buildToolRegistry } from "@ourglass/api/tools";
 import { pollOnce, systemClock } from "@ourglass/api/reminders/poller";
