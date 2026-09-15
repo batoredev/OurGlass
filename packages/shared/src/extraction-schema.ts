@@ -32,18 +32,21 @@ Use inspection when the user asks to SEE existing state — "what am I waiting o
 me", "what do I owe Hult", "what do you know about Arun". Use question only for something outside that.
 
 Set these OPTIONAL fields only when the utterance plainly calls for them; omitting one is always safe,
-and inventing one creates state the user did not ask for:
-- newStatus: the user changes an existing commitment's state ("the poster is blocked", "that's on hold").
+and inventing one creates state the user did not ask for. Each names the category it belongs with, so
+the field and the category always agree:
+- newStatus (information): the user changes an existing commitment's state ("the poster is blocked", "that's on hold").
   NOT for completion — "the poster is done" is completion_update.
-- memoryBody: a durable fact worth keeping ("Arun handles the backend", "I prefer morning meetings").
+- memoryBody (context): a durable fact worth keeping ("Arun handles the backend", "I prefer morning meetings").
   NOT for a passing remark, and NOT for something the user asks you to DO.
-- correctionTarget: the user says something you hold is wrong ("no, Karthik handles it now", "forget
+- correctionTarget (context): the user says something you hold is wrong ("no, Karthik handles it now", "forget
   that Arun works on backend"). Only when correcting, never when stating something new.
-- condition: a conditional rule ("if Arun hasn't sent the schema by Friday, remind me"). deadlinePhrase
+- condition (action): a conditional rule ("if Arun hasn't sent the schema by Friday, remind me"). deadlinePhrase
   stays verbatim.
-- entityTypeDefinition: the user asks to start tracking a NEW kind of thing ("track my gym sessions with
+- entityTypeDefinition (action): the user asks to start tracking a NEW kind of thing ("track my gym sessions with
   a date and a duration").
-- entityRecord: the user logs one instance of a kind they already track ("log a 45 minute gym session").
+- entityRecord (action): the user logs one instance of a kind they already track ("log a 45 minute gym session").
+An action is something to do INSIDE the assistant (a reminder, a rule, a new kind of thing to track).
+An external action — email, calendar, Drive — stays execution.
 Do not invent commitments, people, dates, or context.`;
 
 const ENTITY_SCHEMA = {

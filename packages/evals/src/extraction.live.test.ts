@@ -9,7 +9,7 @@ import {
   isExtraction,
 } from "@ourglass/shared";
 import { EXTRACTION_FIXTURES } from "./fixtures.js";
-import { matchesExpected } from "./match.js";
+import { forbiddenFieldsPresent, matchesExpected } from "./match.js";
 
 const apiKey = process.env["ANTHROPIC_API_KEY"];
 
@@ -57,7 +57,20 @@ describe("Phase 2 live extraction evals", () => {
       const block = response.content.find(
         (content): content is Anthropic.ToolUseBlock => content.type === "tool_use" && content.name === EXTRACTION_TOOL_NAME,
       );
-      if (!block || !isExtraction(block.input) || !matchesExpected(block.input, fixture.expected)) failures.push(fixture.id);
+      if (!block || !isExtraction(block.input)) {
+        failures.push(`${fixture.id}: no valid extraction`);
+        continue;
+      }
+      if (!matchesExpected(block.input, fixture.expected)) {
+        failures.push(fixture.id);
+        continue;
+      }
+      // Over-triggering is scored SEPARATELY from mismatching, because it is a
+      // different defect with a different fix: a mismatch means the model read
+      // the utterance wrong, an over-trigger means the prompt invited a field
+      // the utterance never called for.
+      const invented = forbiddenFieldsPresent(block.input, fixture.forbids);
+      if (invented.length > 0) failures.push(`${fixture.id}: invented ${invented.join(", ")}`);
     }
     expect(failures).toEqual([]);
   }, 300_000);

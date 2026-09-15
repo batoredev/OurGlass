@@ -262,6 +262,21 @@ export interface IntentCompletenessIssue {
 interface FieldRequirement {
   readonly field: IntentCompletenessIssue["missingField"];
   readonly severity: IntentCompletenessIssue["severity"];
+  /**
+   * Other fields that make this requirement moot.
+   *
+   * One requirement can be met by more than one field because one intent kind
+   * can feed more than one TOOL. An `action` normally becomes a reminder and
+   * needs `reminderBody`; an `action` carrying a `condition` becomes a
+   * WORKFLOW instead, and `create_workflow` reads its text from
+   * `condition.actionBody` and never looks at `reminderBody`.
+   *
+   * Without this, "If Arun hasn't sent the schema by Friday, remind me" would
+   * be reported incomplete and Phase 3 would ask the user to restate a body it
+   * was already given — the over-asking §27 forbids, caused by the contract
+   * rather than by the model.
+   */
+  readonly satisfiedBy?: readonly (keyof ExtractedIntent)[];
 }
 
 /**
@@ -279,7 +294,17 @@ const REQUIRED_INTENT_FIELDS: Readonly<Record<IntentKind, readonly FieldRequirem
     { field: "objectText", severity: "blocking" },
     { field: "owner", severity: "advisory" },
   ],
-  action: [{ field: "reminderBody", severity: "blocking" }],
+  // An `action` is a request to do something INTERNAL, and four different
+  // fields can carry what to do: a plain reminder, a conditional rule, a new
+  // tracked type, or one record of one. Each feeds a different tool, and none
+  // of those tools reads the other three fields.
+  action: [
+    {
+      field: "reminderBody",
+      severity: "blocking",
+      satisfiedBy: ["condition", "entityTypeDefinition", "entityRecord"],
+    },
+  ],
   completion_update: [{ field: "objectText", severity: "blocking" }],
   context: [],
   question: [],
@@ -313,7 +338,10 @@ export function validateIntentCompleteness(
   const issues: IntentCompletenessIssue[] = [];
   extraction.intents.forEach((intent, intentIndex) => {
     for (const requirement of REQUIRED_INTENT_FIELDS[intent.kind]) {
-      if (intent[requirement.field] === undefined) {
+      const satisfied =
+        intent[requirement.field] !== undefined ||
+        (requirement.satisfiedBy ?? []).some((alternate) => intent[alternate] !== undefined);
+      if (!satisfied) {
         issues.push({
           intentIndex,
           kind: intent.kind,

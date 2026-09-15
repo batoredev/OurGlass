@@ -21,7 +21,8 @@ import { describe, expect, it } from "vitest";
 import { INTENT_KINDS, isExtraction, validateIntentCompleteness } from "@ourglass/shared";
 import type { IntentKind, TimeReferenceKind } from "@ourglass/shared";
 import { EXTRACTION_FIXTURES } from "./fixtures.js";
-import { matchesExpected } from "./match.js";
+import { FORBIDDABLE_FIELDS, forbiddenFieldsPresent, matchesExpected } from "./match.js";
+import type { ForbiddableField } from "./match.js";
 
 const allIntents = EXTRACTION_FIXTURES.flatMap((fixture) => fixture.expected.intents);
 
@@ -275,5 +276,146 @@ describe("actionability (validateIntentCompleteness)", () => {
       "cancelled-meeting",
       "yesterday-context",
     ]);
+  });
+});
+
+
+describe("the six fields that make the stranded tools reachable", () => {
+  // ========================== READ THIS ====================================
+  // These fields were added to the contract AFTER the comparator was written,
+  // and for one commit the comparator did not look at any of them. Every
+  // fixture asserting `newStatus` passed whether or not the extraction had a
+  // status at all -- 28 fixtures, all green, all decorative.
+  //
+  // The suite below exists so that cannot recur silently. The important test
+  // is the LAST one: it drops each field from each fixture that expects it and
+  // requires the comparator to notice. If someone removes a comparison from
+  // intentMatches, that test goes red.
+  // =========================================================================
+
+  const labelled = (field: ForbiddableField) =>
+    EXTRACTION_FIXTURES.filter((fixture) =>
+      fixture.expected.intents.some((intent) => intent[field] !== undefined),
+    );
+
+  it("has at least one POSITIVE fixture per field", () => {
+    for (const field of FORBIDDABLE_FIELDS) {
+      expect(labelled(field).length, `no fixture exercises ${field}`).toBeGreaterThan(0);
+    }
+  });
+
+  it("has at least one fixture FORBIDDING each field", () => {
+    // Derived from FORBIDDABLE_FIELDS rather than a hardcoded list, so adding a
+    // seventh optional field to the contract fails here until it has a negative
+    // -- which is the only thing that catches over-triggering on it.
+    for (const field of FORBIDDABLE_FIELDS) {
+      const forbidding = EXTRACTION_FIXTURES.filter((fixture) => fixture.forbids?.includes(field) === true);
+      expect(forbidding.length, `no fixture forbids ${field}`).toBeGreaterThan(0);
+    }
+  });
+
+  it("makes every negative fixture declare what it forbids", () => {
+    // A fixture named "negative-..." that forbids nothing asserts nothing about
+    // over-triggering: the comparator ignores unlabelled fields, so it would
+    // pass against an extraction that invented exactly the field it is named
+    // after.
+    for (const fixture of EXTRACTION_FIXTURES.filter((f) => f.id.startsWith("negative-"))) {
+      expect(fixture.forbids ?? [], `${fixture.id} forbids nothing`).not.toEqual([]);
+    }
+  });
+
+  it("never forbids a field it also expects", () => {
+    // A contradiction would make the fixture unsatisfiable, and it would fail
+    // as an over-trigger rather than as the labelling mistake it is.
+    for (const fixture of EXTRACTION_FIXTURES) {
+      const violations = forbiddenFieldsPresent(fixture.expected, fixture.forbids);
+      expect(violations, `${fixture.id} forbids something it expects`).toEqual([]);
+    }
+  });
+
+  it("DETECTS an invented field on every fixture that forbids one", () => {
+    // forbiddenFieldsPresent is what the live lane trusts. Inject the forbidden
+    // field and require it to be caught.
+    const sample: Record<ForbiddableField, unknown> = {
+      newStatus: "blocked",
+      memoryBody: "an invented durable fact",
+      correctionTarget: "an invented correction",
+      condition: { subjectText: "x", deadlinePhrase: "by Friday", action: "remind", actionBody: "y" },
+      entityTypeDefinition: { typeKey: "invented", displayName: "Invented", fields: [] },
+      entityRecord: { typeKey: "invented", values: { a: "b" } },
+    };
+
+    for (const fixture of EXTRACTION_FIXTURES.filter((f) => (f.forbids ?? []).length > 0)) {
+      for (const field of fixture.forbids ?? []) {
+        const polluted = {
+          intents: fixture.expected.intents.map((intent) => ({ ...intent, [field]: sample[field] })),
+        } as typeof fixture.expected;
+        expect(
+          forbiddenFieldsPresent(polluted, fixture.forbids),
+          `${fixture.id} failed to detect an invented ${field}`,
+        ).not.toEqual([]);
+      }
+    }
+  });
+
+  it("REJECTS a DROPPED new field on every fixture that expects one", () => {
+    // THE anti-decorative test. Each of these fixtures must fail the comparator
+    // when its distinguishing field is removed; if it still matches, the fixture
+    // was asserting nothing and the field is unmeasured.
+    let checked = 0;
+    for (const field of FORBIDDABLE_FIELDS) {
+      for (const fixture of labelled(field)) {
+        const stripped = {
+          intents: fixture.expected.intents.map((intent) => {
+            const copy: Record<string, unknown> = { ...intent };
+            delete copy[field];
+            return copy as unknown as (typeof fixture.expected.intents)[number];
+          }),
+        };
+        expect(
+          matchesExpected(stripped, fixture.expected),
+          `${fixture.id}: dropping ${field} still matched -- the fixture is decorative`,
+        ).toBe(false);
+        checked += 1;
+      }
+    }
+    // Guards the loop itself: if `labelled` ever returned nothing for every
+    // field, the assertions above would vacuously pass.
+    expect(checked).toBeGreaterThanOrEqual(20);
+  });
+
+  it("REJECTS a wrong status value, not merely a missing one", () => {
+    // newStatus is a closed enum and each value drives a different write, so
+    // "blocked" vs "cancelled" must fail even though both are present and valid.
+    const withStatus = labelled("newStatus");
+    expect(withStatus.length).toBeGreaterThanOrEqual(4);
+
+    for (const fixture of withStatus) {
+      const swapped = {
+        intents: fixture.expected.intents.map((intent) =>
+          intent.newStatus === undefined
+            ? intent
+            : { ...intent, newStatus: intent.newStatus === "blocked" ? ("cancelled" as const) : ("blocked" as const) },
+        ),
+      };
+      expect(matchesExpected(swapped, fixture.expected), `${fixture.id} accepted a wrong status`).toBe(false);
+    }
+  });
+
+  it("distinguishes a forget from a correction by the absence of a replacement", () => {
+    // The ONLY structural difference between forget_memory and
+    // correct_relationship (assistant-contract.ts, correctionTarget). If the
+    // fixtures stopped expressing it the planner would have nothing to route on.
+    const forget = EXTRACTION_FIXTURES.find((f) => f.id === "forget-arun-backend");
+    const correct = EXTRACTION_FIXTURES.find((f) => f.id === "correct-backend-owner");
+    expect(forget).toBeDefined();
+    expect(correct).toBeDefined();
+
+    expect(forget?.expected.intents[0]?.correctionTarget).toBeDefined();
+    expect(forget?.expected.intents[0]?.memoryBody).toBeUndefined();
+    expect(forget?.forbids).toContain("memoryBody");
+
+    expect(correct?.expected.intents[0]?.correctionTarget).toBeDefined();
+    expect(correct?.expected.intents[0]?.memoryBody).toBeDefined();
   });
 });

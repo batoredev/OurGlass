@@ -39,7 +39,40 @@
  *   The structured fields carry the meaning; asserting segmentation would fail
  *   correct extractions.
  */
-import type { Extraction, ExtractedIntent, EntityMention, TimeReference } from "@ourglass/shared";
+import type {
+  CommitmentStatusHint,
+  ConditionReference,
+  EntityMention,
+  EntityRecordHint,
+  EntityTypeDefinitionHint,
+  Extraction,
+  ExtractedIntent,
+  TimeReference,
+} from "@ourglass/shared";
+
+/**
+ * The optional fields a fixture may assert must be ABSENT.
+ *
+ * Only the six added for the stranded tools (docs/PLANNER-WIRING-DESIGN.md).
+ * Each is a way for the model to OVER-trigger, and the comparator's normal rule
+ * -- an unlabelled field is unconstrained -- cannot catch that by construction.
+ */
+export type ForbiddableField =
+  | "newStatus"
+  | "memoryBody"
+  | "correctionTarget"
+  | "condition"
+  | "entityTypeDefinition"
+  | "entityRecord";
+
+export const FORBIDDABLE_FIELDS: readonly ForbiddableField[] = [
+  "newStatus",
+  "memoryBody",
+  "correctionTarget",
+  "condition",
+  "entityTypeDefinition",
+  "entityRecord",
+];
 
 /**
  * Lowercase, strip punctuation, collapse whitespace.
@@ -98,6 +131,99 @@ function optionalTextMatches(actual: string | undefined, expected: string | unde
  * Exported for the comparator's own tests and for diagnosing a live-lane failure
  * down to the individual intent.
  */
+/**
+ * A closed enum, so exact. There is no wording variance to absorb: the model
+ * either picked the value the utterance implies or it did not, and each value
+ * drives a different `commitments.status` write.
+ */
+function statusMatches(
+  actual: CommitmentStatusHint | undefined,
+  expected: CommitmentStatusHint | undefined,
+): boolean {
+  if (expected === undefined) return true;
+  return actual === expected;
+}
+
+/** Present and non-blank. Used where the TEXT is wording but its absence is a bug. */
+function isPresent(value: string | undefined): boolean {
+  return typeof value === "string" && normalizeText(value) !== "";
+}
+
+/**
+ * The conditional (spec 25).
+ *
+ * `action` is exact (a closed enum choosing between two different tools) and
+ * `deadlinePhrase` is compared normalized because the prompt forbids the model
+ * from paraphrasing it -- chrono-node parses those exact words later, so a
+ * paraphrase is a real defect, not a style choice.
+ *
+ * `subjectText` and `actionBody` are checked for PRESENCE only. Both are whole
+ * clauses rather than the short noun phrases `objectText` holds, and there are
+ * many faithful renderings of "Arun hasn't sent the schema". Asserting equality
+ * would make the lane flap and train us to ignore it -- the failure this file's
+ * header already warns about.
+ */
+function conditionMatches(
+  actual: ConditionReference | undefined,
+  expected: ConditionReference | undefined,
+): boolean {
+  if (expected === undefined) return true;
+  if (actual === undefined) return false;
+  return (
+    actual.action === expected.action &&
+    normalizeText(actual.deadlinePhrase) === normalizeText(expected.deadlinePhrase) &&
+    isPresent(actual.subjectText) &&
+    isPresent(actual.actionBody)
+  );
+}
+
+/**
+ * A type definition (spec 36).
+ *
+ * Compares what the TOOL BOUNDARY validates: the type key, and the field keys
+ * with their kinds. `displayName`, per-field `label`, and `required` are
+ * ignored -- they are presentation and a judgement call the model is not the
+ * authority on, exactly like `EntityMention.kind` above.
+ *
+ * `fieldKind` is exact because it is one of six closed values that decide how
+ * the frontend renders the column with no code change. Getting it wrong is the
+ * difference between a date picker and a text box.
+ */
+function typeDefinitionMatches(
+  actual: EntityTypeDefinitionHint | undefined,
+  expected: EntityTypeDefinitionHint | undefined,
+): boolean {
+  if (expected === undefined) return true;
+  if (actual === undefined) return false;
+  if (normalizeText(actual.typeKey) !== normalizeText(expected.typeKey)) return false;
+
+  const actualKinds = new Map(actual.fields.map((field) => [normalizeText(field.fieldKey), field.fieldKind]));
+  if (actualKinds.size !== expected.fields.length) return false;
+  return expected.fields.every((field) => actualKinds.get(normalizeText(field.fieldKey)) === field.fieldKind);
+}
+
+/**
+ * One record of an existing type (spec 36).
+ *
+ * Key set is exact -- an unknown key is rejected outright by validation, so a
+ * wrong one is a failed write rather than a wording difference. The VALUES are
+ * presence-only: "45", "45 minutes" and "forty-five" are the user's words, and
+ * coercion happens at the tool boundary against the registered field kind.
+ */
+function entityRecordMatches(
+  actual: EntityRecordHint | undefined,
+  expected: EntityRecordHint | undefined,
+): boolean {
+  if (expected === undefined) return true;
+  if (actual === undefined) return false;
+  if (normalizeText(actual.typeKey) !== normalizeText(expected.typeKey)) return false;
+
+  const actualKeys = new Map(Object.entries(actual.values).map(([key, value]) => [normalizeText(key), value]));
+  const expectedKeys = Object.keys(expected.values);
+  if (actualKeys.size !== expectedKeys.length) return false;
+  return expectedKeys.every((key) => isPresent(actualKeys.get(normalizeText(key))));
+}
+
 export function intentMatches(actual: ExtractedIntent, expected: ExtractedIntent): boolean {
   return (
     actual.kind === expected.kind &&
@@ -108,7 +234,17 @@ export function intentMatches(actual: ExtractedIntent, expected: ExtractedIntent
     entityMatches(actual.relatedEntity, expected.relatedEntity) &&
     optionalTextMatches(actual.objectText, expected.objectText) &&
     optionalTextMatches(actual.reminderBody, expected.reminderBody) &&
-    timeMatches(actual.time, expected.time)
+    timeMatches(actual.time, expected.time) &&
+    // The six fields that make the stranded tools reachable. Added late, and
+    // their absence here made every fixture asserting one of them DECORATIVE:
+    // an extraction that omitted newStatus entirely still matched a fixture
+    // that labelled it.
+    statusMatches(actual.newStatus, expected.newStatus) &&
+    optionalTextMatches(actual.memoryBody, expected.memoryBody) &&
+    optionalTextMatches(actual.correctionTarget, expected.correctionTarget) &&
+    conditionMatches(actual.condition, expected.condition) &&
+    typeDefinitionMatches(actual.entityTypeDefinition, expected.entityTypeDefinition) &&
+    entityRecordMatches(actual.entityRecord, expected.entityRecord)
   );
 }
 
@@ -155,4 +291,39 @@ function hasPerfectMatching(actual: readonly ExtractedIntent[], expected: readon
 export function matchesExpected(actual: Extraction, expected: Extraction): boolean {
   if (actual.intents.length !== expected.intents.length) return false;
   return hasPerfectMatching(actual.intents, expected.intents);
+}
+
+
+/**
+ * Which forbidden fields the extraction actually produced.
+ *
+ * ================================ WHY THIS EXISTS ==========================
+ * `matchesExpected` treats an unlabelled field as UNCONSTRAINED, which keeps
+ * fixtures honest -- you assert what you hand-labelled. The cost is that it can
+ * never catch OVER-triggering: an extraction that invents a `memoryBody` for
+ * "Karthik needs to send me the deck by Tuesday" matches a fixture that simply
+ * did not mention memoryBody.
+ *
+ * Every one of the six new fields is a way to over-trigger, and over-triggering
+ * is the failure that LOOKS like the feature working -- a spurious memory reads
+ * as a good memory until you notice the assistant believes something nobody
+ * said. So the negative fixtures name the field that must stay absent, and this
+ * is what checks it.
+ *
+ * Returns ids like "memoryBody@1" (field, intent index) so a live-lane failure
+ * says which intent over-triggered, not merely that one did.
+ * ===========================================================================
+ */
+export function forbiddenFieldsPresent(
+  actual: Extraction,
+  forbids: readonly ForbiddableField[] | undefined,
+): readonly string[] {
+  if (forbids === undefined || forbids.length === 0) return [];
+  const violations: string[] = [];
+  actual.intents.forEach((intent, index) => {
+    for (const field of forbids) {
+      if (intent[field] !== undefined) violations.push(`${field}@${index}`);
+    }
+  });
+  return violations;
 }

@@ -1,9 +1,21 @@
 import type { Extraction, ExtractedIntent, IntentKind, InferenceLevel, EntityMention } from "@ourglass/shared";
+import type { ForbiddableField } from "./match.js";
 
 export interface ExtractionFixture {
   readonly id: string;
   readonly utterance: string;
   readonly expected: Extraction;
+  /**
+   * Fields the extraction must NOT contain.
+   *
+   * `expected` can only say what SHOULD be there; the comparator leaves
+   * unlabelled fields unconstrained on purpose, so it cannot express "and do
+   * not invent a memory here". This can. Used by the negative fixtures, and by
+   * a few positive ones where the neighbouring field is the likely mistake --
+   * defining a type is not logging one, and a forget is distinguished from a
+   * correction only by the ABSENCE of a replacement.
+   */
+  readonly forbids?: readonly ForbiddableField[];
 }
 
 function intent(
@@ -517,5 +529,220 @@ export const EXTRACTION_FIXTURES: readonly ExtractionFixture[] = [
       intent("question", "Is the poster done", "CONFIRMED", { objectText: "the poster" }),
       intent("execution", "If so, email it to Hult", "CONFIRMED", { recipient: org("Hult"), objectText: "it" }),
     ] },
+  },
+  // ---------------------------------------------------------------------------
+  // The six optional fields that make the stranded tools reachable
+  // (docs/PLANNER-WIRING-DESIGN.md). Each block pairs POSITIVE cases with the
+  // NEGATIVE ones that look like them and must not fire.
+  //
+  // The negatives are the load-bearing half. Every one of these fields is a way
+  // for the model to OVER-trigger, and a field that fires too eagerly looks
+  // exactly like a feature working: a spurious memory reads as a good memory
+  // until you notice the assistant believes something nobody said.
+  // ---------------------------------------------------------------------------
+
+  // --- newStatus -> update_commitment (spec 22) ------------------------------
+  {
+    id: "status-blocked",
+    utterance: "The Hult poster is blocked on Karthik's photos.",
+    expected: { intents: [intent("information", "The Hult poster is blocked on Karthik's photos", "CONFIRMED", { owner: me, recipient: org("Hult"), objectText: "The Hult poster", newStatus: "blocked" })] },
+  },
+  {
+    id: "status-waiting-on-someone",
+    utterance: "I'm waiting on Barkha for the article.",
+    expected: { intents: [intent("information", "I'm waiting on Barkha for the article", "CONFIRMED", { owner: person("Barkha"), recipient: me, objectText: "the article", newStatus: "waiting_on_someone" })] },
+  },
+  {
+    id: "status-cancelled",
+    utterance: "Drop the MTTN invoice, they went with someone else.",
+    expected: { intents: [intent("information", "Drop the MTTN invoice, they went with someone else", "CONFIRMED", { owner: me, recipient: org("MTTN"), objectText: "the MTTN invoice", newStatus: "cancelled" })] },
+  },
+  {
+    id: "status-in-progress",
+    utterance: "I've started on the Hult poster.",
+    expected: { intents: [intent("information", "I've started on the Hult poster", "CONFIRMED", { owner: me, recipient: org("Hult"), objectText: "the Hult poster", newStatus: "in_progress" })] },
+  },
+  {
+    // NEGATIVE. "Done" is a completion, and completion has its own path where
+    // lateness is DERIVED from two timestamps (PHASE-3-DESIGN 2). A status hint
+    // saying "completed" would be a second completion path that skips that
+    // derivation, which is why CommitmentStatusHint excludes the value outright
+    // -- this fixture asserts the model does not reach for a status anyway.
+    id: "negative-done-is-completion-not-status",
+    forbids: ["newStatus"],
+    utterance: "The poster is done.",
+    expected: { intents: [intent("completion_update", "The poster is done", "CONFIRMED", { objectText: "The poster" })] },
+  },
+  {
+    // NEGATIVE. An inspection ASKS about status; it does not set one.
+    id: "negative-asking-what-is-blocked",
+    forbids: ["newStatus"],
+    utterance: "What's blocked right now?",
+    expected: { intents: [intent("inspection", "What's blocked right now", "CONFIRMED", {})] },
+  },
+
+  // --- memoryBody -> remember (spec 16) --------------------------------------
+  {
+    id: "memory-preference",
+    utterance: "Barkha prefers WhatsApp over email.",
+    expected: { intents: [intent("context", "Barkha prefers WhatsApp over email", "CONFIRMED", { relatedEntity: person("Barkha"), memoryBody: "Barkha prefers WhatsApp over email" })] },
+  },
+  {
+    id: "memory-own-preference",
+    utterance: "I prefer morning meetings.",
+    expected: { intents: [intent("context", "I prefer morning meetings", "CONFIRMED", { memoryBody: "I prefer morning meetings" })] },
+  },
+  {
+    id: "memory-role",
+    utterance: "Arun handles the backend.",
+    expected: { intents: [intent("context", "Arun handles the backend", "CONFIRMED", { relatedEntity: person("Arun"), memoryBody: "Arun handles the backend" })] },
+  },
+  {
+    // NEGATIVE, and the subtlest one here. "Remember to" is not a request to
+    // REMEMBER -- it is the English idiom for "don't let me forget", which is a
+    // reminder. A model that pattern-matches the verb stores a fact and sets
+    // nothing, and the user never gets the nudge they asked for.
+    id: "negative-remember-to-is-a-reminder",
+    forbids: ["memoryBody"],
+    utterance: "I should probably remember to call her.",
+    expected: { intents: [intent("action", "I should probably remember to call her", "UNCERTAIN", { reminderBody: "call her" })] },
+  },
+  {
+    // NEGATIVE. A commitment is not a memory. This has an owner, a recipient and
+    // a deadline; storing it as a durable fact would leave it out of the
+    // Commitments surface the user relies on to catch mistakes.
+    id: "negative-commitment-is-not-a-memory",
+    forbids: ["memoryBody"],
+    utterance: "Karthik needs to send me the deck by Tuesday.",
+    expected: { intents: [intent("information", "Karthik needs to send me the deck by Tuesday", "CONFIRMED", { owner: person("Karthik"), recipient: me, objectText: "the deck", time: deterministic("by Tuesday") })] },
+  },
+
+  // --- correctionTarget -> forget_memory / correct_relationship (spec 17) ----
+  {
+    // A FORGET: one half stated. Nothing replaces what is being dropped.
+    id: "forget-arun-backend",
+    forbids: ["memoryBody"],
+    utterance: "Forget that Arun works on backend.",
+    expected: { intents: [intent("context", "Forget that Arun works on backend", "CONFIRMED", { relatedEntity: person("Arun"), correctionTarget: "Arun works on backend" })] },
+  },
+  {
+    // A CORRECTION: both halves stated, which is the ONLY thing distinguishing
+    // it from a forget (assistant-contract.ts, correctionTarget). The planner
+    // routes on whether memoryBody accompanies correctionTarget.
+    id: "correct-backend-owner",
+    utterance: "No, Karthik handles backend now, not Arun.",
+    expected: { intents: [intent("context", "No, Karthik handles backend now, not Arun", "CONFIRMED", { relatedEntity: person("Karthik"), correctionTarget: "Arun handles backend", memoryBody: "Karthik handles backend" })] },
+  },
+  {
+    id: "correct-wrong-recipient",
+    utterance: "Actually the poster goes to MTTN, not Hult.",
+    expected: { intents: [intent("context", "Actually the poster goes to MTTN, not Hult", "CONFIRMED", { relatedEntity: org("MTTN"), correctionTarget: "the poster goes to Hult", memoryBody: "the poster goes to MTTN" })] },
+  },
+  {
+    // NEGATIVE, called out by name in PLANNER-WIRING-DESIGN 3.1. Stating a fact
+    // for the first time is a remember, not a correction -- there is nothing on
+    // record to supersede. A model that corrects here invalidates a row that
+    // does not exist, or worse, the wrong one.
+    id: "negative-new-fact-is-not-a-correction",
+    forbids: ["correctionTarget"],
+    utterance: "Karthik handles the frontend.",
+    expected: { intents: [intent("context", "Karthik handles the frontend", "CONFIRMED", { relatedEntity: person("Karthik"), memoryBody: "Karthik handles the frontend" })] },
+  },
+  {
+    // NEGATIVE. "No" disagreeing with a SUGGESTION is not a correction of a
+    // stored belief. Nothing is on record to invalidate.
+    id: "negative-declining-is-not-a-correction",
+    forbids: ["correctionTarget"],
+    utterance: "No, don't remind me about that.",
+    expected: { intents: [intent("context", "No, don't remind me about that", "UNCERTAIN", {})] },
+  },
+
+  // --- condition -> create_workflow (spec 25) --------------------------------
+  {
+    id: "conditional-schema-friday",
+    utterance: "If Arun hasn't sent the schema by Friday, remind me.",
+    expected: { intents: [intent("action", "If Arun hasn't sent the schema by Friday, remind me", "CONFIRMED", { relatedEntity: person("Arun"), condition: { subjectText: "the schema", deadlinePhrase: "by Friday", action: "remind", actionBody: "Arun hasn't sent the schema" } })] },
+  },
+  {
+    id: "conditional-ask-barkha",
+    utterance: "If Barkha hasn't replied by tomorrow morning, ask me whether to chase her.",
+    expected: { intents: [intent("action", "If Barkha hasn't replied by tomorrow morning, ask me whether to chase her", "CONFIRMED", { relatedEntity: person("Barkha"), condition: { subjectText: "Barkha's reply", deadlinePhrase: "by tomorrow morning", action: "ask", actionBody: "whether to chase her" } })] },
+  },
+  {
+    // NEGATIVE. "If so" chains two intents within one turn; it does not create a
+    // standing rule. The difference is DURABILITY -- a workflow outlives the
+    // turn and keeps evaluating, so one created here would fire forever.
+    id: "negative-if-so-is-not-a-workflow",
+    forbids: ["condition"],
+    utterance: "Is the deck ready? If so, send it to Karthik.",
+    expected: { intents: [
+      intent("question", "Is the deck ready", "CONFIRMED", { objectText: "the deck" }),
+      intent("execution", "If so, send it to Karthik", "CONFIRMED", { recipient: person("Karthik"), objectText: "it" }),
+    ] },
+  },
+
+  // --- entityTypeDefinition -> define_entity_type (spec 36) -----------------
+  {
+    // The user's own headline requirement, and the Phase 5 demo utterance: a
+    // type invented mid-conversation must appear in the UI with no deploy.
+    id: "define-gym-sessions",
+    forbids: ["entityRecord"],
+    utterance: "Track my gym sessions with a date and a duration.",
+    expected: { intents: [intent("action", "Track my gym sessions with a date and a duration", "CONFIRMED", { entityTypeDefinition: { typeKey: "gym_session", displayName: "Gym Sessions", fields: [
+      { fieldKey: "date", fieldKind: "date", label: "Date", required: true },
+      { fieldKey: "duration", fieldKind: "number", label: "Duration", required: false },
+    ] } })] },
+  },
+  {
+    id: "define-book-log",
+    forbids: ["entityRecord"],
+    utterance: "Start tracking books I read, with a title and whether I finished it.",
+    expected: { intents: [intent("action", "Start tracking books I read, with a title and whether I finished it", "CONFIRMED", { entityTypeDefinition: { typeKey: "book", displayName: "Books", fields: [
+      { fieldKey: "title", fieldKind: "text", label: "Title", required: true },
+      { fieldKey: "finished", fieldKind: "bool", label: "Finished", required: false },
+    ] } })] },
+  },
+  {
+    // NEGATIVE. A statement of habit is a durable fact, not a request for
+    // structure. A junk type is capped and reversible but clutters the UI
+    // persistently (PLANNER-WIRING-DESIGN 2), and nobody asked for a table.
+    id: "negative-habit-is-not-a-type-definition",
+    forbids: ["entityTypeDefinition"],
+    utterance: "I go to the gym on Tuesdays.",
+    expected: { intents: [intent("context", "I go to the gym on Tuesdays", "CONFIRMED", { memoryBody: "I go to the gym on Tuesdays" })] },
+  },
+  {
+    // NEGATIVE. "Keep track of" one SPECIFIC thing is a commitment, not a new
+    // kind of thing. The tell is that it names one object, not a category.
+    id: "negative-track-one-thing-is-a-commitment",
+    forbids: ["entityTypeDefinition"],
+    utterance: "Keep track of the Hult poster for me.",
+    expected: { intents: [intent("information", "Keep track of the Hult poster for me", "CONFIRMED", { owner: me, recipient: org("Hult"), objectText: "the Hult poster" })] },
+  },
+
+  // --- entityRecord -> create_entity_record (spec 36) ------------------------
+  {
+    id: "log-gym-session",
+    forbids: ["entityTypeDefinition"],
+    utterance: "Log a 45 minute gym session today.",
+    expected: { intents: [intent("action", "Log a 45 minute gym session today", "CONFIRMED", { time: deterministic("today"), entityRecord: { typeKey: "gym_session", values: { duration: "45", date: "today" } } })] },
+  },
+  {
+    id: "log-book-finished",
+    forbids: ["entityTypeDefinition"],
+    utterance: "Add Dune to my books, finished.",
+    expected: { intents: [intent("action", "Add Dune to my books, finished", "CONFIRMED", { entityRecord: { typeKey: "book", values: { title: "Dune", finished: "true" } } })] },
+  },
+  {
+    // NEGATIVE, and UNCERTAIN on purpose. Adding a FIELD to an existing type is
+    // add_entity_field, which has no contract field yet -- so the honest label
+    // is "this needs clarification", not a confident record. Recorded so the
+    // gap is visible in the eval set rather than discovered when a user says it.
+    id: "negative-adding-a-field-is-not-a-record",
+    forbids: ["entityRecord"],
+    utterance: "Also track which gym I went to.",
+    expected: { intents: [intent("action", "Also track which gym I went to", "UNCERTAIN", { entityTypeDefinition: { typeKey: "gym_session", displayName: "Gym Sessions", fields: [
+      { fieldKey: "gym", fieldKind: "text", label: "Gym", required: false },
+    ] } })] },
   },
 ];
