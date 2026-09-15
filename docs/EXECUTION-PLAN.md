@@ -474,6 +474,9 @@ Your side of all of this is collected in **`docs/YOUR-ACTIONS.md`**.
 
 ---
 
+> **Remaining work is sequenced in [MASTER-EXECUTION-PLAN.md](./MASTER-EXECUTION-PLAN.md)** —
+> the multi-provider AI layer (Claude to Gemini to Qwen), hybrid retrieval, and Phases 6-8.
+
 ## Outstanding work, by phase
 
 **Verified against the code on 2026-09-14, not against the checklist.** Every claim below was
