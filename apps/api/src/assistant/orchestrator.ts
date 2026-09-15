@@ -26,7 +26,15 @@ import {
   type RespondOutput,
   type ToolCall,
 } from "@ourglass/shared";
-import { commitments, messages, people, users, type CurrentCommitment } from "@ourglass/db";
+import {
+  commitments,
+  entityRecords,
+  memories,
+  messages,
+  people,
+  users,
+  type CurrentCommitment,
+} from "@ourglass/db";
 import type { DatabaseTransaction } from "@ourglass/shared";
 import { ExtractionError, type Extractor } from "./extract.js";
 import { decideCompletion, resolvePersonMention, type EntityResolution } from "./resolve.js";
@@ -574,8 +582,22 @@ async function planOneIntent(
       break;
 
     case "context": {
-      // §20 context attachment: "She had a family emergency."
-      const plan = await planContext(intent, ctx);
+      // THREE DIFFERENT ACTS wear the `context` label, and the extractor tells
+      // them apart by WHICH FIELD IT FILLED — never by re-reading the
+      // sentence here:
+      //
+      //   correctionTarget -> something on record is wrong (§17)
+      //   memoryBody       -> a durable fact worth keeping (§16)
+      //   neither          -> a note about a commitment (§20)
+      //
+      // Order matters: a CORRECTION also carries memoryBody (the
+      // replacement), so it must be tested first or every correction would be
+      // stored as a new fact with the wrong one left standing.
+      const plan = intent.correctionTarget
+        ? await planCorrection(intent, ctx)
+        : intent.memoryBody
+          ? await planRemember(intent, ctx)
+          : await planContext(intent, ctx);
       questions.push(...plan.questions);
       calls.push(...plan.calls);
       facts.push(...plan.facts);
@@ -598,19 +620,37 @@ async function planOneIntent(
         // nothing to ask either.
         break;
       }
-      const plan = await planCommitment(intent, ctx);
+      // §22: "Arun still hasn't sent the schema" must UPDATE the existing
+      // commitment, not create a second one. planStatusUpdate returns null
+      // when nothing matched, and then creating it is right — the user is
+      // telling us about a commitment we have not heard of.
+      const statusPlan = intent.newStatus ? await planStatusUpdate(intent, ctx) : null;
+      const plan = statusPlan ?? (await planCommitment(intent, ctx));
       questions.push(...plan.questions);
       calls.push(...plan.calls);
       facts.push(...plan.facts);
+      declined.push(...(plan.declined ?? []));
       if (plan.commitmentId) commitmentIdByIntent.set(index, plan.commitmentId);
       break;
     }
 
     case "action": {
-      const plan = planReminder(intent, ctx, commitmentIdByIntent);
+      // An `action` is something to do INSIDE the assistant, and four fields
+      // can carry what that is. Each feeds a DIFFERENT tool, which is why
+      // assistant-contract.ts lets any of them satisfy the body requirement:
+      // create_workflow never reads reminderBody, and set_reminder never
+      // reads condition.
+      const plan = intent.condition
+        ? await planWorkflow(intent, ctx)
+        : intent.entityTypeDefinition
+          ? planDefineEntityType(intent)
+          : intent.entityRecord
+            ? await planCreateEntityRecord(intent, ctx)
+            : planReminder(intent, ctx, commitmentIdByIntent);
       questions.push(...plan.questions);
       calls.push(...plan.calls);
       facts.push(...plan.facts);
+      declined.push(...(plan.declined ?? []));
       dependsOn.push(...(plan.dependsOn ?? []));
       break;
     }
@@ -855,6 +895,385 @@ async function planContext(intent: ExtractedIntent, ctx: PlanContext): Promise<I
     // sentence themselves. The attachment is silent by design; it surfaces on
     // the commitment, not in the reply.
     facts: [],
+  };
+}
+
+/**
+ * An `information` intent carrying a STATUS: §22.
+ *
+ * Returns null when no existing commitment matched, which the caller reads as
+ * "create it instead". That is deliberate: "the Hult poster is blocked" about
+ * something we have never heard of is still news, and refusing it would lose
+ * information the user just gave us.
+ *
+ * AMBIGUITY ASKS rather than guessing. Updating the wrong commitment's status
+ * is silent — it does not look like an error, it looks like the other
+ * commitment moved — so this follows the three-band policy the entity layer
+ * uses (DECISIONS.md #6) rather than taking the top match.
+ */
+async function planStatusUpdate(intent: ExtractedIntent, ctx: PlanContext): Promise<IntentPlan | null> {
+  if (!intent.newStatus || !intent.objectText) return null;
+
+  const owner = await resolveParty(intent.owner, ctx);
+  const recipient = await resolveParty(intent.recipient, ctx);
+  if (!owner.id) return null;
+
+  const open = await commitments.listOpenForOwner(ctx.tx, owner.id, recipient.id);
+  const match = decideCompletion(
+    { ownerId: owner.id, recipientId: recipient.id, objectText: intent.objectText },
+    open,
+  );
+
+  if (match.kind === "ask") {
+    return {
+      calls: [],
+      facts: [],
+      questions: [`Which one do you mean — I have more than one "${intent.objectText}"?`],
+    };
+  }
+  if (match.kind !== "matched") return null;
+
+  return {
+    questions: [],
+    calls: [
+      {
+        name: "update_commitment",
+        input: { commitment_id: match.commitmentId, status: intent.newStatus },
+      },
+    ],
+    facts: [{ kind: "commitment_updated", objectText: intent.objectText, status: intent.newStatus }],
+  };
+}
+
+/**
+ * A `context` intent carrying a durable fact: §16's `remember`.
+ *
+ * ┌─ THE MEMORY KIND IS NOT EXTRACTED, AND THAT IS A STATED LIMIT ──────────┐
+ * │ `memory_kind` is a closed three-value enum (fact/preference/pattern)    │
+ * │ and the contract carries no hint for it, so everything stored from a    │
+ * │ conversation is a `fact`.                                              │
+ * │                                                                        │
+ * │ That is the honest default rather than a guess. `pattern` must be an    │
+ * │ OBSERVABLE COUNT per §13 — "postponed this three times" — which a       │
+ * │ single utterance almost never establishes, and a regex for "I prefer"   │
+ * │ would be a heuristic dressed as extraction. THE FIX IF IT MATTERS IS A  │
+ * │ memoryKind HINT IN THE CONTRACT, not cleverness here.                  │
+ * └────────────────────────────────────────────────────────────────────────┘
+ *
+ * THE SUBJECT IS LINKED WHEN THE EXTRACTOR NAMED ONE. Without it every
+ * memory is unattached, `memories.listBySubject` returns nothing forever, and
+ * "what do you know about Barkha" cannot reach a fact the user stated about
+ * her one turn earlier — the subject column would exist with nothing ever
+ * writing to it. An unresolvable mention stores the memory UNATTACHED rather
+ * than asking: the fact is still worth keeping, and §27 forbids interrogating
+ * the user over a passing remark.
+ */
+async function planRemember(intent: ExtractedIntent, ctx: PlanContext): Promise<IntentPlan> {
+  const body = intent.memoryBody?.trim();
+  if (!body) return { calls: [], facts: [], questions: [] };
+
+  const subject = await resolveParty(intent.relatedEntity, ctx);
+
+  return {
+    questions: [],
+    calls: [
+      {
+        name: "remember",
+        input: {
+          kind: "fact",
+          body,
+          // The extractor's own confidence, passed through unchanged. A
+          // memory stored from an UNCERTAIN reading must not claim to be
+          // confirmed — §12's levels exist so provenance survives the write.
+          inference_level: intent.inferenceLevel,
+          // Both or neither — migration 010's CHECK, restated by the tool.
+          subject_kind: subject.id ? "person" : null,
+          subject_id: subject.id,
+          source_message_id: null,
+        },
+      },
+    ],
+    facts: [{ kind: "memory_stored", body }],
+  };
+}
+
+/**
+ * A `context` intent that says something on record is WRONG: §17.
+ *
+ * ┌─ WHY THIS USES THE MEMORY TOOLS AND NOT correct_relationship ───────────┐
+ * │ `correct_relationship` takes a typed edge: oldRelationshipId,           │
+ * │ subjectId, relType, objectKind, objectId. The extraction contract       │
+ * │ carries ONE entity mention and two text blobs, so there is no way to    │
+ * │ produce a typed object id from "Karthik handles backend now, not Arun"  │
+ * │ -- "backend" is not a person, organization, or project row.             │
+ * │                                                                        │
+ * │ So corrections route through MEMORIES, where the same bitemporal        │
+ * │ property holds: invalidate the old, store the new, nothing deleted.     │
+ * │ `correct_relationship` stays registered and unreachable from a          │
+ * │ conversation, and registry.coverage.test.ts DECLARES that rather than   │
+ * │ leaving it to be discovered.                                            │
+ * └────────────────────────────────────────────────────────────────────────┘
+ *
+ * A forget and a correction differ ONLY in whether a replacement was stated,
+ * which is why both live here: a correction is a forget plus a remember, in
+ * one turn and therefore one transaction and one undo.
+ *
+ * LEXICAL SEARCH, not hybrid. `remember` deliberately stores no embedding
+ * (the backfill adds it later), so a fact stored a minute ago has no vector
+ * and semantic search would miss precisely the memory a user is most likely
+ * to correct.
+ */
+async function planCorrection(intent: ExtractedIntent, ctx: PlanContext): Promise<IntentPlan> {
+  const target = intent.correctionTarget?.trim();
+  if (!target) return { calls: [], facts: [], questions: [] };
+
+  const found = await memories.searchLexical(ctx.tx, target, {}, 5);
+
+  if (found.length === 0) {
+    // An honest decline, not a question. The user corrected something we
+    // never held; asking "which memory?" when the answer is "none" is the
+    // over-asking §27 forbids, and silence would imply we had acted.
+    return {
+      calls: [],
+      facts: [],
+      questions: [],
+      declined: [`I don't have anything on record about "${target}".`],
+    };
+  }
+
+  if (found.length > 1) {
+    // Forgetting is invalidate-not-delete and undoable, but the user may
+    // never notice the wrong one went — so ambiguity asks (DECISIONS.md #6).
+    return {
+      calls: [],
+      facts: [],
+      questions: [`Which should I drop — "${found[0]?.body}" or "${found[1]?.body}"?`],
+    };
+  }
+
+  const stale = found[0]!;
+  const calls: ToolCall[] = [{ name: "forget_memory", input: { memory_id: stale.id } }];
+  const facts: CommittedFact[] = [{ kind: "memory_forgotten", body: stale.body }];
+
+  const replacement = intent.memoryBody?.trim();
+  if (replacement) {
+    const subject = await resolveParty(intent.relatedEntity, ctx);
+    calls.push({
+      name: "remember",
+      input: {
+        kind: "fact",
+        body: replacement,
+        inference_level: intent.inferenceLevel,
+        subject_kind: subject.id ? "person" : null,
+        subject_id: subject.id,
+        source_message_id: null,
+      },
+    });
+    facts.push({ kind: "memory_stored", body: replacement });
+  }
+
+  return { questions: [], calls, facts };
+}
+
+/**
+ * An `action` intent carrying a conditional: §25's `create_workflow`.
+ *
+ * Needs a SUBJECT COMMITMENT, because a rule evaluates against one row. "If
+ * Arun hasn't sent the schema by Friday" is a condition about the commitment
+ * Arun owes; with no such commitment there is nothing to evaluate, and
+ * create_workflow rejects an unknown id rather than writing a rule that
+ * silently never fires.
+ *
+ * The deadline is resolved by chrono-node from the VERBATIM phrase, exactly
+ * as every other time in this system (DECISIONS.md #4). `source_phrase`
+ * keeps the user's words so the resolution stays auditable.
+ */
+async function planWorkflow(intent: ExtractedIntent, ctx: PlanContext): Promise<IntentPlan> {
+  const condition = intent.condition;
+  if (!condition) return { calls: [], facts: [], questions: [] };
+
+  const deadline = resolveTime(
+    { kind: "deterministic", sourcePhrase: condition.deadlinePhrase },
+    ctx.now,
+    ctx.timezone,
+    "forward",
+  );
+  if (deadline.tier !== "deterministic") {
+    return {
+      calls: [],
+      facts: [],
+      questions: [`When should I check — "${condition.deadlinePhrase}"?`],
+    };
+  }
+
+  // The person the condition is ABOUT owes the thing; the user receives it.
+  // "If Arun hasn't sent the schema" is Arun -> me, which is the same
+  // ownership direction §7 makes structural everywhere else.
+  const owner = await resolveParty(intent.relatedEntity, ctx);
+  if (!owner.id) {
+    return {
+      calls: [],
+      facts: [],
+      questions: [owner.question ?? "Who is that about?"],
+    };
+  }
+
+  const open = await commitments.listOpenForOwner(ctx.tx, owner.id, ctx.selfPersonId);
+  const match = decideCompletion(
+    { ownerId: owner.id, recipientId: ctx.selfPersonId, objectText: condition.subjectText },
+    open,
+  );
+  if (match.kind !== "matched") {
+    return {
+      calls: [],
+      facts: [],
+      questions: [],
+      declined: [`I don't have a commitment for "${condition.subjectText}" to watch.`],
+    };
+  }
+
+  return {
+    questions: [],
+    calls: [
+      {
+        name: "create_workflow",
+        input: {
+          // "commitment_not_completed", not "...not_updated": "hasn't SENT"
+          // is about delivery, not about the row going quiet. The two are a
+          // closed enum in workflow-tools.ts and an invalid value is caught
+          // only at validate() — the wire input is Record<string, unknown>,
+          // so tsc cannot see a typo here.
+          condition_kind: "commitment_not_completed",
+          subject_commitment_id: match.commitmentId,
+          evaluate_at: deadline.at,
+          action_kind: condition.action,
+          action_body: condition.actionBody,
+          source_phrase: intent.sourceText,
+        },
+      },
+    ],
+    facts: [
+      {
+        kind: "workflow_created",
+        actionBody: condition.actionBody,
+        evaluateAtLocal: formatLocal(deadline.at, ctx.timezone),
+      },
+    ],
+  };
+}
+
+/**
+ * An `action` intent defining a new kind of thing: §36's `define_entity_type`.
+ *
+ * THE USER'S HEADLINE REQUIREMENT runs through here: a type invented
+ * mid-conversation must appear in the UI with no deploy. That works because
+ * the frontend holds no hardcoded list — it reads the registry and renders
+ * from `field_kind` — so this branch is the only thing standing between the
+ * utterance and a working table.
+ *
+ * Field shape is remapped camelCase -> snake_case because the contract speaks
+ * TypeScript and the tool boundary speaks the wire format. No validation here
+ * beyond presence: `define_entity_type` owns the closed `field_kind` enum,
+ * the reserved-name check and the field cap, and duplicating any of that
+ * would give two answers to one question.
+ */
+function planDefineEntityType(intent: ExtractedIntent): IntentPlan {
+  const definition = intent.entityTypeDefinition;
+  if (!definition || definition.fields.length === 0) {
+    return {
+      calls: [],
+      facts: [],
+      questions: ["What should I track about those?"],
+    };
+  }
+
+  // An enum with no options is the one gap worth ASKING about. Every record
+  // of this type is validated against the option list forever, so inventing
+  // one is a guess that causes a meaningful mistake — the case §27 carves out
+  // of its own don't-over-ask rule.
+  const optionless = definition.fields.filter(
+    (field) => field.fieldKind === "enum" && (field.enumOptions ?? []).length === 0,
+  );
+  if (optionless.length > 0) {
+    return {
+      calls: [],
+      facts: [],
+      questions: [
+        `What are the possible values for ${optionless.map((field) => field.label).join(" and ")}?`,
+      ],
+    };
+  }
+
+  return {
+    questions: [],
+    calls: [
+      {
+        name: "define_entity_type",
+        input: {
+          type_key: definition.typeKey,
+          display_name: definition.displayName,
+          fields: definition.fields.map((field) => ({
+            field_key: field.fieldKey,
+            field_kind: field.fieldKind,
+            label: field.label,
+            required: field.required,
+            // The tool wants [{value,label}]; the contract carries bare
+            // strings because the user says "planned or done", not a pair.
+            // Omitted entirely for non-enum kinds, which reject the key.
+            ...(field.fieldKind === "enum"
+              ? {
+                  enum_options: (field.enumOptions ?? []).map((option) => ({
+                    value: option,
+                    label: option,
+                  })),
+                }
+              : {}),
+          })),
+        },
+      },
+    ],
+    facts: [
+      {
+        kind: "entity_type_defined",
+        displayName: definition.displayName,
+        fieldCount: definition.fields.length,
+      },
+    ],
+  };
+}
+
+/**
+ * An `action` intent logging one instance: §36's `create_entity_record`.
+ *
+ * DECLINES rather than defining the type on the fly. Inferring a schema from
+ * one record is how a registry fills with junk types that cannot be told from
+ * real ones, and PLANNER-WIRING-DESIGN §2 names a cluttered registry as this
+ * tool family's actual risk. Asking is also wrong here — the honest answer is
+ * "I am not tracking that", which the user can act on.
+ */
+async function planCreateEntityRecord(intent: ExtractedIntent, ctx: PlanContext): Promise<IntentPlan> {
+  const record = intent.entityRecord;
+  if (!record) return { calls: [], facts: [], questions: [] };
+
+  const type = await entityRecords.getTypeByKey(ctx.tx, record.typeKey);
+  if (!type) {
+    return {
+      calls: [],
+      facts: [],
+      questions: [],
+      declined: [`I'm not tracking ${record.typeKey} yet — tell me what to track about it first.`],
+    };
+  }
+
+  return {
+    questions: [],
+    calls: [
+      {
+        name: "create_entity_record",
+        input: { type_key: record.typeKey, payload: { ...record.values } },
+      },
+    ],
+    facts: [{ kind: "entity_record_created", displayName: type.display_name }],
   };
 }
 

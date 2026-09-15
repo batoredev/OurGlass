@@ -26,11 +26,14 @@ import type pg from "pg";
 import {
   commitments,
   createPool,
+  entityRecords,
+  memories,
   messages,
   people,
   truncateAll,
   users,
   withTransaction,
+  workflows,
 } from "@ourglass/db";
 import type {
   EntityMention,
@@ -423,5 +426,355 @@ suite("runTurn (integration)", () => {
         deps(fakeExtractor([]), responder),
       ),
     ).rejects.toThrow(/No user row/);
+  });
+
+  // -------------------------------------------------------------------------
+  // The six branches that made the stranded tools reachable
+  // (docs/PLANNER-WIRING-DESIGN.md task 4).
+  //
+  // registry.coverage.test.ts proves each tool NAME appears in the
+  // orchestrator's source. That is a scan, and the file says so itself — it
+  // cannot tell a live branch from a dead literal. These tests are the other
+  // half: each drives runTurn and asserts the row that came out the far end.
+  // -------------------------------------------------------------------------
+
+  /** A commitment owed to the user, created the way a real turn would. */
+  async function commitmentOwedByBarkha(objectText: string) {
+    const { responder } = recordingResponder();
+    await runTurn(
+      { utterance: `Barkha needs to give me ${objectText}.`, userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "information",
+            owner: mention("Barkha"),
+            recipient: mention("me"),
+            objectText,
+          }),
+        ]),
+        responder,
+      ),
+    );
+  }
+
+  it("a stated status UPDATES the existing commitment instead of duplicating it", async () => {
+    // §22, and the reason planStatusUpdate exists at all. Before this branch
+    // the same utterance created a SECOND commitment, which is the duplicate
+    // §23 forbids and which quietly doubles everything the user waits on.
+    await seedBarkha();
+    await commitmentOwedByBarkha("the article");
+
+    const { responder } = recordingResponder();
+    const result = await runTurn(
+      { utterance: "The article is blocked.", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "information",
+            owner: mention("Barkha"),
+            recipient: mention("me"),
+            objectText: "the article",
+            newStatus: "blocked",
+          }),
+        ]),
+        responder,
+      ),
+    );
+
+    expect(result.committed).toEqual(["update_commitment"]);
+
+    const open = await withTransaction(pool, (tx) => commitments.listCurrent(tx));
+    expect(open).toHaveLength(1);
+    expect(open[0]?.status).toBe("blocked");
+  });
+
+  it("a status for a commitment we have never heard of CREATES it", async () => {
+    // Deliberate: "the article is blocked" about something unknown is still
+    // news, and refusing it would lose what the user just said.
+    await seedBarkha();
+    const { responder } = recordingResponder();
+
+    const result = await runTurn(
+      { utterance: "The article is blocked.", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "information",
+            owner: mention("Barkha"),
+            recipient: mention("me"),
+            objectText: "the article",
+            newStatus: "blocked",
+          }),
+        ]),
+        responder,
+      ),
+    );
+
+    expect(result.committed).toEqual(["create_commitment"]);
+  });
+
+  it("a durable fact is stored AND linked to its subject", async () => {
+    // The linkage is the half that would rot silently: an unattached memory
+    // still appears in the Memory table, so nothing looks wrong until
+    // "what do you know about Barkha" comes back empty.
+    const barkha = await seedBarkha();
+    const { responder } = recordingResponder();
+
+    const result = await runTurn(
+      { utterance: "Barkha prefers WhatsApp over email.", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "context",
+            relatedEntity: mention("Barkha"),
+            memoryBody: "Barkha prefers WhatsApp over email",
+          }),
+        ]),
+        responder,
+      ),
+    );
+
+    expect(result.committed).toEqual(["remember"]);
+
+    const stored = await withTransaction(pool, (tx) =>
+      memories.listBySubject(tx, "person", barkha.id),
+    );
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.body).toBe("Barkha prefers WhatsApp over email");
+  });
+
+  it("a correction forgets the old fact and stores the new one, in ONE turn", async () => {
+    // A correction is a forget plus a remember. Doing both in one turn means
+    // one transaction and one undo — "no, Karthik handles it" must not be
+    // half-undoable, leaving neither fact or both.
+    const { responder: first } = recordingResponder();
+    await runTurn(
+      { utterance: "Arun handles the backend.", userId },
+      deps(
+        fakeExtractor([intent({ kind: "context", memoryBody: "Arun handles the backend" })]),
+        first,
+      ),
+    );
+
+    const { responder: second } = recordingResponder();
+    const result = await runTurn(
+      { utterance: "No, Karthik handles the backend now.", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "context",
+            correctionTarget: "Arun handles the backend",
+            memoryBody: "Karthik handles the backend",
+          }),
+        ]),
+        second,
+      ),
+    );
+
+    expect(result.committed).toEqual(["forget_memory", "remember"]);
+
+    // INVALIDATE, NEVER DELETE. listAll reads the current view, so the
+    // superseded fact is gone from it while its row survives with t_invalid
+    // set — which is what makes undoing this turn possible at all.
+    const current = await withTransaction(pool, (tx) => memories.listAll(tx));
+    expect(current.map((row) => row.body)).toEqual(["Karthik handles the backend"]);
+  });
+
+  it("a correction with nothing on record DECLINES rather than asking", async () => {
+    const { responder, calls } = recordingResponder();
+    const result = await runTurn(
+      { utterance: "Forget that Arun works on backend.", userId },
+      deps(
+        fakeExtractor([intent({ kind: "context", correctionTarget: "Arun works on backend" })]),
+        responder,
+      ),
+    );
+
+    expect(result.committed).toEqual([]);
+    // Declined, not asked: no question would help, and §27 forbids
+    // interrogating the user over something we simply never held.
+    expect(calls[0]?.questions).toEqual([]);
+    expect(calls[0]?.declined.length).toBeGreaterThan(0);
+  });
+
+  it("a conditional becomes a workflow pinned to the commitment it watches", async () => {
+    await seedBarkha();
+    await commitmentOwedByBarkha("the schema");
+
+    const { responder } = recordingResponder();
+    const result = await runTurn(
+      { utterance: "If Barkha hasn't sent the schema in 3 days, remind me.", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "action",
+            relatedEntity: mention("Barkha"),
+            condition: {
+              subjectText: "the schema",
+              deadlinePhrase: "in 3 days",
+              action: "remind",
+              actionBody: "chase Barkha about the schema",
+            },
+          }),
+        ]),
+        responder,
+      ),
+    );
+
+    expect(result.committed).toEqual(["create_workflow"]);
+
+    const open = await withTransaction(pool, (tx) => commitments.listCurrent(tx));
+    const rules = await withTransaction(pool, (tx) => workflows.listBySubject(tx, open[0]!.id));
+    expect(rules).toHaveLength(1);
+    expect(rules[0]?.action_kind).toBe("remind");
+    // The enum value is unchecked by tsc at the call site — the tool's input
+    // is Record<string, unknown> — so a typo would surface only as a runtime
+    // validation failure. It did, once. Asserted, therefore.
+    expect(rules[0]?.condition_kind).toBe("commitment_not_completed");
+  });
+
+  it("a conditional with no commitment to watch DECLINES instead of writing a dead rule", async () => {
+    await seedBarkha();
+    const { responder } = recordingResponder();
+
+    const result = await runTurn(
+      { utterance: "If Barkha hasn't sent the schema in 3 days, remind me.", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "action",
+            relatedEntity: mention("Barkha"),
+            condition: {
+              subjectText: "the schema",
+              deadlinePhrase: "in 3 days",
+              action: "remind",
+              actionBody: "chase Barkha",
+            },
+          }),
+        ]),
+        responder,
+      ),
+    );
+
+    // A rule pointing at nothing evaluates false forever and never fires —
+    // worse than a refusal, because it looks like it worked.
+    expect(result.committed).toEqual([]);
+  });
+
+  it("defines a new entity type from an utterance — the no-deploy requirement", async () => {
+    const { responder } = recordingResponder();
+    const result = await runTurn(
+      { utterance: "Track my gym sessions with a date and a note.", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "action",
+            entityTypeDefinition: {
+              typeKey: "gym_session",
+              displayName: "Gym Sessions",
+              fields: [
+                { fieldKey: "session_date", fieldKind: "date", label: "Date", required: false },
+                { fieldKey: "note", fieldKind: "text", label: "Note", required: false },
+              ],
+            },
+          }),
+        ]),
+        responder,
+      ),
+    );
+
+    expect(result.committed).toEqual(["define_entity_type"]);
+
+    // The registry is what the frontend reads; a type absent from it renders
+    // nowhere, which is the whole requirement failing quietly.
+    const type = await withTransaction(pool, (tx) => entityRecords.getTypeByKey(tx, "gym_session"));
+    expect(type?.display_name).toBe("Gym Sessions");
+    expect(type?.fields.map((field) => field.field_key).sort()).toEqual(["note", "session_date"]);
+  });
+
+  it("ASKS for enum options rather than inventing them", async () => {
+    const { responder, calls } = recordingResponder();
+    const result = await runTurn(
+      { utterance: "Track my gym sessions with a status.", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "action",
+            entityTypeDefinition: {
+              typeKey: "gym_session",
+              displayName: "Gym Sessions",
+              fields: [{ fieldKey: "status", fieldKind: "enum", label: "Status", required: false }],
+            },
+          }),
+        ]),
+        responder,
+      ),
+    );
+
+    // Every future record is validated against the option list, so guessing
+    // it is the guess §27 carves out of its own don't-over-ask rule.
+    expect(result.committed).toEqual([]);
+    expect(calls[0]?.questions.length).toBeGreaterThan(0);
+  });
+
+  it("logs one record against an existing type", async () => {
+    const { responder: definition } = recordingResponder();
+    await runTurn(
+      { utterance: "Track my gym sessions with a note.", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "action",
+            entityTypeDefinition: {
+              typeKey: "gym_session",
+              displayName: "Gym Sessions",
+              fields: [{ fieldKey: "note", fieldKind: "text", label: "Note", required: false }],
+            },
+          }),
+        ]),
+        definition,
+      ),
+    );
+
+    const { responder } = recordingResponder();
+    const result = await runTurn(
+      { utterance: "Log a 45 minute gym session.", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "action",
+            entityRecord: { typeKey: "gym_session", values: { note: "45 minutes" } },
+          }),
+        ]),
+        responder,
+      ),
+    );
+
+    expect(result.committed).toEqual(["create_entity_record"]);
+
+    const rows = await withTransaction(pool, (tx) => entityRecords.listRecords(tx, "gym_session"));
+    expect(rows).toHaveLength(1);
+    expect((rows[0]?.payload as { note?: string }).note).toBe("45 minutes");
+  });
+
+  it("DECLINES a record for a type it does not track, rather than inventing a schema", async () => {
+    const { responder, calls } = recordingResponder();
+    const result = await runTurn(
+      { utterance: "Log a 45 minute gym session.", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "action",
+            entityRecord: { typeKey: "gym_session", values: { note: "45 minutes" } },
+          }),
+        ]),
+        responder,
+      ),
+    );
+
+    // Inferring a schema from one record is how the registry fills with junk
+    // types nobody asked for (PLANNER-WIRING-DESIGN §2).
+    expect(result.committed).toEqual([]);
+    expect(calls[0]?.declined.length).toBeGreaterThan(0);
   });
 });

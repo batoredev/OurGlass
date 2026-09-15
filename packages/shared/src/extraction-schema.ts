@@ -44,6 +44,8 @@ the field and the category always agree:
   stays verbatim.
 - entityTypeDefinition (action): the user asks to start tracking a NEW kind of thing ("track my gym sessions with
   a date and a duration").
+  Give each field one of: text, number, bool, date, enum, person_ref. Set enumOptions ONLY for enum, and
+  only with options the user actually named.
 - entityRecord (action): the user logs one instance of a kind they already track ("log a 45 minute gym session").
 An action is something to do INSIDE the assistant (a reminder, a rule, a new kind of thing to track).
 An external action — email, calendar, Drive — stays execution.
@@ -111,6 +113,9 @@ const ENTITY_FIELD_SCHEMA = {
     fieldKind: { enum: ["text", "number", "bool", "date", "enum", "person_ref"] },
     label: { type: "string" },
     required: { type: "boolean" },
+    // Required by define_entity_type whenever fieldKind is "enum". NOT in
+    // `required` below: every other kind must omit it.
+    enumOptions: { type: "array", items: { type: "string" } },
   },
   required: ["fieldKey", "fieldKind", "label", "required"],
 } as const;

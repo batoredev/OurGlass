@@ -65,11 +65,57 @@ export interface CommitmentUpdatedFact {
   readonly status: string | null;
 }
 
+/**
+ * §16 — a durable fact was stored.
+ *
+ * Carries the BODY rather than an id because Respond has no database handle
+ * and, more importantly, because the user needs to see what the assistant now
+ * believes. A reply of "Noted." to a misheard fact is how a wrong memory
+ * survives: §28's "inspect and correct what the assistant believes" starts
+ * with the assistant saying it out loud.
+ */
+export interface MemoryStoredFact {
+  readonly kind: "memory_stored";
+  readonly body: string;
+}
+
+/** §17 — a stored fact was invalidated. Never deleted; see the bitemporal rule. */
+export interface MemoryForgottenFact {
+  readonly kind: "memory_forgotten";
+  readonly body: string;
+}
+
+/** §25 — a conditional rule now stands. */
+export interface WorkflowCreatedFact {
+  readonly kind: "workflow_created";
+  readonly actionBody: string;
+  /** Already formatted in the user's local timezone. */
+  readonly evaluateAtLocal: string;
+}
+
+/** §36 — a new kind of thing is now tracked, and the UI renders it with no deploy. */
+export interface EntityTypeDefinedFact {
+  readonly kind: "entity_type_defined";
+  readonly displayName: string;
+  readonly fieldCount: number;
+}
+
+/** §36 — one instance of a tracked kind. */
+export interface EntityRecordCreatedFact {
+  readonly kind: "entity_record_created";
+  readonly displayName: string;
+}
+
 export type CommittedFact =
   | CommitmentCreatedFact
   | ReminderCreatedFact
   | CommitmentCompletedFact
-  | CommitmentUpdatedFact;
+  | CommitmentUpdatedFact
+  | MemoryStoredFact
+  | MemoryForgottenFact
+  | WorkflowCreatedFact
+  | EntityTypeDefinedFact
+  | EntityRecordCreatedFact;
 
 // ---------------------------------------------------------------------------
 // RespondInput / Responder — the call contract (§5.1).

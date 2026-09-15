@@ -97,6 +97,17 @@ export interface EntityFieldHint {
   readonly fieldKind: string;
   readonly label: string;
   readonly required: boolean;
+  /**
+   * The allowed values, for `fieldKind: "enum"` ONLY.
+   *
+   * `define_entity_type` REQUIRES enum_options for that kind, so without this
+   * an enum column could never be created by talking — one of the six closed
+   * kinds would be unreachable while appearing fully supported. The planner
+   * ASKS when the kind is enum and this is missing: inventing the options of
+   * a closed set is precisely the guess §27 forbids, because every later
+   * record is validated against them.
+   */
+  readonly enumOptions?: readonly string[];
 }
 
 /** §36 — "track my gym sessions with a date and a duration". */
@@ -465,7 +476,10 @@ function isTypeDefinitionOrUndefined(value: unknown): boolean {
       typeof field.fieldKey === "string" &&
       typeof field.fieldKind === "string" &&
       typeof field.label === "string" &&
-      typeof field.required === "boolean",
+      typeof field.required === "boolean" &&
+      (field.enumOptions === undefined ||
+        (Array.isArray(field.enumOptions) &&
+          field.enumOptions.every((option) => typeof option === "string"))),
   );
 }
 
@@ -480,7 +494,7 @@ function isEntityRecordOrUndefined(value: unknown): boolean {
 
 const CONDITION_KEYS = ["subjectText", "deadlinePhrase", "action", "actionBody"] as const;
 const TYPE_DEF_KEYS = ["typeKey", "displayName", "fields"] as const;
-const FIELD_KEYS = ["fieldKey", "fieldKind", "label", "required"] as const;
+const FIELD_KEYS = ["fieldKey", "fieldKind", "label", "required", "enumOptions"] as const;
 const ENTITY_RECORD_KEYS = ["typeKey", "values"] as const;
 
 const ENTITY_KEYS = ["name", "kind", "inferenceLevel"] as const;

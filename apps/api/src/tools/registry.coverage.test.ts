@@ -63,6 +63,71 @@ describe("tool registry coverage", () => {
     expect(registry.has("update_commitment")).toBe(true);
   });
 
+  /**
+   * THE INVERSE ASSERTION, and the one the Phase 5 audit needed.
+   *
+   * The scan above proves every tool the orchestrator EMITS is registered. It
+   * says nothing about the other direction, and that is where the real gap
+   * was: 13 tools registered, 4 reachable from a conversation. Nine objects
+   * that existed, compiled, passed their own unit tests, and could not be
+   * invoked by talking to the assistant -- the "schema with no code path"
+   * class again, one layer up.
+   *
+   * So every registered tool must be emitted by a planner branch OR appear in
+   * the list below WITH A REASON. Adding a tool and forgetting to wire it now
+   * fails here instead of being discovered by a user.
+   */
+  const NOT_REACHABLE_FROM_A_CONVERSATION: Readonly<Record<string, string>> = {
+    // Driven by the cron poller, by design: a reminder fires because time
+    // passed, not because anyone said anything (PHASE-3-DESIGN 6).
+    fire_reminder: "poller-only",
+    evaluate_workflow: "poller-only",
+    // DECLARED GAP, not an oversight. correct_relationship takes a typed edge
+    // (oldRelationshipId, subjectId, relType, objectKind, objectId) and the
+    // extraction contract carries one entity mention and two text blobs -- in
+    // "Karthik handles backend now, not Arun", "backend" is not a person,
+    // organization, or project row. Conversational corrections therefore route
+    // through the MEMORY tools (forget_memory + remember), which preserve the
+    // same invalidate-never-delete property. Reaching this tool needs a
+    // relationship-edge hint in the contract, not a planner branch.
+    correct_relationship: "needs a typed relationship edge the contract cannot express",
+  };
+
+  it("leaves no tool registered but unreachable, unless the reason is stated", () => {
+    const registered = buildToolRegistry().list().map((tool) => tool.name);
+    const emitted = new Set(toolNamesEmittedByOrchestrator());
+
+    const unreachable = registered.filter(
+      (name) => !emitted.has(name) && NOT_REACHABLE_FROM_A_CONVERSATION[name] === undefined,
+    );
+    expect(unreachable).toEqual([]);
+  });
+
+  it("keeps the exemption list honest — every exemption is a REGISTERED tool", () => {
+    // A stale exemption is worse than none: it would silence this test for a
+    // tool that no longer exists while looking like coverage.
+    const registered = new Set(buildToolRegistry().list().map((tool) => tool.name));
+    for (const name of Object.keys(NOT_REACHABLE_FROM_A_CONVERSATION)) {
+      expect(registered.has(name), `${name} is exempted but not registered`).toBe(true);
+    }
+  });
+
+  it("emits the six tools the planner wiring made reachable", () => {
+    // Stated as a fact, like the F1/F6 assertion above, so a revert is a named
+    // failure rather than a silently shrinking list.
+    const emitted = new Set(toolNamesEmittedByOrchestrator());
+    for (const name of [
+      "update_commitment",
+      "remember",
+      "forget_memory",
+      "create_workflow",
+      "define_entity_type",
+      "create_entity_record",
+    ]) {
+      expect(emitted, `${name} is registered but no planner branch emits it`).toContain(name);
+    }
+  });
+
   it("every registered tool has a distinct name and a handler", () => {
     const tools = buildToolRegistry().list();
     const names = tools.map((tool) => tool.name);

@@ -152,6 +152,19 @@ function describeFact(fact: CommittedFact): string {
         : `Got it — ${fact.objectText} marked complete.`;
     case "commitment_updated":
       return `Updated: ${fact.objectText}${fact.status ? ` — ${fact.status}` : ""}.`;
+    // The memory cases ECHO THE BODY BACK deliberately. "Noted." would be
+    // shorter and §31 prefers short, but a memory the user cannot see is one
+    // they cannot correct, and §28 makes correction the point.
+    case "memory_stored":
+      return `Noted: ${fact.body}.`;
+    case "memory_forgotten":
+      return `Forgotten: ${fact.body}.`;
+    case "workflow_created":
+      return `Rule set — I'll check on ${fact.evaluateAtLocal}: ${fact.actionBody}.`;
+    case "entity_type_defined":
+      return `Tracking ${fact.displayName} now, with ${fact.fieldCount} field${fact.fieldCount === 1 ? "" : "s"}.`;
+    case "entity_record_created":
+      return `Logged to ${fact.displayName}.`;
     default:
       return assertNever(fact);
   }
