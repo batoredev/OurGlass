@@ -924,14 +924,29 @@ async function planStatusUpdate(intent: ExtractedIntent, ctx: PlanContext): Prom
     open,
   );
 
-  if (match.kind === "ask") {
-    return {
-      calls: [],
-      facts: [],
-      questions: [`Which one do you mean — I have more than one "${intent.objectText}"?`],
-    };
+  if (match.kind !== "matched") {
+    // ┌─ THE REASON MATTERS HERE, AND ONLY HERE ───────────────────────────┐
+    // │ decideCompletion COLLAPSES "nothing matched" into `ask`, on         │
+    // │ purpose: for a COMPLETION, inventing a retroactive already-done     │
+    // │ commitment would hide the real open one (resolve.ts, THE           │
+    // │ INVERSION). A STATUS UPDATE is the opposite case — "the article is  │
+    // │ blocked" about something unrecorded is news worth keeping, and     │
+    // │ asking "which one?" when the answer is "none" is the over-asking   │
+    // │ §27 forbids.                                                       │
+    // │                                                                    │
+    // │ So only genuine AMBIGUITY asks. Everything else falls through to    │
+    // │ create. This is what `reason` is for, and reading `kind` alone is   │
+    // │ what made a status for an unknown commitment silently do nothing.   │
+    // └────────────────────────────────────────────────────────────────────┘
+    if (match.reason === "ambiguous") {
+      return {
+        calls: [],
+        facts: [],
+        questions: [`Which one do you mean — I have more than one "${intent.objectText}"?`],
+      };
+    }
+    return null;
   }
-  if (match.kind !== "matched") return null;
 
   return {
     questions: [],
