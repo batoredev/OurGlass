@@ -73,6 +73,42 @@ Recorded now so the final report cannot quietly omit them.
 
 ## 2. Execution order
 
+### Progress
+
+**Updated as each stage lands. A stage is DONE only when CI is green on it** —
+integration tests do not run on the dev machine here, so a local pass is not evidence.
+
+| # | Stage | Status | Landed as |
+|---|---|---|---|
+| 1 | Provider contracts + ClaudeProvider | ✅ done | `6b5df31` |
+| 2 | Error classification, retry, router | ✅ done | `4ab9580` |
+| 3 | Gemini provider | ⬜ next | |
+| 4 | Qwen provider via Ollama | ⬜ | |
+| 5 | Typed configuration | ⬜ | |
+| 6 | Idempotency + stage separation | ⬜ | |
+| 7 | Risk policy | ⬜ | |
+| 8 | Observability | ⬜ | |
+| 9 | Provider evals (`pnpm eval:ai`) | ⬜ | |
+| 10 | AI documentation | ⬜ | |
+| 11 | Hybrid retrieval *(closes Phase 4)* | ⬜ | |
+| 12 | §35 permission model *(Phase 7a)* | ⬜ | |
+| 13 | Phase 6 — ingestion | ⬜ | |
+| 14 | Phase 7 — integrations (§34) | ⬜ | |
+| 15 | Phase 8 — voice | ⬜ | |
+| 16 | Full recheck + run | ⬜ | |
+
+Graphify runs after each major stage. Last refresh: `737fac1` — 1859 nodes,
+2619 edges, 162 communities, health clean.
+
+**Blocked on the owner, not on me** (neither stops the build; both stop the *claim*):
+
+| What | Why it matters |
+|---|---|
+| `GEMINI_API_KEY` absent | Stage 3 ships untested against a live endpoint |
+| Ollama not installed | Stage 4 ships untested against a live endpoint |
+| `pnpm test:live` never run | ~97 paid Sonnet calls. The only measurement of extraction quality against a real model |
+
+
 Each stage ends with the same gate: `pnpm typecheck && pnpm lint && pnpm test`, a green CI
 run, `/graphify --update`, and a commit. A stage is not done until CI says so.
 
