@@ -480,29 +480,56 @@ Your side of all of this is collected in **`docs/YOUR-ACTIONS.md`**.
 checked by finding the call site (or its absence), which is the rule `DECISIONS.md` records
 after six phases of "the schema exists" reading as "the feature exists".
 
-### The finding that dominates this list
+### The finding that dominated this list, and how it closed
 
-**Thirteen tools are registered. Four are reachable from a conversation.**
+**It was: fourteen tools registered, four reachable from a conversation. It is now eleven
+reachable and three declared.**
 
 ```
-EMITTED by the orchestrator:  attach_context, complete_commitment,
-                              create_commitment, create_reminder
+EMITTED by the orchestrator:  attach_context, complete_commitment, create_commitment,
+                              create_reminder, update_commitment, remember,
+                              forget_memory, create_workflow, define_entity_type,
+                              create_entity_record, create_event
 
-REGISTERED but unreachable:   update_commitment, remember, forget_memory,
-                              correct_relationship, create_workflow,
-                              define_entity_type, create_entity_record
+Poller-only, by design:       fire_reminder, evaluate_workflow
 
-Poller-only, correctly:       fire_reminder, evaluate_workflow
+Declared unreachable:         correct_relationship
 ```
 
-Each stranded tool is built, unit-tested, and CI-verified at the tool layer. What is missing is
-the **planner branch** that turns an utterance into that call — roughly one `case` per tool in
-`planOneIntent`, plus the extraction work to recognise the intent. This is why several phases
-below read "done" and still have user-facing gaps: the capability exists and nothing can ask
-for it.
+`registry.coverage.test.ts` now asserts this in **both directions**. The forward scan (every
+emitted tool is registered) existed; the inverse (every registered tool is emitted, or named
+in an exemption list with a reason) is what the audit needed and did not have.
 
-> **This is the F-class (schema with no code path) one level up.** Each phase was verified at
-> the layer it was built in. Nothing checked whether a *sentence* could reach it.
+**`correct_relationship` is a declared gap, not an oversight.** It takes a typed edge —
+`oldRelationshipId`, `subjectId`, `relType`, `objectKind`, `objectId` — and the extraction
+contract carries one entity mention and two text blobs. In *"Karthik handles backend now, not
+Arun"*, "backend" is not a person, organization, or project row. Conversational corrections
+therefore route through the **memory** tools (`forget_memory` + `remember`), which preserve the
+same invalidate-never-delete property. Reaching it needs a relationship-edge hint in the
+contract, not a planner branch.
+
+> **The lesson, recorded because it recurred.** The audit said the stranded tools were "one
+> `case` branch each" away. They were not: `ExtractedIntent` had no field that could express
+> "this is a correction" or "the new status is blocked", so a branch would have had nothing to
+> read. **Verifying reachability means checking the whole path, not its two ends.**
+
+### What the wiring cost, in defects
+
+Seven real bugs, none of which `tsc` could see, all found by reading the validator a branch
+feeds or by CI:
+
+| Defect | Why the compiler could not see it |
+|---|---|
+| `condition_kind: "commitment_incomplete"` — not a valid value | Tool input is `Record<string, unknown>` |
+| `enum` field kind unreachable: `EntityFieldHint` had no options, `define_entity_type` requires them | Optional field, valid without it |
+| `remember` stored every memory unattached | `subject_id` is nullable |
+| A status for an unknown commitment asked instead of creating | `decideCompletion` collapses "no match" into `ask` — correctly, for completions |
+| `eventTitle` forgotten from `satisfiedBy` | The list is data, not types |
+| `findOverlapping`: a null `ends_at` built an EMPTY range, so no open-ended event could ever conflict | SQL, and its only test used a fake `tx` |
+| The §26 rule-3 test passed vacuously, with no candidate to suppress | A green test |
+
+**The rule that came out of it: a query whose only tests use a fake transaction is untested.**
+`detectTimeConflicts` was unit-tested against a fake `tx` and had been wrong since Phase 4.
 
 ### Phase 0 — Foundation *(done)*
 
@@ -510,57 +537,66 @@ for it.
   (`{"admin":false,...,"push":true}`, re-verified). Owner action, not ours.
 - **Secret scanning / push protection / Dependabot alerts** — cannot even be *read* without
   ADMIN, so their state is assumed, not confirmed.
+- **No deploy step in CI yet.** Deployment step 6 above.
 
 ### Phase 1 — Structured state + tool layer *(done)*
 
 - **`add_entity_field` was never built.** `PHASE-1-DESIGN.md` §2.8 specifies it and documents
   its non-breaking rule (optional fields only). `entity_types.current_version` and
   `entity_records.schema_version` exist to support it and, until it lands, can never differ.
-- **`update_commitment` is unreachable** — see the finding above. Spec §22's conversational
-  updates have no path.
+  The eval set carries a fixture (`negative-adding-a-field-is-not-a-record`) labelled
+  UNCERTAIN precisely so this gap is visible in the harness rather than found by a user.
+- ~~`update_commitment` is unreachable~~ — **fixed.** §22 status updates now reach it, and a
+  status for a commitment we have never heard of creates it rather than asking.
 
 ### Phase 2 — Interpret + Resolve *(done)*
 
 - **Duplicate detection (§23) is unwired.** `detectDuplicate` exists in `resolve.ts` with its
   inverted-veto logic and is never called by the orchestrator. Saying the same thing twice
-  creates two commitments.
-- **`pnpm test:live` has never run.** 69 paid Sonnet calls, manual. There is still **no
-  recorded model output in the repo**, so every extraction claim is about the harness, not the
-  model. This is the single largest unmeasured surface in the project and has been open since
-  Phase 2.
+  still creates two commitments. *(`planStatusUpdate` and `planCompletion` both call
+  `decideCompletion`, which shares the matcher — so the machinery is exercised, just not on
+  the create path.)*
+- **`pnpm test:live` has never run.** Now **97 fixtures**, so ~97 paid Sonnet calls, manual.
+  There is still **no recorded model output in the repo**. This remains the single largest
+  unmeasured surface, and the contract work has *grown* it: seven optional fields were added
+  and the prompt rewritten, which is exactly what that lane exists to measure.
 
 ### Phase 3 — Conversational loop + reminders *(done)*
 
-- **Conditional rules (§25) cannot be created by talking.** `create_workflow` is registered and
-  the poller evaluates workflows correctly, but no planner branch emits it — so *"if Arun
-  hasn't sent the schema by Friday, remind me"* stores nothing.
-- **The human demo run** through `POST /turn` has never happened. Every §5 judgement —
+- ~~Conditional rules (§25) cannot be created by talking~~ — **fixed.** `create_workflow` is
+  emitted; a conditional with no commitment to watch declines rather than writing a rule that
+  would evaluate false forever.
+- **The human demo run** through `POST /api/turn` has never happened. Every §5 judgement —
   conversational tone, §31 conciseness, §20's optional late prompt — is unfalsifiable by a test
   suite and needs a person reading replies.
 
-### Phase 4 — Understanding over time *(done, with the largest gap)*
+### Phase 4 — Understanding over time *(done)*
 
-- **The demo does not run.** `events.createEvent` has no calling tool, and
-  `detectTimeConflicts`/`selectProactiveLine` are never called from a turn. *"Schedule Arun at
-  5 tomorrow"* surfaces nothing. Needs: a `create_event` tool, two call sites in `runTurn`, one
-  end-to-end test.
-- **Hybrid retrieval is never called.** `searchHybrid`/`searchSemantic` are built, indexed, and
-  integration-tested — and no production code path invokes them. Semantic memory is storage
-  without recall.
-- **`remember`, `forget_memory`, `correct_relationship` are unreachable**, so §16 provenance
-  and §17 correction have no conversational path despite the repository and tools existing.
+- ~~The demo does not run~~ — **fixed, and it was the largest gap in the project.**
+  `create_event` now exists, `runTurn` imports `proactive.ts` for the first time, and
+  *"Schedule Arun at 5 tomorrow"* surfaces the Hult conflict and asks rather than choosing.
+  The conflict is checked **before** the write, per §24's "do not automatically choose".
+- ~~`remember`, `forget_memory` unreachable~~ — **fixed.** §16 storage and §17 correction both
+  have conversational paths, and memories link to their subject, so `listBySubject` is no
+  longer a column nothing writes to.
+- **Hybrid retrieval is still never called.** `searchHybrid`/`searchSemantic` are built,
+  indexed, and integration-tested, and no production path invokes them. `planCorrection` uses
+  `searchLexical` deliberately — `remember` stores no embedding, so a fact stored a minute ago
+  has no vector — but **recall for the assistant's own context is still missing**. This is now
+  the largest remaining capability gap.
 - **Voyage has never been called with a real key.** The `input_type` asymmetry, the dimension
   match, and recall quality are all unverified against the live API.
 
 ### Phase 5 — Dynamic entities + minimal UI *(done)*
 
-- **Nobody has driven the UI in a browser.** Nine routes build and unit-test; every *visual*
-  judgement is unverified. `qa-browser-lead` is the named owner and has not run.
+- **Nobody has driven the UI in a browser.** Eleven API routes and eight UI routes build and
+  unit-test; every *visual* judgement is unverified. `qa-browser-lead` is the named owner and
+  has not run.
 - **The conversation view is not built** — §29 calls it the primary surface. Deliberate: a chat
   UI is a real interactive feature and Phase 5's job was inspection.
-- **`define_entity_type` and `create_entity_record` are unreachable from a turn.** The demo
-  works through the tool layer and the UI renders it, but *"track my gym sessions"* typed at the
-  assistant does not currently reach either tool.
+- ~~`define_entity_type` and `create_entity_record` unreachable~~ — **fixed.** *"Track my gym
+  sessions with a date and a duration"* now reaches the tool, and an enum field with no stated
+  options **asks** rather than inventing a closed set every future record is validated against.
 
 ### Phase 6 — Ingestion *(not started)*
 
@@ -570,13 +606,18 @@ for it.
 ### Phases 7–8 — Integrations, permissions, voice *(not started)*
 
 - Permission model (§35) first, then Gmail/Calendar/Drive (§34). Voice deferred per spec §1.
+- **§35 is load-bearing sooner than the phase order suggests.** `/api/undo` and the eight read
+  surfaces have no authorisation at all; `ENABLE_DEMO_ENDPOINT` being unset in `wrangler.toml`
+  is the entire protection in a deployed environment. See the security note in that file.
 
 ### If you fix one thing
 
-**Wire the planner.** Seven tools and the entire retrieval layer are one `case` branch each
-away from being reachable, and until then the product can create commitments and reminders and
-essentially nothing else by conversation. That is a smaller change than any remaining phase and
-unlocks more user-visible behaviour than all of them.
+**Run `pnpm test:live`.** The planner wiring closed the reachability gap, so the product can
+now do most of what the spec describes by conversation — and *none* of it is measured against
+the real model. 97 fixtures, one paid run, and the seven new optional fields are exactly the
+kind of prompt surface that fails quietly: an over-triggered `memoryBody` reads as a good
+memory until you notice the assistant believes something nobody said. The `forbids` mechanism
+exists to catch that, and it has never been exercised against a model.
 
 ---
 
