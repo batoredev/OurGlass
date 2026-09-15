@@ -343,6 +343,7 @@ describe("the six fields that make the stranded tools reachable", () => {
       condition: { subjectText: "x", deadlinePhrase: "by Friday", action: "remind", actionBody: "y" },
       entityTypeDefinition: { typeKey: "invented", displayName: "Invented", fields: [] },
       entityRecord: { typeKey: "invented", values: { a: "b" } },
+      eventTitle: "an invented meeting",
     };
 
     for (const fixture of EXTRACTION_FIXTURES.filter((f) => (f.forbids ?? []).length > 0)) {

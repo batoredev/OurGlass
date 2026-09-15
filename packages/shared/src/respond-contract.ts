@@ -106,6 +106,14 @@ export interface EntityRecordCreatedFact {
   readonly displayName: string;
 }
 
+/** §24 — a meeting or appointment was put on the internal calendar. */
+export interface EventScheduledFact {
+  readonly kind: "event_scheduled";
+  readonly title: string;
+  /** Already formatted in the user's local timezone. */
+  readonly startsAtLocal: string;
+}
+
 export type CommittedFact =
   | CommitmentCreatedFact
   | ReminderCreatedFact
@@ -115,7 +123,8 @@ export type CommittedFact =
   | MemoryForgottenFact
   | WorkflowCreatedFact
   | EntityTypeDefinedFact
-  | EntityRecordCreatedFact;
+  | EntityRecordCreatedFact
+  | EventScheduledFact;
 
 // ---------------------------------------------------------------------------
 // RespondInput / Responder — the call contract (§5.1).

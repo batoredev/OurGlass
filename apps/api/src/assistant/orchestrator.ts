@@ -39,6 +39,12 @@ import type { DatabaseTransaction } from "@ourglass/shared";
 import { ExtractionError, type Extractor } from "./extract.js";
 import { decideCompletion, resolvePersonMention, type EntityResolution } from "./resolve.js";
 import { renderInspection, runInspection, type InspectionQuery } from "./inspect.js";
+import {
+  detectTimeConflicts,
+  findNewlyOverdue,
+  renderProactiveLine,
+  selectProactiveLine,
+} from "./proactive.js";
 import type { RespondTrace } from "./respond.js";
 import { resolveTime, timeDirectionForIntent, type ResolvedTime } from "./time.js";
 import { executeTurn, type Deps as ExecutorDeps } from "../tools/index.js";
@@ -298,10 +304,42 @@ export async function runTurn(req: TurnRequest, deps: OrchestratorDeps): Promise
   //
   // The model still runs for the rest of the turn (a mixed utterance can both
   // ask and commit), so its reply is appended after, not discarded.
-  const reply =
+  const composed =
     answers.length > 0
       ? [answers.join(" "), modelReply].filter((part) => part.trim() !== "").join(" ")
       : modelReply;
+
+  // ---- §26: at most ONE volunteered line, and only if it earned it --------
+  //
+  // DETERMINISTIC, never a model call. §26's boundary between good and bad
+  // proactivity is exactly the boundary a prompt cannot be tested against;
+  // renderProactiveLine has no branch that can produce advice, so the
+  // assistant structurally cannot drift into "you should study now".
+  //
+  // Appended AFTER the model reply rather than handed to Haiku as input,
+  // for the same reason §28 answers are prepended verbatim: there is no
+  // judgement to make about what the rows say, and rewording them only adds
+  // ways to be wrong.
+  //
+  // The gate itself lives in selectProactiveLine — rule 3 (never alongside a
+  // question) is enforced there, by a signature that can only return one
+  // candidate.
+  const volunteered = await deps.db.withTransaction(async (tx) => {
+    const since = await previousAssistantTurnAt(tx, now);
+    const candidates = await findNewlyOverdue(tx, since, now);
+    return selectProactiveLine(candidates, {
+      // `failures` are surfaced through `questions` too, and a turn that just
+      // told the user a write was rejected is not one to volunteer on.
+      turnAsksQuestion: questions.length > 0 || failures.length > 0,
+    });
+  });
+
+  const reply =
+    volunteered === null
+      ? composed
+      : [composed, renderProactiveLine(volunteered, (iso) => formatLocal(iso, timezone))]
+          .filter((part) => part.trim() !== "")
+          .join(" ");
 
   // ---- Step 7 (§8): the assistant message, with both stages traces --------
   //
@@ -325,6 +363,31 @@ export async function runTurn(req: TurnRequest, deps: OrchestratorDeps): Promise
     committed: committedTools,
     degraded,
   };
+}
+
+/**
+ * When the user was last spoken to — the left edge of §26's rule-2 window.
+ *
+ * ⚠ THE WINDOW IS THE WHOLE RULE. "Is overdue" stays true on every turn until
+ * the thing is completed, and surfacing that repeatedly is the nagging §26
+ * puts in its "bad" column. "JUST became overdue" is true exactly once, and
+ * it is true only relative to when we last spoke.
+ *
+ * Falls back to `now`, which yields an EMPTY window and therefore silence.
+ * That is the correct default for a first turn: we cannot tell whether the
+ * user already knows, so we say nothing.
+ *
+ * Reads the last ASSISTANT message. This runs before the current turn's
+ * assistant message is persisted, so the newest one is genuinely the previous
+ * turn's. `listRecent` returns oldest-first, hence the reversed scan.
+ */
+async function previousAssistantTurnAt(tx: DatabaseTransaction, now: Date): Promise<Date> {
+  const recent = await messages.listRecent(tx, 20);
+  for (let index = recent.length - 1; index >= 0; index -= 1) {
+    const message = recent[index];
+    if (message?.role === "assistant") return message.t_created;
+  }
+  return now;
 }
 
 /**
@@ -646,7 +709,9 @@ async function planOneIntent(
           ? planDefineEntityType(intent)
           : intent.entityRecord
             ? await planCreateEntityRecord(intent, ctx)
-            : planReminder(intent, ctx, commitmentIdByIntent);
+            : intent.eventTitle
+              ? await planEvent(intent, ctx)
+              : planReminder(intent, ctx, commitmentIdByIntent);
       questions.push(...plan.questions);
       calls.push(...plan.calls);
       facts.push(...plan.facts);
@@ -1254,6 +1319,70 @@ function planDefineEntityType(intent: ExtractedIntent): IntentPlan {
         fieldCount: definition.fields.length,
       },
     ],
+  };
+}
+
+/**
+ * An `action` intent scheduling something: §24, and the Phase 4 demo.
+ *
+ * ┌─ THE CONFLICT IS CHECKED BEFORE THE WRITE, AND IT ASKS ─────────────────┐
+ * │ §24 is explicit: "Do not automatically choose." So a collision produces │
+ * │ a QUESTION naming both sides and NO tool call — planOneIntent drops the │
+ * │ calls of any intent that asks, so the event is simply not created and   │
+ * │ the user decides.                                                      │
+ * │                                                                        │
+ * │ Checking first also keeps the reply honest. Creating the event and then │
+ * │ mentioning the clash would say "Scheduled." and "that conflicts" in one │
+ * │ breath, which reads as a warning about something already done.         │
+ * └────────────────────────────────────────────────────────────────────────┘
+ *
+ * Only a DETERMINISTIC time will do. `findOverlapping` compares instants, so
+ * a relational or event-triggered time has nothing to compare and would
+ * create an event that silently collides with everything or nothing.
+ */
+async function planEvent(intent: ExtractedIntent, ctx: PlanContext): Promise<IntentPlan> {
+  const title = intent.eventTitle?.trim();
+  if (!title) return { calls: [], facts: [], questions: [] };
+
+  const time = resolveIntentTime(intent, ctx);
+  if (!time || time.tier !== "deterministic") {
+    return {
+      calls: [],
+      facts: [],
+      questions: [
+        time && time.tier !== "unresolved"
+          ? `I can only schedule a specific time yet — when is "${time.sourcePhrase}"?`
+          : `When should I schedule ${title}?`,
+      ],
+    };
+  }
+
+  const startsAt = new Date(time.at);
+  const conflicts = await detectTimeConflicts(ctx.tx, startsAt, null, null);
+  const clash = conflicts[0];
+  if (clash) {
+    return {
+      calls: [],
+      facts: [],
+      // Rendered by the same function the proactive gate uses, so the two
+      // surfaces cannot drift into describing a conflict differently.
+      questions: [
+        renderProactiveLine({ kind: "conflict", rowId: clash.existingEventId, conflict: clash }, (iso) =>
+          formatLocal(iso, ctx.timezone),
+        ),
+      ],
+    };
+  }
+
+  return {
+    questions: [],
+    calls: [
+      {
+        name: "create_event",
+        input: { title, starts_at: time.at, ends_at: null, location: null, notes: null },
+      },
+    ],
+    facts: [{ kind: "event_scheduled", title, startsAtLocal: formatLocal(time.at, ctx.timezone) }],
   };
 }
 

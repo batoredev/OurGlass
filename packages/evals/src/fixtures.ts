@@ -483,11 +483,6 @@ export const EXTRACTION_FIXTURES: readonly ExtractionFixture[] = [
     expected: { intents: [intent("execution", "Send Arun this", "CONFIRMED", { recipient: person("Arun"), objectText: "this" })] },
   },
   {
-    id: "execution-calendar",
-    utterance: "Create a calendar event for the Hult review tomorrow.",
-    expected: { intents: [intent("execution", "Create a calendar event for the Hult review tomorrow", "CONFIRMED", { relatedEntity: org("Hult"), objectText: "a calendar event for the Hult review", time: deterministic("tomorrow") })] },
-  },
-  {
     id: "execution-email",
     utterance: "Email the poster to Hult.",
     expected: { intents: [intent("execution", "Email the poster to Hult", "CONFIRMED", { recipient: org("Hult"), objectText: "the poster" })] },
@@ -498,9 +493,40 @@ export const EXTRACTION_FIXTURES: readonly ExtractionFixture[] = [
     expected: { intents: [intent("execution", "Put the signed contract in Drive", "CONFIRMED", { objectText: "the signed contract" })] },
   },
   {
-    id: "execution-schedule-arun",
+    // RECLASSIFIED from `execution` when eventTitle arrived. Scheduling writes
+    // a row in our OWN events table — the table §24's conflict detection
+    // reads — so it is an internal act. "Create a calendar EVENT" stays
+    // execution: that one reaches Google, which is §34 and Phase 7.
+    //
+    // This is also the Phase 4 demo utterance, and it could not work while the
+    // intent was labelled execution: that branch declines, so nothing ever
+    // reached the events table for a conflict to be detected against.
+    id: "schedule-arun",
     utterance: "Schedule Arun at 5 tomorrow.",
-    expected: { intents: [intent("execution", "Schedule Arun at 5 tomorrow", "CONFIRMED", { relatedEntity: person("Arun"), objectText: "Schedule Arun", time: deterministic("at 5 tomorrow") })] },
+    expected: { intents: [intent("action", "Schedule Arun at 5 tomorrow", "CONFIRMED", { relatedEntity: person("Arun"), eventTitle: "Arun", time: deterministic("at 5 tomorrow") })] },
+  },
+  {
+    id: "schedule-hult-review",
+    utterance: "Put the Hult review in for Thursday at 3.",
+    expected: { intents: [intent("action", "Put the Hult review in for Thursday at 3", "CONFIRMED", { relatedEntity: org("Hult"), eventTitle: "the Hult review", time: deterministic("Thursday at 3") })] },
+  },
+  {
+    // NEGATIVE, and the one that matters most. "Remind me at 5" and "schedule
+    // X at 5" are the SAME SHAPE — a thing and a time — and different acts.
+    // An over-triggered eventTitle books a meeting nobody asked for and sets
+    // no reminder, so the user is both double-booked and un-nudged.
+    id: "negative-reminder-is-not-an-event",
+    forbids: ["eventTitle"],
+    utterance: "Remind me at 5 to ask Barkha.",
+    expected: { intents: [intent("action", "Remind me at 5 to ask Barkha", "CONFIRMED", { relatedEntity: person("Barkha"), reminderBody: "ask Barkha", time: deterministic("at 5") })] },
+  },
+  {
+    // NEGATIVE. An EXTERNAL calendar write is still execution, still declined
+    // until §35's permission model exists.
+    id: "negative-calendar-is-external",
+    forbids: ["eventTitle"],
+    utterance: "Create a calendar event for the Hult review tomorrow.",
+    expected: { intents: [intent("execution", "Create a calendar event for the Hult review tomorrow", "CONFIRMED", { relatedEntity: org("Hult"), objectText: "a calendar event for the Hult review", time: deterministic("tomorrow") })] },
   },
 
   // ---------------------------------------------------------------------------

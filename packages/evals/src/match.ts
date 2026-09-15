@@ -63,7 +63,8 @@ export type ForbiddableField =
   | "correctionTarget"
   | "condition"
   | "entityTypeDefinition"
-  | "entityRecord";
+  | "entityRecord"
+  | "eventTitle";
 
 export const FORBIDDABLE_FIELDS: readonly ForbiddableField[] = [
   "newStatus",
@@ -72,6 +73,7 @@ export const FORBIDDABLE_FIELDS: readonly ForbiddableField[] = [
   "condition",
   "entityTypeDefinition",
   "entityRecord",
+  "eventTitle",
 ];
 
 /**
@@ -244,7 +246,8 @@ export function intentMatches(actual: ExtractedIntent, expected: ExtractedIntent
     optionalTextMatches(actual.correctionTarget, expected.correctionTarget) &&
     conditionMatches(actual.condition, expected.condition) &&
     typeDefinitionMatches(actual.entityTypeDefinition, expected.entityTypeDefinition) &&
-    entityRecordMatches(actual.entityRecord, expected.entityRecord)
+    entityRecordMatches(actual.entityRecord, expected.entityRecord) &&
+    optionalTextMatches(actual.eventTitle, expected.eventTitle)
   );
 }
 

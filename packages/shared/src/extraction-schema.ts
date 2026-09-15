@@ -47,6 +47,8 @@ the field and the category always agree:
   Give each field one of: text, number, bool, date, enum, person_ref. Set enumOptions ONLY for enum, and
   only with options the user actually named.
 - entityRecord (action): the user logs one instance of a kind they already track ("log a 45 minute gym session").
+- eventTitle (action): the user schedules a meeting or appointment ("schedule Arun at 5 tomorrow"). Put the
+  time in the time field as always. NOT for a reminder — "remind me at 5" is reminderBody.
 An action is something to do INSIDE the assistant (a reminder, a rule, a new kind of thing to track).
 An external action — email, calendar, Drive — stays execution.
 Do not invent commitments, people, dates, or context.`;
@@ -178,6 +180,7 @@ const INTENT_SCHEMA = {
     condition: CONDITION_SCHEMA,
     entityTypeDefinition: ENTITY_TYPE_DEFINITION_SCHEMA,
     entityRecord: ENTITY_RECORD_SCHEMA,
+    eventTitle: { type: "string" },
   },
   required: ["kind", "inferenceLevel", "sourceText"],
 } as const;

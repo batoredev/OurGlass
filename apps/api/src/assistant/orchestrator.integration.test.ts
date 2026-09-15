@@ -27,6 +27,7 @@ import {
   commitments,
   createPool,
   entityRecords,
+  events,
   memories,
   messages,
   people,
@@ -776,5 +777,131 @@ suite("runTurn (integration)", () => {
     // types nobody asked for (PLANNER-WIRING-DESIGN §2).
     expect(result.committed).toEqual([]);
     expect(calls[0]?.declined.length).toBeGreaterThan(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // §24 scheduling and conflict, and the §26 gate — Phase 4's unfinished half.
+  //
+  // proactive.ts was written, unit-tested and correct, and runTurn NEVER
+  // IMPORTED IT. detectTimeConflicts read a table nothing could write to, so
+  // the Phase 4 demo could not fire even in principle.
+  // -------------------------------------------------------------------------
+
+  function scheduleIntent(title: string, phrase: string) {
+    return intent({
+      kind: "action",
+      eventTitle: title,
+      time: { kind: "deterministic", sourcePhrase: phrase },
+    });
+  }
+
+  it("schedules an event when nothing collides", async () => {
+    const { responder } = recordingResponder();
+    const result = await runTurn(
+      { utterance: "Schedule the Hult review at 5 tomorrow.", userId },
+      deps(fakeExtractor([scheduleIntent("Hult review", "at 5 tomorrow")]), responder),
+    );
+
+    expect(result.committed).toEqual(["create_event"]);
+
+    const upcoming = await withTransaction(pool, (tx) => events.listUpcoming(tx, new Date(), 10));
+    expect(upcoming.map((row) => row.title)).toEqual(["Hult review"]);
+  });
+
+  it("THE PHASE 4 DEMO: a colliding time asks instead of choosing", async () => {
+    // "Schedule Arun at 5 tomorrow" surfaces the Hult conflict and asks.
+    const { responder: first } = recordingResponder();
+    await runTurn(
+      { utterance: "Schedule the Hult review at 5 tomorrow.", userId },
+      deps(fakeExtractor([scheduleIntent("Hult review", "at 5 tomorrow")]), first),
+    );
+
+    const { responder, calls } = recordingResponder();
+    const result = await runTurn(
+      { utterance: "Schedule Arun at 5 tomorrow.", userId },
+      deps(fakeExtractor([scheduleIntent("Arun", "at 5 tomorrow")]), responder),
+    );
+
+    // §24: "Do not automatically choose." Nothing is written, and the
+    // question names BOTH sides so the user can act on it.
+    expect(result.committed).toEqual([]);
+    expect(result.asked).toHaveLength(1);
+    expect(result.asked[0]).toContain("Hult review");
+    expect(calls[0]?.questions[0]).toContain("Move it or keep both?");
+
+    // The second event must NOT exist. A conflict that still books is worse
+    // than no detection at all.
+    const upcoming = await withTransaction(pool, (tx) => events.listUpcoming(tx, new Date(), 10));
+    expect(upcoming.map((row) => row.title)).toEqual(["Hult review"]);
+  });
+
+  it("volunteers a newly-overdue commitment, once", async () => {
+    // RULE 2 is the whole point: "is overdue" stays true forever and nagging
+    // about it is §26's own "bad" column. "JUST became overdue" is true once.
+    const barkha = await seedBarkha();
+    const deadline = new Date(Date.now() - 60 * 60 * 1000);
+
+    // A prior assistant turn, so the rule-2 window has a left edge. Without
+    // one the window is empty and silence is correct.
+    const { responder: priming } = recordingResponder();
+    await runTurn(
+      { utterance: "Hello.", userId },
+      deps(fakeExtractor([intent({ kind: "context" })]), priming),
+    );
+
+    await withTransaction(pool, (tx) =>
+      commitments.createCommitment(tx, {
+        ownerId: barkha.id,
+        recipientId: null,
+        objectText: "the article",
+        expectedAt: deadline,
+        status: "pending",
+        projectId: null,
+      }),
+    );
+
+    const { responder } = recordingResponder();
+    const result = await runTurn(
+      { utterance: "Thanks.", userId },
+      deps(fakeExtractor([intent({ kind: "context" })]), responder),
+    );
+
+    // Appended deterministically, never through the model — the fake
+    // responder returns "ok", so anything beyond it came from the gate.
+    expect(result.reply).toContain("the article");
+    expect(result.reply).toContain("overdue");
+  });
+
+  it("stays silent when the turn already asks a question", async () => {
+    // RULE 3. The user is already being asked for one thing; a second line is
+    // the confirmation fatigue §27 forbids.
+    const barkha = await seedBarkha();
+
+    const { responder: priming } = recordingResponder();
+    await runTurn(
+      { utterance: "Hello.", userId },
+      deps(fakeExtractor([intent({ kind: "context" })]), priming),
+    );
+
+    await withTransaction(pool, (tx) =>
+      commitments.createCommitment(tx, {
+        ownerId: barkha.id,
+        recipientId: null,
+        objectText: "the article",
+        expectedAt: new Date(Date.now() - 60 * 60 * 1000),
+        status: "pending",
+        projectId: null,
+      }),
+    );
+
+    const { responder } = recordingResponder();
+    const result = await runTurn(
+      // An information intent with no objectText asks a blocking question.
+      { utterance: "Barkha needs to give me something.", userId },
+      deps(fakeExtractor([intent({ kind: "information", owner: mention("Barkha") })]), responder),
+    );
+
+    expect(result.asked.length).toBeGreaterThan(0);
+    expect(result.reply).not.toContain("overdue");
   });
 });

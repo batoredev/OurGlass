@@ -53,9 +53,15 @@ const FULLY_POPULATED: ExtractedIntent = {
   entityTypeDefinition: {
     typeKey: "gym_session",
     displayName: "Gym Session",
-    fields: [{ fieldKey: "minutes", fieldKind: "number", label: "Minutes", required: true }],
+    fields: [
+      { fieldKey: "minutes", fieldKind: "number", label: "Minutes", required: true },
+      // enumOptions is optional, so a schema/interface drift on it would not
+      // show up in an intent that omits it. Populated deliberately.
+      { fieldKey: "mood", fieldKind: "enum", label: "Mood", required: false, enumOptions: ["good", "bad"] },
+    ],
   },
   entityRecord: { typeKey: "gym_session", values: { minutes: "45" } },
+  eventTitle: "the Hult review",
 };
 
 function schemaProperties(): string[] {

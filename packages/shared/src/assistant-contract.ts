@@ -170,6 +170,22 @@ export interface ExtractedIntent {
 
   /** §36 — one instance of an existing type. create_entity_record. */
   readonly entityRecord?: EntityRecordHint;
+
+  /**
+   * §24 — a meeting or appointment to schedule at `time`: "Schedule Arun at 5
+   * tomorrow", "Put the Hult review in for Thursday".
+   *
+   * INTERNAL, not a calendar. This becomes a row in our own `events` table,
+   * which is what §24's conflict detection reads. Google Calendar is §34 and
+   * Phase 7, behind the permission model — "create a calendar event" stays an
+   * `execution` intent and is still declined.
+   *
+   * A field rather than a heuristic on `objectText` + `time`, because "remind
+   * me at 5" and "schedule Arun at 5" are the same shape and different acts.
+   * Guessing between them either sets a silent reminder or books a meeting
+   * nobody asked for.
+   */
+  readonly eventTitle?: string;
 }
 
 export interface Extraction {
@@ -403,7 +419,8 @@ export function isExtraction(value: unknown): value is Extraction {
       isStringOrUndefined(intent.correctionTarget) &&
       isConditionOrUndefined(intent.condition) &&
       isTypeDefinitionOrUndefined(intent.entityTypeDefinition) &&
-      isEntityRecordOrUndefined(intent.entityRecord);
+      isEntityRecordOrUndefined(intent.entityRecord) &&
+      isStringOrUndefined(intent.eventTitle);
   });
 }
 
@@ -438,6 +455,7 @@ const INTENT_KEYS = [
   "condition",
   "entityTypeDefinition",
   "entityRecord",
+  "eventTitle",
 ] as const;
 
 const STATUS_HINTS: readonly string[] = [
