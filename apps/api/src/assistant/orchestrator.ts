@@ -50,7 +50,7 @@ import {
   renderProactiveLine,
   selectProactiveLine,
 } from "./proactive.js";
-import type { RespondTrace } from "./respond.js";
+import { templateReply, type RespondTrace } from "./respond.js";
 import { resolveTime, timeDirectionForIntent, type ResolvedTime } from "./time.js";
 import { executeTurn, type Deps as ExecutorDeps } from "../tools/index.js";
 
@@ -285,19 +285,44 @@ export async function runTurn(req: TurnRequest, deps: OrchestratorDeps): Promise
 
   // ---- Respond ------------------------------------------------------------
   //
-  // The mutation has already committed. Nothing below here may throw in a way
-  // that loses it — HaikuResponder.respondWithTrace never throws by
-  // construction, and a template reply is always available.
+  // ⚠ THE MUTATION HAS ALREADY COMMITTED. Nothing below here may throw in a
+  // way that loses it, and this is now ENFORCED rather than assumed.
+  //
+  // The previous version said "HaikuResponder.respondWithTrace never throws by
+  // construction" and relied on it. That is true of HaikuResponder and of the
+  // routed adapters — and of nothing else. A TemplateResponder, a test double,
+  // or any third-party Responder can throw, and when one did, the error
+  // propagated out of runTurn: a durable write became a 500, and the user was
+  // invited to retype an utterance that had already succeeded, producing the
+  // duplicate §23 exists to prevent.
+  //
+  // CI's scenario-D integration test caught it. A comment asserting a
+  // guarantee is a citation, not a verification.
   const respondInput: RespondInput = {
     committed: committedFacts,
     questions: [...questions, ...failures],
     declined,
   };
-  const {
-    reply: modelReply,
-    degraded,
-    trace: respondTrace,
-  } = await respondWithTrace(deps.responder, respondInput);
+
+  let modelReply: string;
+  let degraded: boolean;
+  let respondTrace: RespondTrace | { model: null; degraded: boolean };
+  try {
+    ({ reply: modelReply, degraded, trace: respondTrace } = await respondWithTrace(
+      deps.responder,
+      respondInput,
+    ));
+  } catch (error: unknown) {
+    // The deterministic template is always correct and always available — it
+    // is pure, synchronous, and separately unit-tested precisely because it is
+    // the thing that must work when nothing else does.
+    modelReply = templateReply(respondInput);
+    degraded = true;
+    respondTrace = { model: null, degraded: true };
+    // Swallowed but NOT silent: "degrade honestly" applies to observability
+    // too, and this is the only record that a responder broke its contract.
+    console.error("[turn] responder threw; fell back to the template:", error);
+  }
 
   // ---- §28 answers are PREPENDED VERBATIM, never paraphrased --------------
   //

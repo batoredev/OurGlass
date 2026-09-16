@@ -260,3 +260,41 @@ describe("TemplateResponder", () => {
     expect(result.degraded).toBe(true);
   });
 });
+
+// --- runTurn is hardened against a throwing responder -----------------------
+//
+// The orchestrator-level guard lives in runTurn and is exercised end to end by
+// the scenario-D integration test. What is asserted HERE is the property that
+// makes that guard safe to rely on: templateReply is TOTAL. Given any
+// RespondInput it returns a non-empty string, never throws, and needs no clock,
+// no network and no database.
+//
+// If that ever stopped holding, runTurn's catch block would have nothing to
+// fall back to and a committed turn could still be lost.
+describe("templateReply is total, which is what makes the runTurn guard safe", () => {
+  it("answers for every shape of input, including the empty one", () => {
+    const inputs: RespondInput[] = [
+      { committed: [], questions: [], declined: [] },
+      {
+        committed: [{ kind: "reminder_created", fireAtLocal: "5 PM" }],
+        questions: [],
+        declined: [],
+      },
+      { committed: [], questions: ["Which Karthik?"], declined: [] },
+      { committed: [], questions: [], declined: ["I can't do that yet."] },
+      {
+        committed: [{ kind: "commitment_updated", objectText: "the poster", status: "blocked" }],
+        questions: ["When?"],
+        declined: ["No."],
+      },
+    ];
+
+    for (const input of inputs) {
+      const reply = templateReply(input);
+      expect(typeof reply).toBe("string");
+      // Never an empty reply: a turn that committed nothing and asked nothing
+      // still owes the user a sentence. An empty string reads as a crash.
+      expect(reply.trim().length).toBeGreaterThan(0);
+    }
+  });
+});
