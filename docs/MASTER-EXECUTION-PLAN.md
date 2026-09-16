@@ -82,8 +82,8 @@ integration tests do not run on the dev machine here, so a local pass is not evi
 |---|---|---|---|
 | 1 | Provider contracts + ClaudeProvider | ✅ done | `6b5df31` |
 | 2 | Error classification, retry, router | ✅ done | `4ab9580` |
-| 3 | Gemini provider | ⬜ next | |
-| 4 | Qwen provider via Ollama | ⬜ | |
+| 3 | Gemini provider | ✅ done *(unverified live)* | `e738ac9` |
+| 4 | Qwen provider via Ollama | ⬜ next | |
 | 5 | Typed configuration | ⬜ | |
 | 6 | Idempotency + stage separation | ⬜ | |
 | 7 | Risk policy | ⬜ | |
