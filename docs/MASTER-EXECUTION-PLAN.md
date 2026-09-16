@@ -84,8 +84,8 @@ integration tests do not run on the dev machine here, so a local pass is not evi
 | 2 | Error classification, retry, router | ✅ done | `4ab9580` |
 | 3 | Gemini provider | ✅ done *(unverified live)* | `e738ac9` |
 | 4 | Qwen provider via Ollama | ✅ done *(unverified live)* | `f461f86` |
-| 5 | Typed configuration | ⬜ next | |
-| 6 | Idempotency + stage separation | ⬜ | |
+| 5 | Typed configuration | ✅ done | `bef65be` |
+| 6 | Idempotency + stage separation | ⬜ next | |
 | 7 | Risk policy | ⬜ | |
 | 8 | Observability | ⬜ | |
 | 9 | Provider evals (`pnpm eval:ai`) | ⬜ | |
