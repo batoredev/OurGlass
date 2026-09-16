@@ -328,25 +328,46 @@ function correlationId(): string {
  * would have leaked past its own boundary.
  */
 export class RoutedExtractor implements Extractor {
-  constructor(private readonly router: AIModelRouter) {}
+  /**
+   * `requestId` is carried by the ADAPTER, not passed through `extract`.
+   *
+   * `Extractor.extract` takes a bare string, and widening it to thread a
+   * correlation id would mean editing `runTurn` -- the one thing this whole
+   * layer was built to avoid. The route constructs these per request, so one
+   * instance IS one turn, and an id held here correlates every attempt of both
+   * stages without the orchestrator knowing the router exists.
+   */
+  constructor(
+    private readonly router: AIModelRouter,
+    private readonly requestId?: string,
+  ) {}
 
   async extract(utterance: string): Promise<ExtractionResult> {
-    const routed = await this.router.interpret({ utterance });
+    const routed = await this.router.interpret(
+      this.requestId === undefined ? { utterance } : { utterance, requestId: this.requestId },
+    );
     return { extraction: routed.extraction, trace: routed.trace };
   }
 }
 
 /** The router behind the `Responder` interface, including `respondWithTrace`. */
 export class RoutedResponder {
-  constructor(private readonly router: AIModelRouter) {}
+  constructor(
+    private readonly router: AIModelRouter,
+    private readonly requestId?: string,
+  ) {}
+
+  private context(): { requestId?: string } {
+    return this.requestId === undefined ? {} : { requestId: this.requestId };
+  }
 
   async respond(input: RespondInput): Promise<{ reply: string; degraded: boolean }> {
-    const { reply, degraded } = await this.router.respond(input);
+    const { reply, degraded } = await this.router.respond(input, this.context());
     return { reply, degraded };
   }
 
   async respondWithTrace(input: RespondInput): Promise<RespondResult> {
-    const routed = await this.router.respond(input);
+    const routed = await this.router.respond(input, this.context());
     return { reply: routed.reply, degraded: routed.degraded, trace: routed.trace };
   }
 }

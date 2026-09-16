@@ -113,6 +113,10 @@ export async function POST(request: Request) {
   // Built per request rather than cached per isolate, deliberately: it is a
   // few object allocations, and caching would mean a rotated key needs a
   // redeploy to take effect.
+  // ONE id per turn, shared by Interpret and Respond so a failed turn reads as
+  // one story in the log rather than three unrelated lines.
+  const requestId = crypto.randomUUID();
+
   let router;
   try {
     router = buildAIRouter(process.env, {
@@ -138,8 +142,8 @@ export async function POST(request: Request) {
       {
         db,
         registry: buildToolRegistry(),
-        extractor: new RoutedExtractor(router),
-        responder: new RoutedResponder(router),
+        extractor: new RoutedExtractor(router, requestId),
+        responder: new RoutedResponder(router, requestId),
       },
     );
     return NextResponse.json(result);

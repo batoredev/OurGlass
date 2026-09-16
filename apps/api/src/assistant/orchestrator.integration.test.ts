@@ -36,6 +36,7 @@ import {
   withTransaction,
   workflows,
 } from "@ourglass/db";
+import { err } from "@ourglass/shared";
 import type {
   EntityMention,
   ExtractedIntent,
@@ -43,7 +44,7 @@ import type {
   RespondInput,
   RespondOutput,
 } from "@ourglass/shared";
-import { buildToolRegistry } from "../tools/index.js";
+import { ToolRegistry, buildToolRegistry } from "../tools/index.js";
 import { ExtractionError, type Extractor } from "./extract.js";
 import { runTurn, type OrchestratorDeps } from "./orchestrator.js";
 
@@ -1049,5 +1050,134 @@ suite("runTurn (integration)", () => {
     // Both directions present, which is the assertion that matters.
     expect(new Set(open.map((row) => row.owner_id)).size).toBe(2);
     expect(open.some((row) => row.owner_id === barkha.id)).toBe(true);
+  });
+
+  // -------------------------------------------------------------------------
+  // Stage 6 — idempotency and stage separation. Scenarios C and D.
+  //
+  // These are ORCHESTRATOR properties, not router ones: the router cannot
+  // replay a mutation because it has never been given one. That claim can only
+  // be made honestly against a real database, which is why they live here and
+  // not in router.test.ts.
+  //
+  // action_log is read with raw SQL, matching every other test in this repo —
+  // there is no action-log repository.
+  // -------------------------------------------------------------------------
+
+  /** A registry whose `create_commitment` always fails validation. */
+  function registryWithFailingCommitment(): ToolRegistry {
+    const registry = new ToolRegistry();
+    registry.register({
+      name: "create_commitment",
+      description: "Deliberately fails validation, to prove nothing is written.",
+      async validate() {
+        return err([
+          { field: "owner_id", code: "test_forced_failure", message: "Forced failure." },
+        ]);
+      },
+      async commit() {
+        throw new Error("commit must never be reached when validate fails");
+      },
+    });
+    return registry;
+  }
+
+  /** Counts Respond attempts, to prove a committed mutation is not replayed. */
+  function countingResponder(behaviour: "ok" | "throw") {
+    const calls: RespondInput[] = [];
+    return {
+      calls,
+      responder: {
+        respond: async (input: RespondInput): Promise<RespondOutput> => {
+          calls.push(input);
+          if (behaviour === "throw") throw new Error("respond blew up");
+          return { reply: "ok", degraded: false };
+        },
+      },
+    };
+  }
+
+  const owesArticle = () =>
+    intent({
+      kind: "information",
+      owner: mention("Barkha"),
+      recipient: mention("me"),
+      objectText: "the article",
+    });
+
+  it("SCENARIO C: a failed mutation writes NOTHING and is not retried", async () => {
+    await seedBarkha();
+    const { responder, calls } = recordingResponder();
+
+    const result = await runTurn(
+      { utterance: "Barkha needs to give me the article.", userId },
+      {
+        db: { withTransaction: (fn) => withTransaction(pool, fn) },
+        registry: registryWithFailingCommitment(),
+        extractor: fakeExtractor([owesArticle()]),
+        responder,
+      },
+    );
+
+    // The executor validates every call before committing any, and a failure
+    // throws ValidationRollback — so the transaction rolls back having written
+    // nothing at all.
+    expect(result.committed).toEqual([]);
+    expect(result.turnId).toBeNull();
+    expect(await withTransaction(pool, (tx) => commitments.listCurrent(tx))).toEqual([]);
+
+    // NOT an action_log row either. A rolled-back turn that still logged would
+    // make undo offer to reverse something that never happened.
+    expect((await pool.query("SELECT 1 FROM action_log")).rows).toEqual([]);
+
+    // The failure reaches the user as a question, not a silent success — and
+    // Respond ran exactly ONCE. Nothing re-attempted the mutation.
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.questions.join(" ")).toContain("Forced failure.");
+  });
+
+  it("SCENARIO D: a committed mutation is NOT replayed when Respond fails", async () => {
+    // THE MOST IMPORTANT IDEMPOTENCY TEST. The write is already durable by the
+    // time Respond runs; re-running it would create a second commitment for a
+    // cosmetic failure — exactly the duplicate §23 exists to prevent.
+    await seedBarkha();
+    const { responder, calls } = countingResponder("throw");
+
+    const result = await runTurn(
+      { utterance: "Barkha needs to give me the article.", userId },
+      deps(fakeExtractor([owesArticle()]), responder),
+    );
+
+    // The mutation stands.
+    expect(result.committed).toEqual(["create_commitment"]);
+    expect(result.turnId).not.toBeNull();
+
+    // EXACTLY ONE commitment. Not two.
+    expect(await withTransaction(pool, (tx) => commitments.listCurrent(tx))).toHaveLength(1);
+
+    // Exactly one action_log turn, too — a replay would have minted a second.
+    const turns = await pool.query<{ turn_id: string }>("SELECT DISTINCT turn_id FROM action_log");
+    expect(turns.rows).toHaveLength(1);
+
+    // Respond was attempted once and its failure degraded to the template
+    // rather than propagating, so the user is still told what happened.
+    expect(calls).toHaveLength(1);
+    expect(result.degraded).toBe(true);
+    expect(result.reply).toContain("Barkha");
+  });
+
+  it("a read-only turn leaves the audit log untouched", async () => {
+    // The inverse guard: an inspection must not mint a turn_id or write an
+    // action_log row, or undo would offer to reverse a question.
+    const { responder } = recordingResponder();
+
+    const result = await runTurn(
+      { utterance: "What am I waiting on?", userId },
+      deps(fakeExtractor([intent({ kind: "inspection", recipient: mention("me") })]), responder),
+    );
+
+    expect(result.committed).toEqual([]);
+    expect(result.turnId).toBeNull();
+    expect((await pool.query("SELECT 1 FROM action_log")).rows).toEqual([]);
   });
 });

@@ -28,7 +28,12 @@ import type {
 } from "@ourglass/shared";
 import type { RespondResult } from "../assistant/respond.js";
 import { ExtractionError } from "../assistant/extract.js";
-import { AIModelRouter, AllProvidersFailedError, RoutedExtractor } from "./router.js";
+import {
+  AIModelRouter,
+  AllProvidersFailedError,
+  RoutedExtractor,
+  RoutedResponder,
+} from "./router.js";
 import { ProviderError } from "./errors.js";
 import type { AIProvider } from "./provider.js";
 
@@ -509,6 +514,37 @@ describe("RoutedExtractor keeps runTurn's interface unchanged", () => {
     // same shape it was before the router existed, which is why runTurn needed
     // no edit.
     expect(Object.keys(result).sort()).toEqual(["extraction", "trace"]);
+  });
+});
+
+describe("requestId correlates both stages of one turn", () => {
+  it("uses the adapter's id for interpret AND respond", async () => {
+    // One turn, one id, across two stages and any number of retries. Without
+    // it, the log for a failed turn is three unrelated lines.
+    const records: AIRequestLog[] = [];
+    const claude = fake("claude");
+    const shared = router([claude.provider], { onLog: (record) => records.push(record) });
+
+    await new RoutedExtractor(shared, "turn-abc").extract("hello");
+    await new RoutedResponder(shared, "turn-abc").respondWithTrace({
+      committed: [],
+      questions: [],
+      declined: [],
+    });
+
+    expect(records).toHaveLength(2);
+    expect(records.map((r) => r.stage)).toEqual(["interpret", "respond"]);
+    expect(records.every((r) => r.requestId === "turn-abc")).toBe(true);
+  });
+
+  it("still works without one, rather than requiring it", async () => {
+    const records: AIRequestLog[] = [];
+    const claude = fake("claude");
+    await new RoutedExtractor(
+      router([claude.provider], { onLog: (record) => records.push(record) }),
+    ).extract("hello");
+
+    expect(records[0]?.requestId).toBeTruthy();
   });
 });
 
