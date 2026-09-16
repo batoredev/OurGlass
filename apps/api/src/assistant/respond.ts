@@ -73,7 +73,7 @@ export interface RespondResult extends RespondOutput {
  * that finished cleanly and is still a wall of text. Spec §31 says be
  * concise; a paragraph is a failure of the one thing this call is for.
  */
-const MAX_REPLY_CHARS = 600;
+export const MAX_REPLY_CHARS = 600;
 
 /**
  * 3 seconds, and this is not a nicety.
@@ -83,9 +83,9 @@ const MAX_REPLY_CHARS = 600;
  * machinery has to catch. The write is durable; the user is waiting on
  * cosmetics. Bound the cosmetic stage.
  */
-const RESPOND_TIMEOUT_MS = 3_000;
+export const RESPOND_TIMEOUT_MS = 3_000;
 
-const MAX_RESPOND_TOKENS = 200;
+export const MAX_RESPOND_TOKENS = 200;
 
 /**
  * The system prompt carries spec §30's examples VERBATIM.
