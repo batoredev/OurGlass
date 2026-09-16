@@ -20,8 +20,8 @@ import type {
 } from "@ourglass/shared";
 import { EXTRACTION_MODEL, RESPOND_MODEL } from "@ourglass/shared";
 import { AnthropicExtractor } from "../assistant/extract.js";
-import { HaikuResponder, type RespondResult } from "../assistant/respond.js";
-import { classifyProviderError } from "./errors.js";
+import { HaikuResponder, templateReply, type RespondResult } from "../assistant/respond.js";
+import { ProviderError, classifyProviderError } from "./errors.js";
 import type { AIProvider, InterpretInput } from "./provider.js";
 
 export interface ClaudeProviderOptions {
@@ -36,38 +36,71 @@ export interface ClaudeProviderOptions {
 export class ClaudeProvider implements AIProvider {
   readonly name: AIProviderName = "claude";
 
-  private readonly extractor: Pick<AnthropicExtractor, "extract">;
-  private readonly responder: Pick<HaikuResponder, "respondWithTrace">;
+  private readonly apiKey: string;
+  private readonly injectedExtractor: Pick<AnthropicExtractor, "extract"> | undefined;
+  private readonly injectedResponder: Pick<HaikuResponder, "respondWithTrace"> | undefined;
+  private builtExtractor: Pick<AnthropicExtractor, "extract"> | undefined;
+  private builtResponder: Pick<HaikuResponder, "respondWithTrace"> | undefined;
   private readonly interpretModel: string;
   private readonly respondModel: string;
-  private readonly configured: boolean;
 
   private lastFailureAt: string | null = null;
   private lastFailureCategory: ProviderFailureCategory | null = null;
 
   constructor(options: ClaudeProviderOptions) {
-    this.configured = Boolean(options.apiKey);
+    this.apiKey = options.apiKey;
     this.interpretModel = options.interpretModel ?? EXTRACTION_MODEL;
     this.respondModel = options.respondModel ?? RESPOND_MODEL;
+    this.injectedExtractor = options.extractor;
+    this.injectedResponder = options.responder;
 
-    // Built eagerly so a missing key fails HERE rather than mid-turn. The
-    // injected forms skip construction entirely, which is what keeps the unit
-    // tests free of both a key and a network.
-    this.extractor =
-      options.extractor ??
-      new AnthropicExtractor({ apiKey: options.apiKey, model: this.interpretModel as never });
-    this.responder =
-      options.responder ??
-      new HaikuResponder({ apiKey: options.apiKey, model: this.respondModel as never });
+    // NOTHING IS CONSTRUCTED HERE, and the first version got this wrong.
+    //
+    // AnthropicExtractor's own constructor throws on an empty key, so building
+    // eagerly made `new ClaudeProvider({ apiKey: "" })` throw -- and
+    // buildAIRouter constructs EVERY provider in the order before asking any of
+    // them whether they are configured. A deployment with only a Gemini key
+    // therefore crashed while building Claude, before Gemini was ever reached.
+    //
+    // The Stage 1 test meant to cover this injected an extractor, which
+    // bypasses construction entirely, so it passed while proving nothing.
+    // An unconfigured provider must be SKIPPABLE, which means constructible.
   }
 
   modelFor(stage: "interpret" | "respond"): string {
     return stage === "interpret" ? this.interpretModel : this.respondModel;
   }
 
+  /** Built on first use, never at construction. See the constructor. */
+  private extractorOrThrow(): Pick<AnthropicExtractor, "extract"> {
+    if (this.injectedExtractor) return this.injectedExtractor;
+    if (this.builtExtractor) return this.builtExtractor;
+    if (!this.apiKey) {
+      throw new ProviderError("claude", "auth", "ANTHROPIC_API_KEY is not set");
+    }
+    this.builtExtractor = new AnthropicExtractor({
+      apiKey: this.apiKey,
+      model: this.interpretModel as never,
+    });
+    return this.builtExtractor;
+  }
+
+  private responderOrThrow(): Pick<HaikuResponder, "respondWithTrace"> {
+    if (this.injectedResponder) return this.injectedResponder;
+    if (this.builtResponder) return this.builtResponder;
+    if (!this.apiKey) {
+      throw new ProviderError("claude", "auth", "ANTHROPIC_API_KEY is not set");
+    }
+    this.builtResponder = new HaikuResponder({
+      apiKey: this.apiKey,
+      model: this.respondModel as never,
+    });
+    return this.builtResponder;
+  }
+
   async interpret(input: InterpretInput): Promise<ExtractionResult> {
     try {
-      return await this.extractor.extract(input.utterance);
+      return await this.extractorOrThrow().extract(input.utterance);
     } catch (error: unknown) {
       const classified = classifyProviderError(this.name, error);
       this.lastFailureAt = new Date().toISOString();
@@ -77,16 +110,33 @@ export class ClaudeProvider implements AIProvider {
   }
 
   async respond(input: RespondInput): Promise<RespondResult> {
-    // No try/catch, deliberately: respondWithTrace never throws. Adding one
-    // would imply a failure mode that does not exist and would hide a real
-    // regression if that guarantee were ever broken.
-    return this.responder.respondWithTrace(input);
+    // respondWithTrace itself never throws. The only throw reachable here is an
+    // unconfigured key from responderOrThrow, and even that must degrade rather
+    // than propagate: by the time Respond runs the mutation is already durable,
+    // and an exception would turn a committed write into an apparent failure
+    // and invite the user to repeat themselves.
+    let responder: Pick<HaikuResponder, "respondWithTrace">;
+    try {
+      responder = this.responderOrThrow();
+    } catch {
+      return {
+        reply: templateReply(input),
+        degraded: true,
+        trace: {
+          model: this.respondModel,
+          latencyMs: 0,
+          degraded: true,
+          fallbackReason: "sdk_error",
+        },
+      };
+    }
+    return responder.respondWithTrace(input);
   }
 
   health(): ProviderHealth {
     return {
       provider: this.name,
-      configured: this.configured,
+      configured: Boolean(this.apiKey) || this.injectedExtractor !== undefined,
       lastFailureAt: this.lastFailureAt,
       lastFailureCategory: this.lastFailureCategory,
     };

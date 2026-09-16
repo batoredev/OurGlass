@@ -24,12 +24,13 @@
  * importing `@ourglass/db` applies to CLIENT code specifically.
  */
 import { NextResponse } from "next/server";
+import { UnknownUserError, runTurn } from "@ourglass/api/assistant";
 import {
-  AnthropicExtractor,
-  HaikuResponder,
-  UnknownUserError,
-  runTurn,
-} from "@ourglass/api/assistant";
+  NoProviderConfiguredError,
+  RoutedExtractor,
+  RoutedResponder,
+  buildAIRouter,
+} from "@ourglass/api/ai";
 import { buildToolRegistry } from "@ourglass/api/tools";
 import { createPool, users, withTransaction } from "@ourglass/db";
 import type { DatabaseTransaction } from "@ourglass/shared";
@@ -94,15 +95,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Not enabled." }, { status: 404 });
   }
 
-  const apiKey = process.env["ANTHROPIC_API_KEY"];
-  if (!apiKey) {
-    // Fail with the CAUSE named. Discovering a missing key as a generic 500
-    // after typing a sentence is the worst moment to find out.
-    return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY is not set; the turn endpoint calls Sonnet and Haiku." },
-      { status: 500 },
-    );
-  }
 
   let body: { utterance?: unknown };
   try {
@@ -114,14 +106,40 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "utterance must be a non-empty string" }, { status: 400 });
   }
 
+  // ONE ROUTER, built from the environment. The provider chain, its order, the
+  // timeout and the retry budget are configuration now — this file knows only
+  // that something can interpret and something can respond.
+  //
+  // Built per request rather than cached per isolate, deliberately: it is a
+  // few object allocations, and caching would mean a rotated key needs a
+  // redeploy to take effect.
+  let router;
+  try {
+    router = buildAIRouter(process.env, {
+      // §21. One structured line per attempt, carrying no key and no
+      // utterance — Workers Logs is a different retention story from
+      // `messages`, where the body already lives with its own provenance.
+      onLog: (record) => {
+        console.log(JSON.stringify({ event: "ai_request", ...record }));
+      },
+    });
+  } catch (error: unknown) {
+    if (error instanceof NoProviderConfiguredError) {
+      // Named at the boundary rather than surfacing as a generic 500 after
+      // the user has already typed a sentence.
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    throw error;
+  }
+
   try {
     const result = await runTurn(
       { utterance: body.utterance, userId: await getUserId() },
       {
         db,
         registry: buildToolRegistry(),
-        extractor: new AnthropicExtractor({ apiKey }),
-        responder: new HaikuResponder({ apiKey }),
+        extractor: new RoutedExtractor(router),
+        responder: new RoutedResponder(router),
       },
     );
     return NextResponse.json(result);

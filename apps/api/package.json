@@ -37,6 +37,10 @@
     "./reminders/poller": {
       "types": "./dist/reminders/poller.d.ts",
       "default": "./dist/reminders/poller.js"
+    },
+    "./ai": {
+      "types": "./dist/ai/index.d.ts",
+      "default": "./dist/ai/index.js"
     }
   }
 }

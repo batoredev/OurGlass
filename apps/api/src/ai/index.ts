@@ -11,3 +11,4 @@ export * from "./router.js";
 export * from "./gemini-schema.js";
 export * from "./gemini.js";
 export * from "./qwen.js";
+export * from "./config.js";

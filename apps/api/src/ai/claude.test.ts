@@ -123,16 +123,41 @@ describe("ClaudeProvider", () => {
     expect(health.lastFailureAt).not.toBeNull();
   });
 
-  it("reports itself unconfigured without a key, rather than throwing at construction", () => {
-    // The ROUTER decides what to do about an unconfigured provider. A
-    // constructor that throws would make an unset GEMINI_API_KEY crash the
-    // process at startup instead of simply skipping that provider.
-    const claude = new ClaudeProvider({
-      apiKey: "",
-      extractor: { extract: async () => EXTRACTION },
-      responder: { respondWithTrace: async () => REPLY },
+  it("does NOT throw at construction with no key AND no injected client", () => {
+    // THE TEST THAT WAS MISSING, and its absence hid a real bug.
+    //
+    // The version below injects an extractor, which bypasses construction
+    // entirely -- so it passed while proving nothing. Meanwhile
+    // AnthropicExtractor's constructor throws on an empty key, and
+    // buildAIRouter constructs EVERY provider before asking any of them
+    // whether they are configured. A deployment with only a Gemini key
+    // therefore crashed while building Claude.
+    expect(() => new ClaudeProvider({ apiKey: "" })).not.toThrow();
+    expect(new ClaudeProvider({ apiKey: "" }).health().configured).toBe(false);
+  });
+
+  it("fails as auth, not as a crash, when used without a key", async () => {
+    const claude = new ClaudeProvider({ apiKey: "" });
+    const failure = (await claude
+      .interpret({ utterance: "hi" })
+      .catch((error: unknown) => error)) as ProviderError;
+
+    expect(failure.category).toBe("auth");
+    expect(failure.retryable).toBe(false);
+    expect(failure.fallbackable).toBe(true);
+  });
+
+  it("DEGRADES rather than throwing when respond has no key", async () => {
+    // The mutation is already durable by then; an exception would make a
+    // committed write look like a failure.
+    const result = await new ClaudeProvider({ apiKey: "" }).respond({
+      committed: [{ kind: "reminder_created", fireAtLocal: "5 PM" }],
+      questions: [],
+      declined: [],
     });
-    expect(claude.health().configured).toBe(false);
+
+    expect(result.degraded).toBe(true);
+    expect(result.reply).toContain("Reminder set for 5 PM");
   });
 
   it("passes a degraded reply through instead of throwing", async () => {
