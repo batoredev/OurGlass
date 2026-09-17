@@ -152,11 +152,13 @@ level lives in a table keyed by tool name — never on the tool, never from the 
 neither can under-declare it. `assertRiskTableCovers` fails a test if a tool is registered
 without a classification.
 
-**It is classification, not yet enforcement.** There is no confirmation mechanism until the
-§35 permission model (master plan stage 12). A risk check that can only throw enforces nothing
-but name-presence, so enforcement was deliberately left out of the executor; see the header of
-`risk.ts` for the full reasoning. Today every registered tool is `REVERSIBLE_WRITE` or
-`IMPORTANT_STATE_CHANGE` — nothing external exists to confirm.
+**Enforced by the §35 permission gate** (`apps/api/src/permissions/gate.ts`), which `runTurn`
+calls between Resolve and Mutate. It combines the risk table with the user's standing grants:
+internal writes act immediately unless the user asked to confirm them, external actions confirm
+unless always-allowed, high-impact actions always confirm. A held intent becomes a pending
+action approved on the Permissions page. Grants and approvals are a control plane the model can
+never reach — see [PHASE-7-PERMISSIONS-DESIGN.md](PHASE-7-PERMISSIONS-DESIGN.md). Today no
+registered tool is external, so by default nothing is held.
 
 ---
 

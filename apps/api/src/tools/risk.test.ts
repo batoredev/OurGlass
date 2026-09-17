@@ -10,7 +10,6 @@ import {
   UnclassifiedToolError,
   assertRiskTableCovers,
   highestRisk,
-  requiresConfirmation,
   riskFor,
 } from "./risk.js";
 
@@ -77,13 +76,8 @@ describe("severity ordering", () => {
 });
 
 describe("confirmation", () => {
-  it("does NOT ask about recoverable writes", () => {
-    // Everything below EXTERNAL_ACTION is reversible from action_log, and
-    // confirming a recoverable write is the confirmation fatigue §27 forbids.
-    expect(requiresConfirmation(["create_commitment"])).toBe(false);
-    expect(requiresConfirmation(["forget_memory", "remember"])).toBe(false);
-    expect(requiresConfirmation([])).toBe(false);
-  });
+  // Whether a call ASKS is decided by permissions/policy.ts, which combines
+  // this table with the user's grants — see policy.test.ts for every cell.
 
   it("puts the floor at the first level undo cannot reverse", () => {
     // §35: external actions always confirm. That is also exactly where

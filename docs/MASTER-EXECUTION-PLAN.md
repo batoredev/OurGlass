@@ -91,16 +91,19 @@ integration tests do not run on the dev machine here, so a local pass is not evi
 | 9 | Provider evals (`pnpm eval:ai`) | ✅ built *(never run — paid)* | `2cc9f16` |
 | 10 | AI documentation | ✅ done | `ade2183` |
 | 11 | Hybrid retrieval *(closes Phase 4)* | ✅ done *(Voyage unverified live)* | *(this commit)* |
-| 12 | §35 permission model *(Phase 7a)* | ⬜ next | |
+| 12 | §35 permission model *(Phase 7a)* | 🟨 12a done (model, gate, hold/release, UI) — 12b access control next | *(this commit)* |
 | 13 | Phase 6 — ingestion | ⬜ | |
 | 14 | Phase 7 — integrations (§34) | ⬜ | |
 | 15 | Phase 8 — voice | ⬜ | |
 | 16 | Full recheck + run | ⬜ | |
 
-Graphify runs after each major stage. Last refresh: after stage 9 — 2044 nodes,
-2969 edges, 174 communities, health clean, no import cycles. Verified from it: the
-provider layer (`apps/api/src/ai`) imports only `@ourglass/shared` and the
-Interpret/Respond contracts — no path to `@ourglass/db` or the tool layer.
+Graphify runs after each major stage. Last refresh: after stage 11 (`6bdad72`) — 2050
+nodes, 3095 edges, 161 communities, health clean (0 dangling, 0 missing), no import cycles.
+Verified from it: the provider layer (`apps/api/src/ai`) imports only `@ourglass/shared` and
+the Interpret/Respond contracts — no path to `@ourglass/db` or the tool layer. New hubs
+`ExtractionError`, `ProviderError`, `classifyProviderError` (16 edges each) are the failure
+contract crossing ai → assistant after `a932d7d` — expected, not coupling. `demoEnabled()` is
+still the second-largest hub (19): stage 12b replaces it.
 
 **Blocked on the owner, not on me** (neither stops the build; both stop the *claim*):
 

@@ -32,6 +32,7 @@ import {
   memories,
   messages,
   people,
+  permissions,
   users,
   type CurrentCommitment,
 } from "@ourglass/db";
@@ -54,6 +55,8 @@ import { templateReply, type RespondTrace } from "./respond.js";
 import { resolveTime, timeDirectionForIntent, type ResolvedTime } from "./time.js";
 import { executeTurn, type Deps as ExecutorDeps } from "../tools/index.js";
 import type { QueryEmbedder } from "../embeddings/backfill.js";
+import { gateIntentCalls, loadGrants, type GateDecision } from "../permissions/gate.js";
+import { PENDING_ACTION_TTL_SECONDS } from "../permissions/policy.js";
 
 export interface TurnRequest {
   readonly utterance: string;
@@ -223,15 +226,49 @@ export async function runTurn(req: TurnRequest, deps: OrchestratorDeps): Promise
   const queryEmbeddings = await embedRecallQueries(interpretation.extraction.intents, deps.embedder);
 
   // ---- Resolve (read only; writes nothing) --------------------------------
-  const planned = await deps.db.withTransaction((tx) =>
-    planIntents(interpretation.extraction.intents, {
+  const { resolved, grants } = await deps.db.withTransaction(async (tx) => ({
+    resolved: await planIntents(interpretation.extraction.intents, {
       tx,
       now,
       timezone,
       selfPersonId,
       queryEmbeddings,
     }),
-  );
+    grants: await loadGrants(tx),
+  }));
+
+  // ---- The §35 permission gate (PHASE-7-PERMISSIONS-DESIGN §4) -------------
+  //
+  // An intent whose calls need confirmation is HELD: it gets a question, so
+  // the partial-commit rule below blocks it — and every intent depending on
+  // it — with no second blocking mechanism. Its calls are recorded as a
+  // pending action once the blocked set is known.
+  const holds = new Map<number, Extract<GateDecision, { decision: "confirm" }>>();
+  for (const entry of resolved) {
+    if (entry.calls.length === 0 || entry.questions.length > 0) continue;
+    const gate = gateIntentCalls(entry.calls, grants);
+    if (gate.decision === "confirm") holds.set(entry.index, gate);
+  }
+  const planned: readonly PlannedIntent[] = resolved.map((entry) => {
+    const hold = holds.get(entry.index);
+    return hold ? { ...entry, questions: [confirmationQuestion(hold)] } : entry;
+  });
+
+  if (holds.size > 0) {
+    await deps.db.withTransaction(async (tx) => {
+      for (const entry of resolved) {
+        const hold = holds.get(entry.index);
+        if (!hold) continue;
+        await permissions.createPendingAction(tx, {
+          calls: entry.calls,
+          riskLevel: hold.risk,
+          summary: summarizeHeld(entry),
+          ttlSeconds: PENDING_ACTION_TTL_SECONDS,
+          sourceMessageId: userMessage.id,
+        });
+      }
+    });
+  }
 
   // ---- The partial-commit rule (§3.3) -------------------------------------
   const blocked = blockedIntentIndices(planned);
@@ -1297,6 +1334,25 @@ async function planCorrection(intent: ExtractedIntent, ctx: PlanContext): Promis
   }
 
   return { questions: [], calls, facts };
+}
+
+/**
+ * What the user is told about a held intent. Says WHY, because "waiting for
+ * approval" with no reason reads as the assistant being obstructive.
+ */
+function confirmationQuestion(hold: Extract<GateDecision, { decision: "confirm" }>): string {
+  return hold.reason === "user_requires_confirmation"
+    ? "You asked me to check before doing that, so it's waiting for your approval on the Permissions page."
+    : "That acts outside OurGlass, so it's waiting for your approval on the Permissions page.";
+}
+
+/**
+ * The held action in words, from the PLANNER's facts — never from model
+ * output. Falls back to tool names for an intent with no describable fact.
+ */
+function summarizeHeld(entry: PlannedIntent): string {
+  if (entry.facts.length === 0) return entry.calls.map((call) => call.name).join(", ");
+  return templateReply({ committed: entry.facts, questions: [], declined: [] });
 }
 
 /**

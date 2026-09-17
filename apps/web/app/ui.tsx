@@ -27,6 +27,7 @@ export const SURFACES = [
   { href: "/memory", label: "Memory" },
   { href: "/activity", label: "Activity" },
   { href: "/types", label: "Types" },
+  { href: "/permissions", label: "Permissions" },
 ] as const;
 
 export function Nav() {

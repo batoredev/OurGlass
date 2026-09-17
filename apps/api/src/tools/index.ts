@@ -16,6 +16,12 @@ import { attachContextTool } from "./attach-context.js";
 import { createEntityRecordTool } from "./create-entity-record.js";
 import { createEventTool } from "./create-event.js";
 import {
+  declinePendingActionTool,
+  releasePendingActionTool,
+  revokePermissionTool,
+  setPermissionTool,
+} from "./permission-tools.js";
+import {
   correctRelationshipTool,
   forgetMemoryTool,
   rememberTool,
@@ -63,6 +69,13 @@ export function buildToolRegistry(): ToolRegistry {
   // surface, and nothing that could write to it. Section 24 conflict detection
   // was querying a table that could only ever be empty.
   registry.register(createEventTool);
+  // Phase 7a (§35) — the CONTROL PLANE. Registered so they run through the
+  // same validate/commit/log/undo path, and never emitted by a planner: the
+  // orchestrator's gate throws if one ever is (PHASE-7-PERMISSIONS-DESIGN §1).
+  registry.register(setPermissionTool);
+  registry.register(revokePermissionTool);
+  registry.register(releasePendingActionTool);
+  registry.register(declinePendingActionTool);
   return registry;
 }
 

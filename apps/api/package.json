@@ -45,6 +45,10 @@
     "./embeddings": {
       "types": "./dist/embeddings/index.d.ts",
       "default": "./dist/embeddings/index.js"
+    },
+    "./permissions": {
+      "types": "./dist/permissions/index.d.ts",
+      "default": "./dist/permissions/index.js"
     }
   }
 }

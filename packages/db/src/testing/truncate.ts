@@ -34,6 +34,10 @@ import type { Queryable } from "../client.js";
  */
 export const TRUNCATABLE_TABLES = [
   "action_log",
+  // Phase 7a (migration 011). pending_actions references `messages`, so it is
+  // listed before it, matching the dependents-first convention below.
+  "permission_grants",
+  "pending_actions",
   "entity_records",
   "entity_type_fields",
   "entity_types",

@@ -15,28 +15,29 @@
  * too permissive (silently allowing an unclassified external action) or too
  * strict (blocking every new tool until someone noticed).
  *
- * ┌─ WHERE THIS IS ENFORCED, AND WHY NOT YET IN THE EXECUTOR ───────────────┐
- * │ The first version called `riskFor` inside `executeTurn`, before every   │
- * │ write. It was removed, and the reason is worth keeping.                 │
+ * ┌─ WHERE THIS IS ENFORCED — AND WHY NOT IN THE EXECUTOR ──────────────────┐
+ * │ ENFORCED in `apps/api/src/permissions/gate.ts`, called by `runTurn`     │
+ * │ between Resolve and Mutate (PHASE-7-PERMISSIONS-DESIGN §4). The gate    │
+ * │ combines this table with the user's grants and HOLDS an intent for      │
+ * │ confirmation rather than refusing it.                                   │
  * │                                                                        │
- * │ THERE IS NO CONFIRMATION MECHANISM YET — §35 builds it in stage 12. A   │
- * │ call that can only THROW enforces nothing except that a name appears in │
- * │ a table: enforcement theatre. It also forced every in-memory test       │
- * │ double (`create_widget`, `send_email`) to become an entry in the        │
- * │ PRODUCTION risk table, which directly contradicts this file's own       │
- * │ "classifies nothing that is not registered" test. Two rules that cannot │
- * │ both hold is the signal that the design was wrong, not the tests.       │
+ * │ The first version called `riskFor` inside `executeTurn`. It was removed │
+ * │ in stage 7: a check that can only THROW enforces nothing but that a     │
+ * │ name appears in a table, and it forced every in-memory test double      │
+ * │ (`create_widget`, `send_email`) into the PRODUCTION table. Holding      │
+ * │ needs the planner's intent grouping, which exists only in `runTurn`.    │
  * │                                                                        │
- * │ The real threat is a future tool reaching `buildToolRegistry` with no   │
- * │ classification. That is a PROGRAMMING error, not a runtime condition,   │
- * │ and `assertRiskTableCovers` catches it at test time — the right layer.  │
+ * │ What keeps a gate outside the executor honest is                       │
+ * │ `executor.callsites.test.ts`: every other caller of `executeTurn` must  │
+ * │ be listed with the reason it is not model-driven.                       │
  * │                                                                        │
- * │ `requiresConfirmation` is the seam stage 12 will call, once there is    │
- * │ something to confirm WITH.                                             │
+ * │ `requiresConfirmation` (risk only) was deleted when the gate landed:    │
+ * │ it ignored grants, so any caller would have got the wrong answer the    │
+ * │ moment a user set one. `decidePermission` is the one decision.          │
  * └────────────────────────────────────────────────────────────────────────┘
  * ===========================================================================
  */
-import { CONFIRMATION_FLOOR, atOrAbove, type RiskLevel } from "@ourglass/shared";
+import { atOrAbove, type RiskLevel } from "@ourglass/shared";
 import type { ToolRegistry } from "./registry.js";
 
 /**
@@ -72,6 +73,14 @@ export const RISK_BY_TOOL: Readonly<Record<string, RiskLevel>> = {
   forget_memory: "IMPORTANT_STATE_CHANGE",
   correct_relationship: "IMPORTANT_STATE_CHANGE",
   define_entity_type: "IMPORTANT_STATE_CHANGE",
+
+  // The §35 control plane. Classified like any tool, but never gated by the
+  // permission policy: they ARE the user's explicit decision, reached only
+  // from control-plane routes (PHASE-7-PERMISSIONS-DESIGN §1).
+  set_permission: "IMPORTANT_STATE_CHANGE",
+  revoke_permission: "IMPORTANT_STATE_CHANGE",
+  release_pending_action: "REVERSIBLE_WRITE",
+  decline_pending_action: "REVERSIBLE_WRITE",
 };
 
 /** Raised when a tool call reaches the executor with no classification. */
@@ -109,12 +118,6 @@ export function highestRisk(toolNames: readonly string[]): RiskLevel | null {
     if (highest === null || atOrAbove(level, highest)) highest = level;
   }
   return highest;
-}
-
-/** True when a turn containing these calls needs explicit confirmation (§35). */
-export function requiresConfirmation(toolNames: readonly string[]): boolean {
-  const highest = highestRisk(toolNames);
-  return highest !== null && atOrAbove(highest, CONFIRMATION_FLOOR);
 }
 
 /**

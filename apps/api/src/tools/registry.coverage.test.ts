@@ -91,6 +91,14 @@ describe("tool registry coverage", () => {
     // same invalidate-never-delete property. Reaching this tool needs a
     // relationship-edge hint in the contract, not a planner branch.
     correct_relationship: "needs a typed relationship edge the contract cannot express",
+    // BY DESIGN, and the strongest reason on this list: these change what is
+    // PERMITTED. A grant a model could propose is a grant a prompt-injected
+    // document could propose (PHASE-7-PERMISSIONS-DESIGN §1). Driven only by
+    // explicit user actions on the control-plane routes.
+    set_permission: "control plane — must never be model-reachable",
+    revoke_permission: "control plane — must never be model-reachable",
+    release_pending_action: "control plane — must never be model-reachable",
+    decline_pending_action: "control plane — must never be model-reachable",
   };
 
   it("leaves no tool registered but unreachable, unless the reason is stated", () => {

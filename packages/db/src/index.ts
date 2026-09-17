@@ -29,6 +29,7 @@ export * as memories from "./repositories/memories.js";
 export * as relationships from "./repositories/relationships.js";
 export * as events from "./repositories/events.js";
 export * as entityRecords from "./repositories/entity-records.js";
+export * as permissions from "./repositories/permissions.js";
 
 export type { Person, CreatePersonInput } from "./repositories/people.js";
 export type { Organization } from "./repositories/organizations.js";
@@ -86,6 +87,12 @@ export type {
   SupersedeResult,
 } from "./repositories/relationships.js";
 export type { Event, CreateEventInput } from "./repositories/events.js";
+export type {
+  PermissionDecision,
+  PermissionGrant,
+  PendingAction,
+  PendingActionStatus,
+} from "./repositories/permissions.js";
 export type {
   EntityType,
   EntityTypeField,

@@ -52,7 +52,10 @@ describe("truncateAll", () => {
         "memories",
         "messages",
         "organizations",
+        // Phase 7a, migration 011.
+        "pending_actions",
         "people",
+        "permission_grants",
         "projects",
         "relationships",
         "reminders",

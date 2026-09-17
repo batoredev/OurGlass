@@ -106,6 +106,35 @@ export interface Today {
   readonly events: readonly TodayEvent[];
 }
 
+/** §35 — mirrors packages/db's PermissionGrant as serialised by the route. */
+export interface PermissionGrant {
+  readonly id: string;
+  readonly action_type: string;
+  readonly decision: "allow" | "confirm";
+  readonly t_valid: string;
+}
+
+export interface PendingAction {
+  readonly id: string;
+  readonly risk_level: string;
+  readonly summary: string;
+  readonly status: "pending" | "executed" | "declined" | "failed";
+  readonly expires_at: string;
+  readonly decided_at: string | null;
+  readonly t_created: string;
+}
+
+export interface ActionType {
+  readonly name: string;
+  readonly risk: string;
+}
+
+export interface Permissions {
+  readonly grants: readonly PermissionGrant[];
+  readonly pending: readonly PendingAction[];
+  readonly actionTypes: readonly ActionType[];
+}
+
 /**
  * SAME-ORIGIN by default.
  *
@@ -206,4 +235,13 @@ export async function fetchActivity(): Promise<readonly ActivityEntry[]> {
 
 export async function fetchToday(): Promise<Today> {
   return get<Today>("/api/today");
+}
+
+/**
+ * §35 — READ ONLY, like everything in this file. Changing a permission or
+ * deciding a held action goes through `lib/control.ts`, which exists as a
+ * separate module so this one keeps its "no write function" guarantee.
+ */
+export async function fetchPermissions(): Promise<Permissions> {
+  return get<Permissions>("/api/permissions");
 }
