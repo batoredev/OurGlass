@@ -75,10 +75,24 @@ export const OLLAMA_DEFAULT_BASE_URL = "http://localhost:11434";
  */
 export const OLLAMA_DEFAULT_MODEL = "qwen3:8b";
 
+/**
+ * Interpret's own abort budget — deliberately NOT Respond's 3 seconds.
+ *
+ * Until 2026-09-17 both stages shared `timeoutMs`, which defaults to
+ * RESPOND_TIMEOUT_MS. Extraction sends a long system prompt and allows 1,200
+ * output tokens; a local 8B model cannot do that in 3 seconds, so every Qwen
+ * interpretation aborted and the fallback it exists to provide never worked.
+ * Matches the router's default wait; `buildAIRouter` passes
+ * AI_REQUEST_TIMEOUT_MS so the abort and the router's wait agree.
+ */
+export const QWEN_DEFAULT_INTERPRET_TIMEOUT_MS = 20_000;
+
 export interface QwenProviderOptions {
   readonly baseUrl?: string | undefined;
   readonly model?: string | undefined;
+  /** Respond-stage budget. Short on purpose: the template is always ready. */
   readonly timeoutMs?: number | undefined;
+  readonly interpretTimeoutMs?: number | undefined;
   /** Injected in tests so nothing reaches the network. */
   readonly fetchImpl?: FetchLike | undefined;
 }
@@ -89,6 +103,7 @@ export class QwenProvider implements AIProvider {
   private readonly baseUrl: string;
   private readonly model: string;
   private readonly timeoutMs: number;
+  private readonly interpretTimeoutMs: number;
   private readonly fetchImpl: FetchLike;
 
   private lastFailureAt: string | null = null;
@@ -99,6 +114,7 @@ export class QwenProvider implements AIProvider {
     this.baseUrl = (options.baseUrl ?? OLLAMA_DEFAULT_BASE_URL).replace(/\/+$/, "");
     this.model = options.model ?? OLLAMA_DEFAULT_MODEL;
     this.timeoutMs = options.timeoutMs ?? RESPOND_TIMEOUT_MS;
+    this.interpretTimeoutMs = options.interpretTimeoutMs ?? QWEN_DEFAULT_INTERPRET_TIMEOUT_MS;
     this.fetchImpl = options.fetchImpl ?? (globalThis.fetch as unknown as FetchLike);
   }
 
@@ -137,7 +153,7 @@ export class QwenProvider implements AIProvider {
 
     const started = performance.now();
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    const timer = setTimeout(() => controller.abort(), this.interpretTimeoutMs);
 
     try {
       const response = await this.chat(

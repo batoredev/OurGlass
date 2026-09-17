@@ -170,6 +170,10 @@ function buildProvider(name: AIProviderName, config: AIConfig): AIProvider {
       return new QwenProvider({
         baseUrl: config.ollama.baseUrl ?? undefined,
         model: config.ollama.model,
+        // The provider's own abort must not fire before the router stops
+        // waiting — otherwise AI_REQUEST_TIMEOUT_MS is a setting that cannot
+        // lengthen anything.
+        interpretTimeoutMs: config.timeoutMs,
       });
   }
 }

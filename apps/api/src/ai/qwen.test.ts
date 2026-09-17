@@ -244,4 +244,41 @@ describe("configuration", () => {
 
     expect(qwen.health().lastFailureCategory).toBe("server_error");
   });
+
+  it("gives Interpret its own budget, not Respond's short one", async () => {
+    // Both stages once shared Respond's 3-second abort, so every local
+    // extraction aborted. A slow Ollama (60ms here) against a 20ms RESPOND
+    // budget: Interpret must still succeed; Respond must still degrade.
+    const slowFetch: FetchLike = (_url, init) =>
+      new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          const body: Partial<OllamaChatResponse> = {
+            message: { content: JSON.stringify(VALID) },
+            done_reason: "stop",
+          };
+          resolve({
+            ok: true,
+            status: 200,
+            async json() {
+              return body as OllamaChatResponse;
+            },
+            async text() {
+              return JSON.stringify(body);
+            },
+          });
+        }, 60);
+        init.signal?.addEventListener("abort", () => {
+          clearTimeout(timer);
+          reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+        });
+      });
+    const qwen = new QwenProvider({ timeoutMs: 20, fetchImpl: slowFetch });
+
+    const interpreted = await qwen.interpret({ utterance: "Arun handles the backend" });
+    expect(interpreted.extraction).toEqual(VALID);
+
+    const replied = await qwen.respond({ committed: [], questions: [], declined: [] });
+    expect(replied.degraded).toBe(true);
+    expect(replied.trace.fallbackReason).toBe("timeout");
+  });
 });
