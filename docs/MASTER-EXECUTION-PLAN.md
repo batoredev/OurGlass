@@ -90,8 +90,8 @@ integration tests do not run on the dev machine here, so a local pass is not evi
 | 8 | Observability | ✅ done | `d71e2e0` |
 | 9 | Provider evals (`pnpm eval:ai`) | ✅ built *(never run — paid)* | `2cc9f16` |
 | 10 | AI documentation | ✅ done | `ade2183` |
-| 11 | Hybrid retrieval *(closes Phase 4)* | ⬜ next | |
-| 12 | §35 permission model *(Phase 7a)* | ⬜ | |
+| 11 | Hybrid retrieval *(closes Phase 4)* | ✅ done *(Voyage unverified live)* | *(this commit)* |
+| 12 | §35 permission model *(Phase 7a)* | ⬜ next | |
 | 13 | Phase 6 — ingestion | ⬜ | |
 | 14 | Phase 7 — integrations (§34) | ⬜ | |
 | 15 | Phase 8 — voice | ⬜ | |

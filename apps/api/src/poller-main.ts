@@ -19,6 +19,7 @@
  */
 import { createPool, withTransaction } from "@ourglass/db";
 import type { DatabaseTransaction } from "@ourglass/shared";
+import { VoyageClient } from "./embeddings/voyage.js";
 import { startReminderPoller, systemClock } from "./reminders/poller.js";
 import { buildToolRegistry } from "./tools/index.js";
 
@@ -31,6 +32,7 @@ function main(): void {
   }
 
   const pool = createPool(connectionString);
+  const voyageKey = process.env["VOYAGE_API_KEY"];
   const handle = startReminderPoller({
     db: {
       withTransaction: <T>(fn: (tx: DatabaseTransaction) => Promise<T>) =>
@@ -38,9 +40,15 @@ function main(): void {
     },
     registry: buildToolRegistry(),
     clock: systemClock,
+    // The memory-embedding backfill rides the same tick. Absent without a key:
+    // semantic recall is then off and nothing else changes.
+    embedder: voyageKey ? new VoyageClient({ apiKey: voyageKey }) : undefined,
   });
 
-  console.log("[poller] running — reminders and conditional rules, every 30s. Ctrl-C to stop.");
+  console.log(
+    `[poller] running — reminders, conditional rules${voyageKey ? ", memory embeddings" : ""}, ` +
+      "every 30s. Ctrl-C to stop.",
+  );
 
   // ⚠ THE POLLER'S INTERVAL IS `unref`'d, on purpose (poller.ts): an API
   // server should exit on SIGTERM rather than being held open by a timer.

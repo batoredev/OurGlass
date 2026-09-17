@@ -46,6 +46,8 @@ import type {
 } from "@ourglass/shared";
 import { AIModelRouter, RoutedExtractor } from "../ai/router.js";
 import type { AIProvider } from "../ai/provider.js";
+import type { QueryEmbedder } from "../embeddings/backfill.js";
+import { EMBEDDING_DIMENSIONS } from "../embeddings/voyage.js";
 import { ToolRegistry, buildToolRegistry } from "../tools/index.js";
 import { ExtractionError, type Extractor } from "./extract.js";
 import { runTurn, type OrchestratorDeps } from "./orchestrator.js";
@@ -636,6 +638,98 @@ suite("runTurn (integration)", () => {
     // Declined, not asked: no question would help, and §27 forbids
     // interrogating the user over something we simply never held.
     expect(calls[0]?.questions).toEqual([]);
+    expect(calls[0]?.declined.length).toBeGreaterThan(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // Hybrid recall for corrections (PHASE-4-DESIGN §3). Embeddings are faked as
+  // unit vectors; pgvector, the fusion and the planner are real.
+  // -------------------------------------------------------------------------
+
+  const axis = (k: number): number[] =>
+    Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => (i === k ? 1 : 0));
+
+  const queryEmbedder = (vector: number[]): QueryEmbedder => ({
+    async embedQuery() {
+      return {
+        embeddings: [vector],
+        trace: { model: "fake", latencyMs: 0, inputCount: 1, totalTokens: null },
+      };
+    },
+  });
+
+  async function storedFact(body: string, embedding: number[]) {
+    return withTransaction(pool, (tx) =>
+      memories.createMemory(tx, { kind: "fact", body, inferenceLevel: "CONFIRMED", embedding }),
+    );
+  }
+
+  it("a paraphrased correction found ONLY semantically asks — it never forgets on similarity", async () => {
+    // The design's own demo: stored "Arun handles the backend", said "works
+    // on". Lexical search needs every term and has no `works`, so before
+    // hybrid this DECLINED as if nothing were on record.
+    const stored = await storedFact("Arun handles the backend", axis(0));
+    const { responder, calls } = recordingResponder();
+
+    const result = await runTurn(
+      { utterance: "Forget that Arun works on backend.", userId },
+      {
+        ...deps(
+          fakeExtractor([intent({ kind: "context", correctionTarget: "Arun works on backend" })]),
+          responder,
+        ),
+        embedder: queryEmbedder(axis(0)),
+      },
+    );
+
+    // Similarity is not evidence — nothing is forgotten on it.
+    expect(result.committed).toEqual([]);
+    expect(calls[0]?.questions.join(" ")).toContain("Arun handles the backend");
+    const current = await withTransaction(pool, (tx) => memories.getById(tx, stored.id));
+    expect(current?.t_invalid).toBeNull();
+  });
+
+  it("a lexical hit is still forgotten directly when an embedder is present", async () => {
+    // Regression guard: wiring the semantic half must not turn every
+    // correction into a question.
+    await storedFact("Arun handles the backend", axis(0));
+    const { responder } = recordingResponder();
+
+    const result = await runTurn(
+      { utterance: "Forget that Arun handles the backend.", userId },
+      {
+        ...deps(
+          fakeExtractor([intent({ kind: "context", correctionTarget: "Arun handles the backend" })]),
+          responder,
+        ),
+        embedder: queryEmbedder(axis(7)),
+      },
+    );
+
+    expect(result.committed).toEqual(["forget_memory"]);
+  });
+
+  it("a failing embedder degrades recall to lexical-only instead of failing the turn", async () => {
+    await storedFact("Arun handles the backend", axis(0));
+    const { responder, calls } = recordingResponder();
+
+    const result = await runTurn(
+      { utterance: "Forget that Arun works on backend.", userId },
+      {
+        ...deps(
+          fakeExtractor([intent({ kind: "context", correctionTarget: "Arun works on backend" })]),
+          responder,
+        ),
+        embedder: {
+          async embedQuery() {
+            throw new Error("voyage is down");
+          },
+        },
+      },
+    );
+
+    // Exactly the pre-hybrid behaviour: an honest decline, no 500.
+    expect(result.committed).toEqual([]);
     expect(calls[0]?.declined.length).toBeGreaterThan(0);
   });
 

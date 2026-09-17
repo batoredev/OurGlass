@@ -19,12 +19,14 @@ import type pg from "pg";
 import {
   commitments,
   createPool,
+  memories,
   people,
   reminders,
   truncateAll,
   withTransaction,
   workflows,
 } from "@ourglass/db";
+import { EMBEDDING_DIMENSIONS } from "../embeddings/voyage.js";
 import { buildToolRegistry } from "../tools/index.js";
 import { undoTurn, type Deps } from "../tools/executor.js";
 import { TurnNotFoundError } from "../tools/errors.js";
@@ -122,6 +124,40 @@ suite("reminder poller (integration)", () => {
     await seedReminder(DUE_AT);
     const result = await pollOnce(deps(BEFORE));
     expect(result.fired).toBe(0);
+  });
+
+  it("runs the memory-embedding backfill on the same tick — only when an embedder exists", async () => {
+    // The call site the backfill never had: without it, every memory stayed
+    // NULL forever and semantic recall had nothing to search.
+    await withTransaction(pool, (tx) =>
+      memories.createMemory(tx, {
+        kind: "fact",
+        body: "Arun handles the backend",
+        inferenceLevel: "CONFIRMED",
+      }),
+    );
+
+    const without = await pollOnce(deps(AFTER));
+    expect(without.embedded).toBe(0);
+    expect(await withTransaction(pool, (tx) => memories.listUnembedded(tx))).toHaveLength(1);
+
+    const withEmbedder = await pollOnce(
+      deps(AFTER, {
+        embedder: {
+          async embedDocuments(texts) {
+            return {
+              embeddings: texts.map(() =>
+                Array.from({ length: EMBEDDING_DIMENSIONS }, (_, i) => (i === 0 ? 1 : 0)),
+              ),
+              trace: { model: "fake", latencyMs: 0, inputCount: texts.length, totalTokens: null },
+            };
+          },
+        },
+      }),
+    );
+    expect(withEmbedder.embedded).toBe(1);
+    expect(withEmbedder.embeddingFailure).toBeNull();
+    expect(await withTransaction(pool, (tx) => memories.listUnembedded(tx))).toEqual([]);
   });
 
   it("does not fire an invalidated reminder", async () => {

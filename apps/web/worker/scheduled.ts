@@ -26,6 +26,7 @@
  * audit kept finding. A comment asserting a call site is worth exactly as
  * much as the call site existing.
  */
+import { VoyageClient } from "@ourglass/api/embeddings";
 import { buildToolRegistry } from "@ourglass/api/tools";
 import { pollOnce, systemClock } from "@ourglass/api/reminders/poller";
 import { createPool, withTransaction } from "@ourglass/db";
@@ -33,6 +34,8 @@ import type { DatabaseTransaction } from "@ourglass/shared";
 
 export interface Env {
   DATABASE_URL: string;
+  /** Optional (`wrangler secret put VOYAGE_API_KEY`). Enables the memory-embedding backfill. */
+  VOYAGE_API_KEY?: string;
 }
 
 /**
@@ -60,6 +63,7 @@ export async function runScheduled(env: Env): Promise<void> {
       },
       registry: buildToolRegistry(),
       clock: systemClock,
+      embedder: env.VOYAGE_API_KEY ? new VoyageClient({ apiKey: env.VOYAGE_API_KEY }) : undefined,
     });
     // Logged even when nothing fired: a poller that has silently stopped
     // looks identical to a quiet one, and this is the only signal that
@@ -67,7 +71,9 @@ export async function runScheduled(env: Env): Promise<void> {
     console.log(
       `[cron] fired=${result.fired} skipped=${result.skipped} ` +
         `rules=${result.workflowsEvaluated}/${result.workflowsFired} ` +
-        `at=${result.asOf.toISOString()}`,
+        `embedded=${result.embedded}` +
+        (result.embeddingFailure ? ` embedding_failure=${result.embeddingFailure}` : "") +
+        ` at=${result.asOf.toISOString()}`,
     );
   } catch (error: unknown) {
     console.error("[cron] poll failed:", error);

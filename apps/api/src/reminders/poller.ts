@@ -21,6 +21,8 @@
  */
 import type { DatabaseTransaction } from "@ourglass/shared";
 import { reminders, workflows, type DueReminder, type DueWorkflow } from "@ourglass/db";
+import { backfillMemoryEmbeddings, type DocumentEmbedder } from "../embeddings/backfill.js";
+import type { EmbeddingFailureReason } from "../embeddings/voyage.js";
 import { executeTurn, type Deps as ExecutorDeps } from "../tools/index.js";
 
 export interface Clock {
@@ -57,6 +59,12 @@ export interface PollerDeps extends ExecutorDeps {
   readonly batchSize?: number;
   readonly onFire?: OnFire;
   readonly onRuleFired?: OnRuleFired;
+  /**
+   * Fills memories written without an embedding (PHASE-4-DESIGN §2.2).
+   * Absent when VOYAGE_API_KEY is unset: semantic recall is then simply off,
+   * and lexical recall is unaffected.
+   */
+  readonly embedder?: DocumentEmbedder | undefined;
 }
 
 export interface PollResult {
@@ -71,6 +79,10 @@ export interface PollResult {
    * is a successful evaluation, not a skip.
    */
   readonly workflowsFired: number;
+  /** Memories embedded this pass. 0 when no embedder is configured. */
+  readonly embedded: number;
+  /** A provider failure during the backfill, or null. Rows stay NULL and retry next pass. */
+  readonly embeddingFailure: EmbeddingFailureReason | null;
   /** The instant the pass ran at. Echoed so a caller can log it. */
   readonly asOf: Date;
 }
@@ -143,11 +155,20 @@ export async function pollOnce(deps: PollerDeps): Promise<PollResult> {
 
   const rules = await evaluateDueWorkflows(deps, asOf, batchSize);
 
+  // LAST, after everything time-sensitive: a slow embedding provider must
+  // never delay a reminder. The backfill opens no transaction across its HTTP
+  // call, and a provider failure returns a reason instead of throwing.
+  const backfill = deps.embedder
+    ? await backfillMemoryEmbeddings({ db: deps.db, embedder: deps.embedder })
+    : { embedded: 0, failure: null };
+
   return {
     fired,
     skipped,
     workflowsEvaluated: rules.evaluated,
     workflowsFired: rules.held,
+    embedded: backfill.embedded,
+    embeddingFailure: backfill.failure,
     asOf,
   };
 }

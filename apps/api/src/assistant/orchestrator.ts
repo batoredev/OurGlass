@@ -53,6 +53,7 @@ import {
 import { templateReply, type RespondTrace } from "./respond.js";
 import { resolveTime, timeDirectionForIntent, type ResolvedTime } from "./time.js";
 import { executeTurn, type Deps as ExecutorDeps } from "../tools/index.js";
+import type { QueryEmbedder } from "../embeddings/backfill.js";
 
 export interface TurnRequest {
   readonly utterance: string;
@@ -94,6 +95,12 @@ export interface TracingResponder extends Responder {
 export interface OrchestratorDeps extends ExecutorDeps {
   readonly extractor: Extractor;
   readonly responder: TracingResponder;
+  /**
+   * Semantic half of memory recall (PHASE-4-DESIGN §3). Optional: without it,
+   * recall is lexical-only — exactly the behaviour before hybrid retrieval was
+   * wired — rather than an error.
+   */
+  readonly embedder?: QueryEmbedder | undefined;
 }
 
 /**
@@ -212,6 +219,9 @@ export async function runTurn(req: TurnRequest, deps: OrchestratorDeps): Promise
     throw error;
   }
 
+  // ---- Recall queries, embedded OUTSIDE any transaction -------------------
+  const queryEmbeddings = await embedRecallQueries(interpretation.extraction.intents, deps.embedder);
+
   // ---- Resolve (read only; writes nothing) --------------------------------
   const planned = await deps.db.withTransaction((tx) =>
     planIntents(interpretation.extraction.intents, {
@@ -219,6 +229,7 @@ export async function runTurn(req: TurnRequest, deps: OrchestratorDeps): Promise
       now,
       timezone,
       selfPersonId,
+      queryEmbeddings,
     }),
   );
 
@@ -598,6 +609,12 @@ interface PlanContext {
   readonly now: Date;
   readonly timezone: string;
   readonly selfPersonId: string | null;
+  /**
+   * Query embeddings computed BEFORE the Resolve transaction opened, keyed by
+   * the exact text embedded. Planning runs inside a transaction and must never
+   * make a network call — see `embedRecallQueries`.
+   */
+  readonly queryEmbeddings: ReadonlyMap<string, readonly number[]>;
 }
 
 async function planIntents(
@@ -1205,9 +1222,37 @@ async function planCorrection(intent: ExtractedIntent, ctx: PlanContext): Promis
   const target = intent.correctionTarget?.trim();
   if (!target) return { calls: [], facts: [], questions: [] };
 
-  const found = await memories.searchLexical(ctx.tx, target, {}, 5);
+  // HYBRID recall (PHASE-4-DESIGN §3). The user rarely repeats a memory
+  // word for word: "Forget that Arun works on backend" against a stored
+  // "Arun handles the backend" shares no `works`, and lexical search requires
+  // every term — so lexical-only recall DECLINED the design's own demo.
+  //
+  // With no embedding (no provider, or it failed) this is lexical-only, the
+  // behaviour before hybrid was wired. The limit is generous because the
+  // lexical hits are filtered out of a FUSED list below.
+  const embedding = ctx.queryEmbeddings.get(target) ?? null;
+  const results = await memories.searchHybrid(ctx.tx, target, embedding, {}, 20);
+
+  // ⚠ ONLY A LEXICAL HIT MAY BE FORGOTTEN WITHOUT ASKING.
+  //
+  // A semantic search ALWAYS returns neighbours — the nearest memory to
+  // "Arun likes tea" exists even when it is "Arun handles the backend". No
+  // distance threshold has been measured for this corpus, so similarity alone
+  // is evidence of nothing, and forgetting on it would silently drop a true
+  // fact. A semantic-only match can therefore only become a QUESTION.
+  const found = results.filter((result) => result.matchedLexical).map((result) => result.memory);
 
   if (found.length === 0) {
+    const nearest = results[0]?.memory;
+    if (nearest) {
+      return {
+        calls: [],
+        facts: [],
+        questions: [
+          `I don't have "${target}" on record. Did you mean "${nearest.body}"? If so, say that and I'll drop it.`,
+        ],
+      };
+    }
     // An honest decline, not a question. The user corrected something we
     // never held; asking "which memory?" when the answer is "none" is the
     // over-asking §27 forbids, and silence would imply we had acted.
@@ -1222,6 +1267,7 @@ async function planCorrection(intent: ExtractedIntent, ctx: PlanContext): Promis
   if (found.length > 1) {
     // Forgetting is invalidate-not-delete and undoable, but the user may
     // never notice the wrong one went — so ambiguity asks (DECISIONS.md #6).
+    // Fused order, so a hit the semantic half also found is offered first.
     return {
       calls: [],
       facts: [],
@@ -1251,6 +1297,44 @@ async function planCorrection(intent: ExtractedIntent, ctx: PlanContext): Promis
   }
 
   return { questions: [], calls, facts };
+}
+
+/**
+ * Embed every recall query this turn needs, BEFORE Resolve opens its
+ * transaction.
+ *
+ * Planning runs inside `withTransaction`, and a network call there holds a
+ * pooled connection for as long as the vendor takes (PHASE-4-DESIGN §2.2,
+ * "Rejected"). So the queries are known from the extraction, embedded here,
+ * and handed to the planners as data.
+ *
+ * NEVER THROWS. A failed embedding degrades that recall to lexical-only — the
+ * pre-hybrid behaviour — and a turn must not fail because an optional
+ * enhancement did. Most turns carry no correction and make no call at all.
+ */
+async function embedRecallQueries(
+  intents: readonly ExtractedIntent[],
+  embedder: QueryEmbedder | undefined,
+): Promise<ReadonlyMap<string, readonly number[]>> {
+  const embeddings = new Map<string, readonly number[]>();
+  if (!embedder) return embeddings;
+
+  const queries = new Set(
+    intents
+      .map((intent) => intent.correctionTarget?.trim())
+      .filter((target): target is string => Boolean(target)),
+  );
+
+  for (const query of queries) {
+    try {
+      const result = await embedder.embedQuery(query);
+      const vector = result.embeddings[0];
+      if (vector) embeddings.set(query, vector);
+    } catch (error: unknown) {
+      console.warn("[turn] query embedding failed; recall is lexical-only:", error);
+    }
+  }
+  return embeddings;
 }
 
 /**

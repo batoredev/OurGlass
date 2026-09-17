@@ -31,6 +31,7 @@ import {
   RoutedResponder,
   buildAIRouter,
 } from "@ourglass/api/ai";
+import { VoyageClient } from "@ourglass/api/embeddings";
 import { buildToolRegistry } from "@ourglass/api/tools";
 import { createPool, users, withTransaction } from "@ourglass/db";
 import type { DatabaseTransaction } from "@ourglass/shared";
@@ -144,6 +145,11 @@ export async function POST(request: Request) {
         registry: buildToolRegistry(),
         extractor: new RoutedExtractor(router, requestId),
         responder: new RoutedResponder(router, requestId),
+        // Optional semantic recall. Without a key, recall is lexical-only —
+        // the orchestrator treats an absent embedder as a choice, not a fault.
+        embedder: process.env["VOYAGE_API_KEY"]
+          ? new VoyageClient({ apiKey: process.env["VOYAGE_API_KEY"] })
+          : undefined,
       },
     );
     return NextResponse.json(result);
