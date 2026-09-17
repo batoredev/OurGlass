@@ -108,7 +108,21 @@ Interpret/Respond contracts — no path to `@ourglass/db` or the tool layer.
 |---|---|
 | `GEMINI_API_KEY` absent | Stage 3 ships untested against a live endpoint |
 | Ollama not installed | Stage 4 ships untested against a live endpoint |
-| `pnpm test:live` never run | ~97 paid Sonnet calls. The only measurement of extraction quality against a real model |
+| `pnpm test:live` never run | ~99 paid Sonnet calls. The only measurement of extraction quality against a real model |
+
+### Defects found while executing (not waiting for stage 16)
+
+Each was invisible to the suite that existed, and each is now pinned by a test that was shown
+to fail without its fix.
+
+| Commit | Defect | Why nothing caught it |
+|---|---|---|
+| `5067898` | `evals.yml` never built the workspace libraries; every PR run failed to resolve `@ourglass/shared` | Stages land by direct push to `main`, where that workflow does not trigger. Surfaced on a Dependabot PR |
+| `ad06f76` | `RESPOND_MODEL` was `claude-haiku-5`, a model that does not exist — every live reply silently fell back to the template | Unit tests inject fake clients; Respond never throws, and the template reply looks correct. Found by asking `GET /v1/models`; `pnpm check:models` now does |
+| `a932d7d` | Since stage 5, any Interpret-stage provider failure (outage, bad key, refusal) returned **HTTP 500** with the user message orphaned | `runTurn` catches only `ExtractionError`; the router throws its own types. Router and orchestrator tests each injected the type their own side expected |
+| `5af1efe` | Qwen's Interpret aborted after Respond's 3-second budget — the local fallback could never succeed | One `timeoutMs` shared by both stages; tests used instant fakes |
+
+All four are the recorded defect class *a citation is not a verification*, at a seam.
 
 
 Each stage ends with the same gate: `pnpm typecheck && pnpm lint && pnpm test`, a green CI
