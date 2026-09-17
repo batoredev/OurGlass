@@ -510,10 +510,11 @@ describe("RoutedExtractor keeps runTurn's interface unchanged", () => {
     const result = await extractor.extract("hello");
 
     expect(result.extraction.intents).toHaveLength(1);
-    // No provider/fallbackUsed leakage: the orchestrator's contract is the
-    // same shape it was before the router existed, which is why runTurn needed
-    // no edit.
+    // Same top-level shape as before the router existed, which is why runTurn
+    // needed no edit — provenance rides INSIDE the trace (§21).
     expect(Object.keys(result).sort()).toEqual(["extraction", "trace"]);
+    expect(result.trace.provider).toBe("claude");
+    expect(result.trace.fallbackUsed).toBe(false);
   });
 });
 
@@ -545,6 +546,30 @@ describe("requestId correlates both stages of one turn", () => {
     ).extract("hello");
 
     expect(records[0]?.requestId).toBeTruthy();
+  });
+});
+
+describe("provenance is persisted, and never clobbers the vendor request id", () => {
+  it("stamps provider, fallback and correlation id into both traces", async () => {
+    const claude = fake("claude", { interpret: async () => { throw status(503); } });
+    const gemini = fake("gemini", {
+      interpret: async () => ({ ...OK, trace: { ...OK.trace, requestId: "vendor-req-1" } }),
+    });
+    const shared = router([claude.provider, gemini.provider]);
+
+    const extracted = await new RoutedExtractor(shared, "turn-9").extract("hi");
+    expect(extracted.trace.provider).toBe("gemini");
+    expect(extracted.trace.fallbackUsed).toBe(true);
+    expect(extracted.trace.correlationId).toBe("turn-9");
+    // The vendor's id survives. Overwriting it would destroy the only handle
+    // for a support conversation with them.
+    expect(extracted.trace.requestId).toBe("vendor-req-1");
+
+    const replied = await new RoutedResponder(shared, "turn-9").respondWithTrace({
+      committed: [], questions: [], declined: [],
+    });
+    expect(replied.trace.correlationId).toBe("turn-9");
+    expect(replied.trace.provider).toBe("claude");
   });
 });
 

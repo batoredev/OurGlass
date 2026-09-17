@@ -215,6 +215,17 @@ export interface ExtractionTrace {
    * interpretation is complete"; see AnthropicExtractor for the failure taxonomy.
    */
   readonly stopReason?: string | null;
+  /**
+   * Which provider answered, and whether the router had to fall back to get
+   * here (§21). Set by the routed adapter, persisted in messages.trace.
+   *
+   * `correlationId` is OURS and deliberately NOT `requestId`: requestId is the
+   * vendor's id, the only handle for a support conversation with them, and
+   * overwriting it with a local correlation id would destroy that handle.
+   */
+  readonly provider?: string;
+  readonly fallbackUsed?: boolean;
+  readonly correlationId?: string;
 }
 
 export interface ExtractionResult {

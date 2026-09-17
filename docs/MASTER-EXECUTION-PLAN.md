@@ -86,9 +86,9 @@ integration tests do not run on the dev machine here, so a local pass is not evi
 | 4 | Qwen provider via Ollama | ✅ done *(unverified live)* | `f461f86` |
 | 5 | Typed configuration | ✅ done | `bef65be` |
 | 6 | Idempotency + stage separation | ✅ done | `56a16a5`, `72b8786` |
-| 7 | Risk policy | ⬜ next | |
-| 8 | Observability | ⬜ | |
-| 9 | Provider evals (`pnpm eval:ai`) | ⬜ | |
+| 7 | Risk policy | ✅ done | `73c9779` |
+| 8 | Observability | ✅ done | *(this commit)* |
+| 9 | Provider evals (`pnpm eval:ai`) | ⬜ next | |
 | 10 | AI documentation | ⬜ | |
 | 11 | Hybrid retrieval *(closes Phase 4)* | ⬜ | |
 | 12 | §35 permission model *(Phase 7a)* | ⬜ | |

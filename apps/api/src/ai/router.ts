@@ -346,7 +346,15 @@ export class RoutedExtractor implements Extractor {
     const routed = await this.router.interpret(
       this.requestId === undefined ? { utterance } : { utterance, requestId: this.requestId },
     );
-    return { extraction: routed.extraction, trace: routed.trace };
+    return {
+      extraction: routed.extraction,
+      trace: {
+        ...routed.trace,
+        provider: routed.provider,
+        fallbackUsed: routed.fallbackUsed,
+        ...(this.requestId === undefined ? {} : { correlationId: this.requestId }),
+      },
+    };
   }
 }
 
@@ -368,6 +376,15 @@ export class RoutedResponder {
 
   async respondWithTrace(input: RespondInput): Promise<RespondResult> {
     const routed = await this.router.respond(input, this.context());
-    return { reply: routed.reply, degraded: routed.degraded, trace: routed.trace };
+    return {
+      reply: routed.reply,
+      degraded: routed.degraded,
+      trace: {
+        ...routed.trace,
+        provider: routed.provider,
+        fallbackUsed: routed.fallbackUsed,
+        ...(this.requestId === undefined ? {} : { correlationId: this.requestId }),
+      },
+    };
   }
 }

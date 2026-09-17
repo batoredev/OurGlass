@@ -58,6 +58,10 @@ export interface RespondTrace {
     readonly inputTokens: number;
     readonly outputTokens: number;
   };
+  /** See ExtractionTrace: provider provenance, never the vendor requestId. */
+  readonly provider?: string | null;
+  readonly fallbackUsed?: boolean;
+  readonly correlationId?: string;
 }
 
 export interface RespondResult extends RespondOutput {
