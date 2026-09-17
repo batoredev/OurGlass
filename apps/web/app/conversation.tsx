@@ -63,6 +63,21 @@ export function Conversation() {
   const [loaded, setLoaded] = useState(false);
   const streamRef = useRef<HTMLDivElement | null>(null);
 
+  /**
+   * THE READER'S CLOCK, NOT THE SERVER'S — and only after mount.
+   *
+   * The date and the greeting are facts about where the person is sitting:
+   * their locale orders "18 September" differently from the server's, and
+   * their timezone decides whether it is evening. Rendering either during SSR
+   * makes the server guess, and React then finds two different strings and
+   * throws away the tree (hydration mismatch). Null until mounted, so the
+   * server renders nothing rather than something wrong.
+   */
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setNow(new Date());
+  }, []);
+
   // History first, so a reload does not look like amnesia.
   useEffect(() => {
     let cancelled = false;
@@ -172,12 +187,14 @@ export function Conversation() {
       <header className="chat-head">
         <div>
           <h1>OurGlass</h1>
-          <div className="date">
-            {new Date().toLocaleDateString(undefined, {
-              weekday: "long",
-              month: "long",
-              day: "numeric",
-            })}
+          <div className="date" suppressHydrationWarning>
+            {now
+              ? now.toLocaleDateString(undefined, {
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
+                })
+              : ""}
           </div>
         </div>
       </header>
@@ -187,7 +204,7 @@ export function Conversation() {
           <div className="greeting">
             <div>
               <div className="hello-kicker">Your world, in context</div>
-              <h2>{greeting(new Date())}</h2>
+              <h2 suppressHydrationWarning>{now ? greeting(now) : "Hello."}</h2>
               <p>Tell me what is happening.</p>
             </div>
             <div className="chat-illustration" aria-hidden="true">
