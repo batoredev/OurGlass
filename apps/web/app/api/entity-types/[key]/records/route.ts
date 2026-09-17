@@ -7,13 +7,15 @@
  */
 import { NextResponse } from "next/server";
 import { entityRecords } from "@ourglass/db";
-import { demoEnabled, read } from "../../../_lib";
+import { authorize } from "../../../_auth";
+import { read } from "../../../_lib";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ key: string }> }) {
-  if (!demoEnabled()) return NextResponse.json({ error: "Not enabled." }, { status: 404 });
+export async function GET(request: Request, { params }: { params: Promise<{ key: string }> }) {
+  const denied = await authorize(request);
+  if (denied) return denied;
 
   const { key } = await params;
   const type = await read((tx) => entityRecords.getTypeByKey(tx, key));

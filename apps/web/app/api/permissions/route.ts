@@ -15,13 +15,15 @@ import { CONTROL_PLANE_TOOLS } from "@ourglass/api/permissions";
 import { RISK_BY_TOOL, buildToolRegistry, executeTurn } from "@ourglass/api/tools";
 import { permissions } from "@ourglass/db";
 import { rejectCrossSite } from "../_http";
-import { db, demoEnabled, read } from "../_lib";
+import { authorize } from "../_auth";
+import { db, read } from "../_lib";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  if (!demoEnabled()) return NextResponse.json({ error: "Not enabled." }, { status: 404 });
+export async function GET(request: Request) {
+  const denied = await authorize(request);
+  if (denied) return denied;
   const [grants, pending] = await read(async (tx) => [
     await permissions.listCurrentGrants(tx),
     await permissions.listRecentPendingActions(tx),
@@ -36,7 +38,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  if (!demoEnabled()) return NextResponse.json({ error: "Not enabled." }, { status: 404 });
+  const denied = await authorize(request);
+  if (denied) return denied;
   const refused = rejectCrossSite(request, { requireJson: true });
   if (refused) return refused;
 
@@ -57,7 +60,8 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  if (!demoEnabled()) return NextResponse.json({ error: "Not enabled." }, { status: 404 });
+  const denied = await authorize(request);
+  if (denied) return denied;
   const refused = rejectCrossSite(request, { requireJson: false });
   if (refused) return refused;
 

@@ -22,8 +22,9 @@ export default function HomePage() {
       </p>
 
       <p style={{ marginBottom: "1rem", color: "#666", fontSize: "0.9rem" }}>
-        The conversation view lands in a later phase. Until then, talk to it through the demo
-        endpoint:
+        Sign in at <Link href="/login">/login</Link> with the deployment&apos;s access token. The
+        conversation view lands in a later phase; until then, talk to the assistant through the
+        API with the same token:
       </p>
 
       <pre
@@ -34,7 +35,9 @@ export default function HomePage() {
           overflowX: "auto",
         }}
       >
-        {`curl -s localhost:3001/turn -H 'content-type: application/json' \\
+        {`curl -s localhost:3000/api/turn \\
+  -H "authorization: Bearer $OURGLASS_ACCESS_TOKEN" \\
+  -H 'content-type: application/json' \\
   -d '{"utterance":"track my gym sessions with a date and a duration"}'`}
       </pre>
 

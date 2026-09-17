@@ -152,6 +152,32 @@ const API_BASE =
   (typeof window === "undefined" ? "http://localhost:3000" : "");
 
 /**
+ * The incoming request's credentials, for a server component's fetch.
+ *
+ * Server components render by calling this app's own API over HTTP. That call
+ * starts on the SERVER, so the browser's session cookie is not attached to it
+ * automatically — without forwarding, every page would render "Not signed in"
+ * for a signed-in user. In the browser there is nothing to forward: the
+ * request is same-origin and carries the cookie itself.
+ */
+async function forwardedCredentials(): Promise<Record<string, string>> {
+  if (typeof window !== "undefined") return {};
+  try {
+    const { headers } = await import("next/headers");
+    const incoming = await headers();
+    const forwarded: Record<string, string> = {};
+    const cookie = incoming.get("cookie");
+    const authorization = incoming.get("authorization");
+    if (cookie) forwarded["cookie"] = cookie;
+    if (authorization) forwarded["authorization"] = authorization;
+    return forwarded;
+  } catch {
+    // Outside a request (a build step): nothing to forward.
+    return {};
+  }
+}
+
+/**
  * One fetch, with the failure mode named rather than swallowed.
  *
  * The API's read routes register only behind the demo flag, so the
@@ -164,7 +190,10 @@ const API_BASE =
 async function get<T>(path: string): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
+    response = await fetch(`${API_BASE}${path}`, {
+      cache: "no-store",
+      headers: await forwardedCredentials(),
+    });
   } catch (error: unknown) {
     throw new Error(
       `Cannot reach the API at ${API_BASE}. Is it running? ` +
@@ -172,10 +201,13 @@ async function get<T>(path: string): Promise<T> {
     );
   }
 
+  if (response.status === 401) {
+    throw new Error("Not signed in. Sign in at /login with the deployment's access token.");
+  }
   if (response.status === 404) {
     throw new Error(
-      `${path} returned 404. The read surfaces register only when the API runs with ` +
-        `ENABLE_DEMO_ENDPOINT=true.`,
+      `${path} returned 404. The API is closed: set OURGLASS_ACCESS_TOKEN (or, for local ` +
+        `development only, ENABLE_DEMO_ENDPOINT=true).`,
     );
   }
   if (!response.ok) {

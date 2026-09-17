@@ -9,13 +9,15 @@ import { NextResponse } from "next/server";
 import { releasePendingAction } from "@ourglass/api/permissions";
 import { buildToolRegistry } from "@ourglass/api/tools";
 import { rejectCrossSite } from "../../../_http";
-import { db, demoEnabled } from "../../../_lib";
+import { authorize } from "../../../_auth";
+import { db } from "../../../_lib";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!demoEnabled()) return NextResponse.json({ error: "Not enabled." }, { status: 404 });
+  const denied = await authorize(request);
+  if (denied) return denied;
   const refused = rejectCrossSite(request, { requireJson: true });
   if (refused) return refused;
 

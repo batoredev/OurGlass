@@ -5,6 +5,7 @@
 # ANTHROPIC_API_KEY, not VOYAGE_API_KEY. Set those with:
 #
 #     npx wrangler secret put DATABASE_URL
+#     npx wrangler secret put OURGLASS_ACCESS_TOKEN # REQUIRED: without it every route 404s
 #     npx wrangler secret put ANTHROPIC_API_KEY
 #     npx wrangler secret put VOYAGE_API_KEY        # optional
 #
@@ -45,12 +46,11 @@ binding = "ASSETS"
 #   and serves one person's commitments, people and memories to anyone who
 #   finds the hostname.
 #
-# Until Phase 7 builds the permission model (§35), the demo endpoints stay OFF
-# in any deployed environment. Local development sets ENABLE_DEMO_ENDPOINT in
-# .env, where `next dev` binds localhost and the original guarantee holds.
-#
-# If you need them reachable before Phase 7, put Cloudflare Access in front of
-# the Worker — do not flip a flag.
+# Access in a deployed Worker comes from OURGLASS_ACCESS_TOKEN (a secret, see
+# the top of this file): sign in at /login, or send a bearer token. The demo
+# flag is for local development only and is IGNORED whenever a token is set
+# (apps/web/app/api/_auth.ts). Cloudflare Access in front of the Worker is a
+# welcome additional layer — never a reason to flip the flag.
 #
 [vars]
 # Non-secret configuration only. Secrets go in via `wrangler secret put`.

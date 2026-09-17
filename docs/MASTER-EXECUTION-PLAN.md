@@ -91,8 +91,8 @@ integration tests do not run on the dev machine here, so a local pass is not evi
 | 9 | Provider evals (`pnpm eval:ai`) | ✅ built *(never run — paid)* | `2cc9f16` |
 | 10 | AI documentation | ✅ done | `ade2183` |
 | 11 | Hybrid retrieval *(closes Phase 4)* | ✅ done *(Voyage unverified live)* | *(this commit)* |
-| 12 | §35 permission model *(Phase 7a)* | 🟨 12a done (model, gate, hold/release, UI) — 12b access control next | *(this commit)* |
-| 13 | Phase 6 — ingestion | ⬜ | |
+| 12 | §35 permission model *(Phase 7a)* | ✅ done — 12a model/gate/hold/release/UI, 12b access control | `c3d87ab`, *(this commit)* |
+| 13 | Phase 6 — ingestion | ⬜ next | |
 | 14 | Phase 7 — integrations (§34) | ⬜ | |
 | 15 | Phase 8 — voice | ⬜ | |
 | 16 | Full recheck + run | ⬜ | |

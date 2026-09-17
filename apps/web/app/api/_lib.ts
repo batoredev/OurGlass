@@ -35,12 +35,5 @@ export function read<T>(fn: (tx: DatabaseTransaction) => Promise<T>): Promise<T>
   return db.withTransaction(fn);
 }
 
-/**
- * The same guard the Fastify demo endpoint used, and for the same reason:
- * these serve personal data with no authentication, because Phase 7 owns the
- * permission model (§35). A route that refuses by default is stronger than
- * one that checks a flag it might forget.
- */
-export function demoEnabled(): boolean {
-  return process.env["ENABLE_DEMO_ENDPOINT"] === "true";
-}
+// Access control lives in `_auth.ts` (`authorize`), not here: it must be
+// testable without this module's Postgres pool.

@@ -58,7 +58,7 @@ export function Page({ title, children }: { title: string; children: ReactNode }
  *
  * .claude/rules/ai-systems.md's "degrade honestly" applied to a read surface.
  * The overwhelmingly likely failure in development is a 404 because the API
- * was started without ENABLE_DEMO_ENDPOINT=true — and rendering an empty
+ * is not signed in or the API is closed — and rendering an empty
  * table there would tell the user their data is gone, which is both alarming
  * and false.
  */

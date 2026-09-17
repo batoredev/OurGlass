@@ -33,6 +33,8 @@ import {
 } from "@ourglass/api/ai";
 import { VoyageClient } from "@ourglass/api/embeddings";
 import { buildToolRegistry } from "@ourglass/api/tools";
+import { authorize } from "../_auth";
+import { rejectCrossSite } from "../_http";
 import { createPool, users, withTransaction } from "@ourglass/db";
 import type { DatabaseTransaction } from "@ourglass/shared";
 
@@ -88,13 +90,14 @@ async function getUserId(): Promise<string> {
 }
 
 export async function POST(request: Request) {
-  // Same guard as the Fastify demo endpoint, for the same reason: this spends
-  // model tokens on whatever it is sent and has no authentication until
-  // Phase 7 owns the permission model (§35). A route that refuses by default
-  // is a stronger guarantee than one that checks a flag it might forget.
-  if (process.env["ENABLE_DEMO_ENDPOINT"] !== "true") {
-    return NextResponse.json({ error: "Not enabled." }, { status: 404 });
-  }
+  // This spends model tokens on whatever it is sent and writes to the
+  // database, so it is the route an attacker most wants. Access first
+  // (PHASE-7-PERMISSIONS-DESIGN §8), then refuse anything a foreign page could
+  // have submitted on a signed-in browser's behalf.
+  const denied = await authorize(request);
+  if (denied) return denied;
+  const crossSite = rejectCrossSite(request, { requireJson: true });
+  if (crossSite) return crossSite;
 
 
   let body: { utterance?: unknown };

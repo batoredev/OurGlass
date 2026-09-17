@@ -8,8 +8,8 @@
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { demoMock, executeTurnMock, releaseMock, declineMock } = vi.hoisted(() => ({
-  demoMock: vi.fn(),
+const { authMock, executeTurnMock, releaseMock, declineMock } = vi.hoisted(() => ({
+  authMock: vi.fn(),
   executeTurnMock: vi.fn(),
   releaseMock: vi.fn(),
   declineMock: vi.fn(),
@@ -19,8 +19,9 @@ vi.mock("./_lib", () => ({
   getPool: vi.fn(),
   db: { withTransaction: vi.fn() },
   read: vi.fn(),
-  demoEnabled: demoMock,
 }));
+
+vi.mock("./_auth", () => ({ authorize: authMock }));
 
 vi.mock("@ourglass/db", () => ({
   permissions: { listCurrentGrants: vi.fn(), listRecentPendingActions: vi.fn() },
@@ -51,18 +52,18 @@ const sameOriginJson = { origin: ORIGIN, "content-type": "application/json" };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  demoMock.mockReturnValue(true);
+  authMock.mockResolvedValue(null);
   executeTurnMock.mockResolvedValue({ ok: true, turnId: "t-1", results: [{}] });
   releaseMock.mockResolvedValue({ ok: true, turnId: "t-2", results: [] });
   declineMock.mockResolvedValue({ ok: true, turnId: "t-3" });
 });
 
 describe("POST /api/permissions", () => {
-  it("404s with the flag off, and writes no grant", async () => {
-    demoMock.mockReturnValue(false);
+  it("refuses when not signed in, and writes no grant", async () => {
+    authMock.mockResolvedValueOnce(Response.json({ error: "Not signed in." }, { status: 401 }));
     const { POST } = await import("./permissions/route");
     const response = await POST(post("/api/permissions", sameOriginJson));
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(401);
     expect(executeTurnMock).not.toHaveBeenCalled();
   });
 
@@ -153,11 +154,11 @@ describe("POST /api/pending-actions/:id/confirm", () => {
 });
 
 describe("POST /api/pending-actions/:id/decline", () => {
-  it("404s with the flag off, and declines nothing", async () => {
-    demoMock.mockReturnValue(false);
+  it("refuses when not signed in, and declines nothing", async () => {
+    authMock.mockResolvedValueOnce(Response.json({ error: "Not signed in." }, { status: 401 }));
     const { POST } = await import("./pending-actions/[id]/decline/route");
     const response = await POST(post("/api/pending-actions/x/decline", sameOriginJson), params);
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(401);
     expect(declineMock).not.toHaveBeenCalled();
   });
 });

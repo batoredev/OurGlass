@@ -22,9 +22,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-const { queryMock, demoMock, undoTurnMock } = vi.hoisted(() => ({
+const { queryMock, authMock, undoTurnMock } = vi.hoisted(() => ({
   queryMock: vi.fn(),
-  demoMock: vi.fn(),
+  authMock: vi.fn(),
   undoTurnMock: vi.fn(),
 }));
 
@@ -34,8 +34,11 @@ vi.mock("./_lib", () => ({
   getPool: () => ({ query: queryMock }),
   db: { withTransaction: vi.fn() },
   read: vi.fn(),
-  demoEnabled: demoMock,
 }));
+
+// The guard itself is unit-tested in _auth.test.ts; here only its VERDICT is
+// controlled, to prove each route obeys it before doing anything.
+vi.mock("./_auth", () => ({ authorize: authMock }));
 
 vi.mock("@ourglass/api/tools", () => ({
   undoTurn: undoTurnMock,
@@ -46,7 +49,7 @@ vi.mock("@ourglass/api/tools", () => ({
 
 beforeEach(() => {
   vi.clearAllMocks();
-  demoMock.mockReturnValue(true);
+  authMock.mockResolvedValue(null);
 });
 
 describe("wrangler.toml does not enable the demo endpoints", () => {
@@ -70,7 +73,8 @@ describe("wrangler.toml does not enable the demo endpoints", () => {
   it("carries no secret-looking assignment", () => {
     // wrangler.toml is COMMITTED and this repo is PUBLIC. Secrets belong in
     // `wrangler secret put`, which never touches the file.
-    const secretish = /^(DATABASE_URL|ANTHROPIC_API_KEY|VOYAGE_API_KEY)\s*=/;
+    const secretish =
+      /^(DATABASE_URL|ANTHROPIC_API_KEY|GEMINI_API_KEY|VOYAGE_API_KEY|OURGLASS_ACCESS_TOKEN)\s*=/;
     expect(active.filter((line) => secretish.test(line))).toEqual([]);
   });
 });
@@ -117,26 +121,27 @@ describe("GET /api/health leaks nothing when the database is down", () => {
   });
 });
 
-describe("POST /api/undo is gated, because the gate is the only access control", () => {
+describe("POST /api/undo obeys the access guard before anything else", () => {
   const body = (turnId: unknown) =>
     new Request("http://localhost/api/undo", {
       method: "POST",
+      headers: { "content-type": "application/json" },
       body: JSON.stringify({ turnId }),
     });
 
-  it("404s and does not reach undoTurn when the flag is off", async () => {
-    demoMock.mockReturnValue(false);
+  it("refuses and does not reach undoTurn when the caller is not signed in", async () => {
+    authMock.mockResolvedValueOnce(Response.json({ error: "Not signed in." }, { status: 401 }));
     const { POST } = await import("./undo/route");
 
     const response = await POST(body("some-turn-id"));
 
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(401);
     // The status code alone would pass even if the undo had already run and
     // the route 404'd afterwards. This is the assertion that matters.
     expect(undoTurnMock).not.toHaveBeenCalled();
   });
 
-  it("reaches undoTurn when the flag is on", async () => {
+  it("reaches undoTurn when the caller is authorized", async () => {
     undoTurnMock.mockResolvedValueOnce({ undone: true });
     const { POST } = await import("./undo/route");
 

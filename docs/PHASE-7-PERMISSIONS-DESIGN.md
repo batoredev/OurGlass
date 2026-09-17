@@ -170,7 +170,45 @@ exception exists because the model must not be the one issuing them (§1).
 
 ## 8. Stage 12b — HTTP access control
 
-Today every data route answers only when `ENABLE_DEMO_ENDPOINT=true`, which is either no
-authentication or no product. Designed separately once 12a lands; the constraint recorded now is
-that the server components fetch the app's own `/api/*` routes over HTTP, so whatever
-authenticates the browser must also be forwarded on those server-side fetches.
+Until 12b, `ENABLE_DEMO_ENDPOINT` was the entire access control: every data route served
+personal data to anyone, or served nothing. That is either no authentication or no product.
+
+### Decision: a shared access token, per-route guard, signed session cookie
+
+| Mode | When | Behaviour |
+|---|---|---|
+| `token` | `OURGLASS_ACCESS_TOKEN` set (≥ 32 chars) | `Authorization: Bearer <token>`, or the session cookie from `POST /api/session` |
+| `demo` | no token, `ENABLE_DEMO_ENDPOINT=true` | open — **local development only**; ignored when a token is set |
+| `closed` | neither | every data route 404s |
+| `misconfigured` | token shorter than 32 chars | 500 naming the problem, never serve behind a guessable secret |
+
+- **Why a token, not accounts.** The schema has one `users` row: this is a single-user
+  assistant. Accounts would be an identity system for a population of one.
+- **Why per-route, not middleware.** Next 16 renames middleware to "proxy", and its behaviour
+  under the Cloudflare adapter is unverified here. Every route already had one guard call; the
+  guard stays there, and `access-guard.test.ts` reads each route's source and fails if any
+  exported handler does not call `authorize(request)` first.
+- **Sessions.** `v1.<expiry>.<HMAC-SHA256>`, keyed by a key *derived from the token*, so rotating
+  the token signs everyone out. Cookie `og_session`: `HttpOnly`, `Secure`, `SameSite=Strict`,
+  7 days. Pure Web Crypto — identical under `next dev` and Workers; no dependency.
+- **Comparison is constant-time**: both sides are HMAC'd under a random key and the fixed-length
+  digests compared, so neither length nor content shapes timing.
+- **Server components forward credentials.** Pages fetch the app's own `/api/*` from the server,
+  where the browser's cookie is not attached automatically; `lib/api.ts` forwards the incoming
+  `cookie` and `authorization` headers.
+- **CSRF.** The cookie is `SameSite=Strict`, and every mutating route (`/api/turn`, `/api/undo`,
+  the control plane, `/api/session`) also refuses a foreign `Origin` and non-JSON bodies.
+- **Exempt**: `/api/health` (no data; monitors need it) and `/api/session` (the door).
+
+### Rejected
+
+| Option | Why not |
+|---|---|
+| Cloudflare Access as the only layer | Cannot be verified from this machine, and a server component's fetch to its own hostname would meet the Access login redirect. Recommended as an *additional* layer |
+| A JWT library | Web Crypto does HMAC natively; a dependency for 40 lines is the wrong trade |
+| Rate limiting in the app | A ≥ 32-character token makes online guessing hopeless; Cloudflare WAF rate rules are the right layer if the Worker is public |
+
+### Not verified
+
+The session flow has not been exercised against a deployed Worker — only by unit tests with real
+crypto and, locally, by `next dev`.
