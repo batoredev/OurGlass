@@ -157,6 +157,8 @@ function categoryForExtractionError(error: ExtractionError): ProviderFailureCate
       return "malformed_output";
     case "invalid_payload":
       return "schema_invalid";
+    case "provider_error":
+      return "unavailable";
     default:
       return "unknown";
   }

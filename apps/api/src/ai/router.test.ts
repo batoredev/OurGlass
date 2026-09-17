@@ -298,6 +298,56 @@ describe("Scenario F — malformed output retries once, then falls back", () => 
   });
 });
 
+describe("RoutedExtractor speaks runTurn's failure contract", () => {
+  // runTurn degrades gracefully ONLY on ExtractionError. Anything else becomes
+  // a 500 with the user's message persisted and nothing beside it.
+
+  it("turns an all-providers outage into ExtractionError(provider_error)", async () => {
+    const down = async (): Promise<ExtractionResult> => {
+      throw status(503);
+    };
+    const extractor = new RoutedExtractor(
+      router([fake("claude", { interpret: down }).provider, fake("gemini", { interpret: down }).provider]),
+    );
+
+    const error = await extractor.extract("hi").catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ExtractionError);
+    expect((error as ExtractionError).reason).toBe("provider_error");
+    // The trail survives into the message, for the log.
+    expect((error as ExtractionError).message).toContain("claude:server_error");
+  });
+
+  it("hands back the provider's OWN ExtractionError for a refusal, stop reason intact", async () => {
+    const original = new ExtractionError("refused", "declined", {
+      utterance: "hi",
+      stopReason: "refusal",
+    });
+    const claude = fake("claude", {
+      interpret: async () => {
+        throw new ProviderError("claude", "refused", "declined", { cause: original });
+      },
+    });
+
+    const error = await new RoutedExtractor(router([claude.provider]))
+      .extract("hi")
+      .catch((e: unknown) => e);
+    expect(error).toBe(original);
+  });
+
+  it("maps a terminal failure with no ExtractionError behind it", async () => {
+    // A 400 we caused: terminal, not a model answer, still must not 500.
+    const claude = fake("claude", {
+      interpret: async () => {
+        throw status(400);
+      },
+    });
+    const error = await new RoutedExtractor(router([claude.provider]))
+      .extract("hi")
+      .catch((e: unknown) => e);
+    expect((error as ExtractionError).reason).toBe("provider_error");
+  });
+});
+
 describe("Scenario G — every provider unavailable", () => {
   it("fails deterministically, naming the whole trail", async () => {
     const claude = fake("claude", {

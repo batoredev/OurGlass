@@ -1797,6 +1797,10 @@ export function replyForExtractionFailure(error: ExtractionError): string {
       return "I can't help with that one.";
     case "context_window_exceeded":
       return "That was too long for me to read — can you shorten it?";
+    case "provider_error":
+      // Not "something went wrong interpreting that": nothing was interpreted.
+      // Saying so tells the user a retry is reasonable, which it is.
+      return "I couldn't process that just now — nothing was saved. Try again in a moment.";
     default:
       return "Something went wrong interpreting that — nothing was saved.";
   }

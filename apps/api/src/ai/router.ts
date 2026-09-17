@@ -24,7 +24,7 @@ import type {
   ProviderHealth,
   RespondInput,
 } from "@ourglass/shared";
-import type { Extractor } from "../assistant/extract.js";
+import { ExtractionError, type Extractor } from "../assistant/extract.js";
 import { templateReply, type RespondResult } from "../assistant/respond.js";
 import { ProviderError, classifyProviderError } from "./errors.js";
 import type { AIProvider } from "./provider.js";
@@ -343,9 +343,14 @@ export class RoutedExtractor implements Extractor {
   ) {}
 
   async extract(utterance: string): Promise<ExtractionResult> {
-    const routed = await this.router.interpret(
-      this.requestId === undefined ? { utterance } : { utterance, requestId: this.requestId },
-    );
+    let routed: RoutedInterpretation;
+    try {
+      routed = await this.router.interpret(
+        this.requestId === undefined ? { utterance } : { utterance, requestId: this.requestId },
+      );
+    } catch (error: unknown) {
+      throw toExtractionError(utterance, error);
+    }
     return {
       extraction: routed.extraction,
       trace: {
@@ -355,6 +360,53 @@ export class RoutedExtractor implements Extractor {
         ...(this.requestId === undefined ? {} : { correlationId: this.requestId }),
       },
     };
+  }
+}
+
+/**
+ * Router failure -> the `ExtractionError` contract `runTurn` already handles.
+ *
+ * ================================ WHY THIS EXISTS ==========================
+ * `runTurn` degrades gracefully ONLY on `ExtractionError`: a templated reply,
+ * a persisted trace, a normal return. Everything else it rethrows. Before the
+ * router, the Anthropic extractor threw exactly that type. After stage 5 the
+ * router threw `ProviderError` and `AllProvidersFailedError` instead, so a
+ * refusal, a bad key or an outage became a raw 500 — with the user's message
+ * already persisted and no reply or trace beside it.
+ *
+ * Translated HERE, not in `runTurn`: the AI layer depends on the assistant,
+ * never the reverse, and the orchestrator must not learn the router exists.
+ * ===========================================================================
+ */
+function toExtractionError(utterance: string, error: unknown): unknown {
+  if (error instanceof ExtractionError) return error;
+
+  const failure =
+    error instanceof AllProvidersFailedError
+      ? error.failures.at(-1)
+      : error instanceof ProviderError
+        ? error
+        : null;
+
+  // Not a provider failure at all: a programming error. Disguising it as a
+  // polite reply would hide the bug, so it propagates untouched.
+  if (failure === null) return error;
+
+  // The model answered and the answer was unusable (refusal, truncation, bad
+  // shape): the provider's own ExtractionError is the most precise account,
+  // stop reason and raw payload included.
+  if (failure?.cause instanceof ExtractionError) return failure.cause;
+
+  const message = error instanceof Error ? error.message : "AI provider failure";
+  switch (failure?.category) {
+    case "refused":
+      return new ExtractionError("refused", message, { utterance, stopReason: null });
+    case "truncated":
+      return new ExtractionError("truncated", message, { utterance, stopReason: null });
+    case "context_window":
+      return new ExtractionError("context_window_exceeded", message, { utterance, stopReason: null });
+    default:
+      return new ExtractionError("provider_error", message, { utterance, stopReason: null });
   }
 }
 

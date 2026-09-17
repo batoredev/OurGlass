@@ -44,6 +44,8 @@ import type {
   RespondInput,
   RespondOutput,
 } from "@ourglass/shared";
+import { AIModelRouter, RoutedExtractor } from "../ai/router.js";
+import type { AIProvider } from "../ai/provider.js";
 import { ToolRegistry, buildToolRegistry } from "../tools/index.js";
 import { ExtractionError, type Extractor } from "./extract.js";
 import { runTurn, type OrchestratorDeps } from "./orchestrator.js";
@@ -395,6 +397,44 @@ suite("runTurn (integration)", () => {
     expect(trace.failed).toBe(true);
     expect(trace.reason).toBe("truncated");
     expect(assistant.degraded).toBe(true);
+  });
+
+  it("degrades, not 500s, when EVERY provider behind the router is down", async () => {
+    // The seam that broke in stage 5: runTurn caught ExtractionError only, and
+    // the router threw its own types. Faked providers, REAL router and
+    // orchestrator — the unit tests of each passed while the wire between them
+    // returned a 500.
+    const down: AIProvider = {
+      name: "claude",
+      modelFor: () => "down",
+      interpret: async () => {
+        throw Object.assign(new Error("HTTP 503"), { status: 503 });
+      },
+      respond: async () => {
+        throw new Error("unused");
+      },
+      health: () => ({
+        provider: "claude",
+        configured: true,
+        lastFailureAt: null,
+        lastFailureCategory: null,
+      }),
+    };
+    const extractor = new RoutedExtractor(
+      new AIModelRouter({ providers: [down], sleep: async () => undefined, random: () => 0 }),
+    );
+    const { responder, calls } = recordingResponder();
+
+    const result = await runTurn({ utterance: "…", userId }, deps(extractor, responder));
+
+    expect(result.degraded).toBe(true);
+    expect(result.turnId).toBeNull();
+    expect(result.reply).toMatch(/nothing was saved/i);
+    expect(calls).toHaveLength(0);
+
+    const all = await withTransaction(pool, (tx) => messages.listRecent(tx, 10));
+    const assistant = all.find((m) => m.role === "assistant")!;
+    expect((assistant.trace as { reason?: string }).reason).toBe("provider_error");
   });
 
   it("gives a DISTINCT honest reply per failure reason", async () => {

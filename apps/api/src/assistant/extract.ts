@@ -35,7 +35,14 @@ export type ExtractionFailureReason =
   | "refused"
   | "context_window_exceeded"
   | "no_tool_call"
-  | "invalid_payload";
+  | "invalid_payload"
+  /**
+   * No provider produced an interpretation for a reason that is not about the
+   * answer: timeout, outage, bad key, rate limit, a request we malformed.
+   * Raised only by `RoutedExtractor`, which translates the router's failures
+   * into this contract so `runTurn` can degrade instead of returning a 500.
+   */
+  | "provider_error";
 
 export class ExtractionError extends Error {
   readonly reason: ExtractionFailureReason;
