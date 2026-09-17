@@ -43,13 +43,22 @@ export function Nav() {
   );
 }
 
+/**
+ * The remaining plain surfaces (Activity, Types), inside the app shell.
+ *
+ * No `<Nav />` and no `<main>`: `app/shell.tsx` owns both now. Rendering
+ * either here would put a second navigation inside the first.
+ */
 export function Page({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <main style={{ fontFamily: "system-ui, sans-serif", padding: "1.5rem", maxWidth: "60rem" }}>
-      <Nav />
-      <h1 style={{ fontSize: "1.25rem", marginBottom: "1rem" }}>{title}</h1>
+    <section className="page">
+      <header className="page-header">
+        <div>
+          <h1>{title}</h1>
+        </div>
+      </header>
       {children}
-    </main>
+    </section>
   );
 }
 

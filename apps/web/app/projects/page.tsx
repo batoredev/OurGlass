@@ -1,6 +1,8 @@
-/** §29 Projects, read-only. */
+/**
+ * §29 Projects — context gathered from conversation.
+ */
 import { fetchProjects, type Project } from "../../lib/api";
-import { LoadError, Page, Table, type Column } from "../ui";
+import { EmptyState, LoadFailure, PageHeader } from "../surface";
 
 export const dynamic = "force-dynamic";
 
@@ -10,19 +12,37 @@ export default async function ProjectsPage() {
     projects = await fetchProjects();
   } catch (error: unknown) {
     return (
-      <Page title="Projects">
-        <LoadError error={error} />
-      </Page>
+      <section className="page">
+        <PageHeader title="Projects" />
+        <LoadFailure error={error} />
+      </section>
     );
   }
 
-  const columns: Column<Project>[] = [
-    { key: "name", header: "Name", render: (project) => project.name },
-  ];
-
   return (
-    <Page title="Projects">
-      <Table columns={columns} rows={projects} rowKey={(project) => project.id} empty="projects" />
-    </Page>
+    <section className="page">
+      <PageHeader
+        title="Projects"
+        subtitle="Context gathered from conversations and people."
+        eyebrow="Projects"
+      />
+      {projects.length === 0 ? (
+        <EmptyState
+          title="No projects yet"
+          body="Name a project in conversation and it will appear here."
+        />
+      ) : (
+        <div className="project-list">
+          {projects.map((project) => (
+            <div className="project-card" key={project.id}>
+              <div className="project-title">
+                <span>{project.name}</span>
+              </div>
+              <span className="project-glyph">{project.name.slice(0, 1).toUpperCase()}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }

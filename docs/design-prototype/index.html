@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f6f4ef">
+  <title>OurGlass</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <button class="wordmark" data-route="chat" aria-label="OurGlass home"><span class="mark">O</span><span>OURGLASS</span></button>
+      <nav class="primary-nav" id="desktop-nav"></nav>
+      <div class="sidebar-foot">
+        <div class="assistant-state"><span class="state-dot"></span><span>Listening when you need me</span></div>
+        <button class="nav-item" data-route="settings" aria-label="Settings"><span data-icon="settings"></span><span>Settings</span></button>
+      </div>
+    </aside>
+
+    <main class="main" id="main" tabindex="-1"></main>
+
+    <nav class="mobile-tabs" id="mobile-nav" aria-label="Mobile navigation"></nav>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <div class="sheet-backdrop" id="sheet-backdrop" hidden></div>
+    <section class="bottom-sheet" id="bottom-sheet" aria-modal="true" role="dialog" hidden></section>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,47 +1,121 @@
 /**
  * §29 Commitments — the primary abstraction (spec §6), read-only.
  *
- * Ownership direction is shown as TWO columns because it is stored as two
- * columns (§7). That is the product's stated differentiator, and collapsing
- * it into one "who" column here would hide the distinction the schema exists
- * to preserve.
+ * Ownership direction is shown in both directions because it is STORED in
+ * both directions (§7): `owner_id` delivers, `recipient_id` receives. The
+ * filter is a query parameter rather than client state, so a filtered view is
+ * a link you can share and reload.
  */
-import { fetchCommitments, fetchPeople, type Commitment, type Person } from "../../lib/api";
-import { LoadError, Page, Table, formatWhen, type Column } from "../ui";
+import Link from "next/link";
+import {
+  fetchCommitments,
+  fetchDirectory,
+  type Commitment,
+} from "../../lib/api";
+import { Avatar, StatusPill } from "../icons";
+import { EmptyState, LoadFailure, PageHeader, statusLabel, statusTone, when } from "../surface";
 
 export const dynamic = "force-dynamic";
 
-export default async function CommitmentsPage() {
-  let commitments: readonly Commitment[];
-  let peopleById: Map<string, Person>;
+const TABS = [
+  ["all", "All"],
+  ["to-me", "Owed to me"],
+  ["by-me", "Owed by me"],
+  ["completed", "Completed"],
+] as const;
+
+const TERMINAL = new Set(["completed", "completed_late", "cancelled", "superseded"]);
+
+export default async function CommitmentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ filter?: string }>;
+}) {
+  const { filter = "all" } = await searchParams;
+
+  let rows: readonly Commitment[];
+  let selfPersonId: string | null;
+  let byId: Map<string, string>;
   try {
-    const [rows, people] = await Promise.all([fetchCommitments(), fetchPeople()]);
-    commitments = rows;
-    peopleById = new Map(people.map((person) => [person.id, person]));
+    const [commitments, directory] = await Promise.all([fetchCommitments(), fetchDirectory()]);
+    rows = commitments;
+    selfPersonId = directory.selfPersonId;
+    byId = new Map(directory.people.map((person) => [person.id, person.display_name]));
   } catch (error: unknown) {
     return (
-      <Page title="Commitments">
-        <LoadError error={error} />
-      </Page>
+      <section className="page">
+        <PageHeader title="Commitments" />
+        <LoadFailure error={error} />
+      </section>
     );
   }
 
-  // Falls back to the raw id rather than blank: an unresolvable owner means
-  // the person row was invalidated, which should be visible.
-  const name = (id: string | null): string =>
-    id === null ? "\u2014" : (peopleById.get(id)?.display_name ?? id);
+  const nameOf = (id: string | null) =>
+    id === null ? "Someone" : id === selfPersonId ? "You" : (byId.get(id) ?? "Someone");
 
-  const columns: Column<Commitment>[] = [
-    { key: "owner", header: "Owner", render: (row) => name(row.owner_id) },
-    { key: "recipient", header: "Recipient", render: (row) => name(row.recipient_id) },
-    { key: "object", header: "What", render: (row) => row.object_text },
-    { key: "status", header: "Status", render: (row) => row.status },
-    { key: "due", header: "Due", render: (row) => formatWhen(row.expected_at) },
-  ];
+  const visible = rows.filter((commitment) => {
+    if (filter === "completed") return TERMINAL.has(commitment.status);
+    if (filter === "to-me") return commitment.recipient_id === selfPersonId;
+    if (filter === "by-me") return commitment.owner_id === selfPersonId;
+    return true;
+  });
 
   return (
-    <Page title="Commitments">
-      <Table columns={columns} rows={commitments} rowKey={(row) => row.id} empty="commitments" />
-    </Page>
+    <section className="page">
+      <PageHeader
+        title="Commitments"
+        subtitle="What people are counting on, in both directions."
+        eyebrow="Understood from conversation"
+      />
+
+      <div className="tabs">
+        {TABS.map(([id, label]) => (
+          <Link
+            key={id}
+            className={`tab ${filter === id ? "active" : ""}`}
+            href={id === "all" ? "/commitments" : `/commitments?filter=${id}`}
+          >
+            {label}
+          </Link>
+        ))}
+      </div>
+
+      <div className="rule-list">
+        {visible.length === 0 ? (
+          <EmptyState
+            title="Nothing here"
+            body="When you mention a commitment, it will appear automatically."
+          />
+        ) : (
+          visible.map((commitment) => {
+            const owner = nameOf(commitment.owner_id);
+            const mine = commitment.owner_id === selfPersonId;
+            return (
+              <div
+                className={`row commitment-row ${TERMINAL.has(commitment.status) ? "completed-row" : ""}`}
+                key={commitment.id}
+              >
+                <div className="person-cell">
+                  <Avatar name={mine ? "Me" : owner} />
+                  <div>
+                    <div className="row-title">{owner}</div>
+                    <div className="relation-label">{mine ? "You owe" : "Owes you"}</div>
+                  </div>
+                </div>
+                <div>
+                  <div className="row-title">{commitment.object_text}</div>
+                  <div className="row-subtitle">to {nameOf(commitment.recipient_id)}</div>
+                </div>
+                <div className="due-cell">{when(commitment.expected_at)}</div>
+                <StatusPill
+                  label={statusLabel(commitment.status)}
+                  tone={statusTone(commitment.status)}
+                />
+              </div>
+            );
+          })
+        )}
+      </div>
+    </section>
   );
 }

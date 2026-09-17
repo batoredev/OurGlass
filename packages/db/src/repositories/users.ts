@@ -80,6 +80,22 @@ export async function getUserWithPerson(
   return { user, self };
 }
 
+/**
+ * THE account, for read surfaces that need "me" without knowing an id.
+ *
+ * Single-user by design (PHASE-7-PERMISSIONS-DESIGN §8): one `users` row, one
+ * `action_log`. A read route cannot call `ensureUser` — that writes — so this
+ * is the read-only counterpart. Oldest row wins if a second ever appears, so
+ * the answer is stable rather than arbitrary.
+ */
+export async function currentAccount(tx: Queryable): Promise<UserWithPerson | null> {
+  const { rows } = await tx.query<User>(
+    `SELECT * FROM users_current ORDER BY t_created, id LIMIT 1`,
+  );
+  const user = rows[0];
+  return user ? getUserWithPerson(tx, user.id) : null;
+}
+
 /** Input to `ensureUser`. */
 export interface EnsureUserInput {
   displayName: string;

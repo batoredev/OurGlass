@@ -1,42 +1,93 @@
 /**
- * §29 Memory — what the assistant believes, and how confidently.
+ * §29 Memory — what the assistant believes, with its provenance.
  *
- * `inference_level` is shown because §28's "inspect and correct what the
- * assistant believes" is impossible without it: CONFIRMED and INFERRED
- * deserve different scrutiny from the reader, and hiding the difference makes
- * every memory look equally authoritative.
+ * §28 is explicit that the user must be able to inspect and correct this. The
+ * correction itself happens in conversation ("forget that ..."), which is why
+ * there is no edit control here: a second write path would bypass the tool
+ * layer, `action_log` and undo.
  */
 import { fetchMemories, type Memory } from "../../lib/api";
-import { LoadError, Page, Table, formatWhen, type Column } from "../ui";
+import { EmptyState, LoadFailure, PageHeader } from "../surface";
 
 export const dynamic = "force-dynamic";
 
-export default async function MemoryPage() {
+export default async function MemoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
+  const { q = "" } = await searchParams;
+
   let memories: readonly Memory[];
   try {
     memories = await fetchMemories();
   } catch (error: unknown) {
     return (
-      <Page title="Memory">
-        <LoadError error={error} />
-      </Page>
+      <section className="page page-narrow">
+        <PageHeader title="Memories" />
+        <LoadFailure error={error} />
+      </section>
     );
   }
 
-  const columns: Column<Memory>[] = [
-    { key: "body", header: "Memory", render: (memory) => memory.body },
-    { key: "kind", header: "Kind", render: (memory) => memory.kind },
-    { key: "level", header: "Confidence", render: (memory) => memory.inference_level },
-    { key: "when", header: "Recorded", render: (memory) => formatWhen(memory.t_created) },
-  ];
+  const needle = q.trim().toLowerCase();
+  const results = needle
+    ? memories.filter((memory) => memory.body.toLowerCase().includes(needle))
+    : memories;
 
   return (
-    <Page title="Memory">
-      <p style={{ color: "#666", fontSize: "0.85rem", marginBottom: "1rem" }}>
-        Say &ldquo;forget that &hellip;&rdquo; to correct anything here. Nothing is deleted &mdash;
-        it stops being current, and the change is undoable.
-      </p>
-      <Table columns={columns} rows={memories} rowKey={(memory) => memory.id} empty="memories" />
-    </Page>
+    <section className="page page-narrow">
+      <PageHeader
+        title="Memories"
+        subtitle="What OurGlass understands, with a clear source for every detail."
+        eyebrow="Memory"
+      />
+
+      <form className="search" method="get">
+        <input
+          type="search"
+          name="q"
+          defaultValue={q}
+          placeholder="Search memories..."
+          aria-label="Search memories"
+        />
+      </form>
+
+      <section className="section">
+        <h2 className="section-title">
+          {needle ? `${results.length} found` : `${memories.length} remembered`}
+        </h2>
+        <div className="rule-list">
+          {results.length === 0 ? (
+            <EmptyState
+              title={needle ? "No matching memories" : "Nothing remembered yet"}
+              body={
+                needle
+                  ? "Try a person, project, or phrase you remember using."
+                  : "Tell the assistant something worth keeping and it will appear here."
+              }
+            />
+          ) : (
+            results.map((memory) => (
+              <div className="row memory-row" key={memory.id}>
+                <div>
+                  <div className="memory-text">{memory.body}</div>
+                  <div className="memory-tags">
+                    <span className="meta-tag">{memory.kind}</span>
+                    <span className="meta-tag">{memory.inference_level}</span>
+                  </div>
+                </div>
+                <div className="memory-date">
+                  {new Date(memory.t_created).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+    </section>
   );
 }

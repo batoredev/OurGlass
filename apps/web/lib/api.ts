@@ -147,9 +147,36 @@ export interface Permissions {
  * to resolve against, so an absolute base is still needed there. In the
  * browser it stays empty and the path is relative.
  */
-const API_BASE =
-  process.env["NEXT_PUBLIC_API_URL"] ??
-  (typeof window === "undefined" ? "http://localhost:3000" : "");
+/**
+ * THE REQUEST'S OWN ORIGIN, not a configured one.
+ *
+ * A server component fetching this app's API is calling ITSELF, so the right
+ * base is whatever host the browser just reached — `localhost:3000` in
+ * development, the Worker's hostname in production, and correct on both
+ * without configuration.
+ *
+ * A configured base is a fact that can go stale, and did: `.env` still carried
+ * `NEXT_PUBLIC_API_URL=http://localhost:3001` from the Fastify server deleted
+ * in the Cloudflare port, so every page rendered "Cannot reach the API". The
+ * env var is now only a fallback for rendering with no request context.
+ */
+async function apiBase(): Promise<string> {
+  // In the browser a relative URL is already same-origin.
+  if (typeof window !== "undefined") return "";
+  try {
+    const { headers } = await import("next/headers");
+    const incoming = await headers();
+    const host = incoming.get("host");
+    if (host) {
+      const forwarded = incoming.get("x-forwarded-proto");
+      const protocol = forwarded ?? (host.startsWith("localhost") ? "http" : "https");
+      return `${protocol}://${host}`;
+    }
+  } catch {
+    // Outside a request (a build step): fall through.
+  }
+  return process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3000";
+}
 
 /**
  * The incoming request's credentials, for a server component's fetch.
@@ -188,15 +215,16 @@ async function forwardedCredentials(): Promise<Record<string, string>> {
  * prevent. So this THROWS, and the surfaces show why.
  */
 async function get<T>(path: string): Promise<T> {
+  const base = await apiBase();
   let response: Response;
   try {
-    response = await fetch(`${API_BASE}${path}`, {
+    response = await fetch(`${base}${path}`, {
       cache: "no-store",
       headers: await forwardedCredentials(),
     });
   } catch (error: unknown) {
     throw new Error(
-      `Cannot reach the API at ${API_BASE}. Is it running? ` +
+      `Cannot reach the API at ${base || "this origin"}. Is it running? ` +
         `(${error instanceof Error ? error.message : String(error)})`,
     );
   }
@@ -251,6 +279,19 @@ export async function fetchCommitments(): Promise<readonly Commitment[]> {
 
 export async function fetchPeople(): Promise<readonly Person[]> {
   return (await get<{ people: Person[] }>("/api/people")).people;
+}
+
+/**
+ * People AND which of them is the account holder.
+ *
+ * Ownership direction is the product's differentiator (§7), so a surface that
+ * cannot tell "you" from "Barkha" cannot render a commitment honestly.
+ */
+export async function fetchDirectory(): Promise<{
+  readonly people: readonly Person[];
+  readonly selfPersonId: string | null;
+}> {
+  return get<{ people: Person[]; selfPersonId: string | null }>("/api/people");
 }
 
 export async function fetchProjects(): Promise<readonly Project[]> {
