@@ -159,13 +159,13 @@ describe("model overrides", () => {
   it("passes per-provider model names through", () => {
     const config = loadAIConfig({
       ANTHROPIC_INTERPRET_MODEL: "claude-sonnet-5",
-      ANTHROPIC_RESPONSE_MODEL: "claude-haiku-5",
+      ANTHROPIC_RESPONSE_MODEL: "claude-haiku-4-5-20251001",
       GEMINI_INTERPRET_MODEL: "gemini-custom",
       OLLAMA_MODEL: "qwen3:4b",
     });
 
     expect(config.anthropic.interpretModel).toBe("claude-sonnet-5");
-    expect(config.anthropic.respondModel).toBe("claude-haiku-5");
+    expect(config.anthropic.respondModel).toBe("claude-haiku-4-5-20251001");
     expect(config.gemini.interpretModel).toBe("gemini-custom");
     expect(config.ollama.model).toBe("qwen3:4b");
   });

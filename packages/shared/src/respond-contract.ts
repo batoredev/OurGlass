@@ -22,7 +22,13 @@
 // (docs/DECISIONS.md open question 2). Respond is the one Haiku call.
 // ---------------------------------------------------------------------------
 
-export const RESPOND_MODEL = "claude-haiku-5" as const;
+//
+// ⚠ VERIFIED against `GET /v1/models` on 2026-09-17, not recalled. This was
+// "claude-haiku-5" from Phase 3 until then — a model that does not exist. The
+// Respond stage never throws, so every live 404 degraded silently to the
+// template and nothing failed. `pnpm check:models` (packages/evals
+// models.live.test.ts, free) now asks the API instead of trusting this line.
+export const RESPOND_MODEL = "claude-haiku-4-5-20251001" as const;
 
 // ---------------------------------------------------------------------------
 // CommittedFact — one already-applied mutation, described as plain data.
