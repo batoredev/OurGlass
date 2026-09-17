@@ -97,13 +97,13 @@ integration tests do not run on the dev machine here, so a local pass is not evi
 | 15 | Phase 8 — voice | ⬜ | |
 | 16 | Full recheck + run | ⬜ | |
 
-Graphify runs after each major stage. Last refresh: after stage 11 (`6bdad72`) — 2050
-nodes, 3095 edges, 161 communities, health clean (0 dangling, 0 missing), no import cycles.
-Verified from it: the provider layer (`apps/api/src/ai`) imports only `@ourglass/shared` and
-the Interpret/Respond contracts — no path to `@ourglass/db` or the tool layer. New hubs
-`ExtractionError`, `ProviderError`, `classifyProviderError` (16 edges each) are the failure
-contract crossing ai → assistant after `a932d7d` — expected, not coupling. `demoEnabled()` is
-still the second-largest hub (19): stage 12b replaces it.
+Graphify runs after each major stage. Last refresh: after stage 12 — 2280 nodes, 3503
+edges, 185 communities, health clean (0 dangling, 0 missing, 0 collapsed), no import cycles.
+Verified from it: `demoEnabled()` no longer exists anywhere in the graph, and `authorize()` is
+now the second-largest hub (33 edges) — every data route depends on ONE access guard, which is
+the intended shape. `ExtractionError` / `ProviderError` / `classifyProviderError` remain hubs
+as the failure contract crossing ai → assistant. The provider layer still has no path to
+`@ourglass/db` or the tool layer.
 
 **Blocked on the owner, not on me** (neither stops the build; both stop the *claim*):
 
