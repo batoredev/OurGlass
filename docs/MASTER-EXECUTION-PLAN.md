@@ -97,8 +97,10 @@ integration tests do not run on the dev machine here, so a local pass is not evi
 | 15 | Phase 8 — voice | ⬜ | |
 | 16 | Full recheck + run | ⬜ | |
 
-Graphify runs after each major stage. Last refresh: `737fac1` — 1859 nodes,
-2619 edges, 162 communities, health clean.
+Graphify runs after each major stage. Last refresh: after stage 9 — 2044 nodes,
+2969 edges, 174 communities, health clean, no import cycles. Verified from it: the
+provider layer (`apps/api/src/ai`) imports only `@ourglass/shared` and the
+Interpret/Respond contracts — no path to `@ourglass/db` or the tool layer.
 
 **Blocked on the owner, not on me** (neither stops the build; both stop the *claim*):
 
