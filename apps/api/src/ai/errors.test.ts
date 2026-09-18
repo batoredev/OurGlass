@@ -116,6 +116,49 @@ describe("classifyProviderError", () => {
     expect(classified.retryable).toBe(false);
   });
 
+  it("treats a BILLING 4xx as unavailable, so another provider is tried", () => {
+    // Verbatim from a live call on 2026-09-18. Anthropic reports an exhausted
+    // balance as 400 invalid_request_error, which the status table alone would
+    // call `bad_request` — terminal. Running out of credit at one provider is
+    // exactly when the next one should answer.
+    const outOfCredit = Object.assign(
+      new Error(
+        '400 {"type":"error","error":{"type":"invalid_request_error","message":' +
+          '"Your credit balance is too low to access the Anthropic API. Please go to Plans ' +
+          '& Billing to upgrade or purchase credits."}}',
+      ),
+      { status: 400 },
+    );
+
+    const classified = classifyProviderError("claude", outOfCredit);
+    expect(classified.category).toBe("unavailable");
+    expect(classified.fallbackable).toBe(true);
+    // Retrying the same empty account only adds latency.
+    expect(classified.retryable).toBe(false);
+  });
+
+  it("treats 402 Payment Required the same way, whatever the wording", () => {
+    const classified = classifyProviderError(
+      "gemini",
+      Object.assign(new Error("402 payment required"), { status: 402 }),
+    );
+    expect(classified.category).toBe("unavailable");
+    expect(classified.fallbackable).toBe(true);
+  });
+
+  it("keeps an ORDINARY 400 terminal — a malformed request fails everywhere", () => {
+    const classified = classifyProviderError(
+      "claude",
+      Object.assign(
+        new Error('400 {"error":{"message":"messages: at least one message required"}}'),
+        { status: 400 },
+      ),
+    );
+    expect(classified.category).toBe("bad_request");
+    expect(classified.fallbackable).toBe(false);
+    expect(classified.retryable).toBe(false);
+  });
+
   it("passes an already-classified error through unchanged", () => {
     const original = new ProviderError("claude", "rate_limit", "slow down");
     expect(classifyProviderError("gemini", original)).toBe(original);

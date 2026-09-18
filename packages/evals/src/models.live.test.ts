@@ -19,6 +19,10 @@
  */
 import { describe, expect, it } from "vitest";
 import { EXTRACTION_MODEL, RESPOND_MODEL } from "@ourglass/shared";
+import {
+  GEMINI_DEFAULT_INTERPRET_MODEL,
+  GEMINI_DEFAULT_RESPOND_MODEL,
+} from "@ourglass/api/ai";
 
 const apiKey = process.env["ANTHROPIC_API_KEY"];
 
@@ -72,4 +76,37 @@ describe("shipped Claude model ids (free, live)", () => {
     expect(EXTRACTION_MODEL).toMatch(/sonnet/);
     expect(RESPOND_MODEL).toMatch(/haiku/);
   });
+});
+
+/**
+ * The same check for Gemini, when a key exists.
+ *
+ * Its default model names shipped UNVERIFIED — nobody had a key. A wrong name
+ * there fails exactly like the `claude-haiku-5` bug did: the provider answers
+ * 404, the router moves on, and the product quietly runs on its fallback.
+ * `models.list` is free.
+ */
+const geminiKey = process.env["GEMINI_API_KEY"];
+const geminiSuite = geminiKey ? describe : describe.skip;
+
+geminiSuite("shipped Gemini model ids (free, live)", () => {
+  it(
+    "names models the API actually serves",
+    async () => {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}&pageSize=200`,
+      );
+      if (!response.ok) {
+        throw new Error(`GET /v1beta/models returned HTTP ${response.status}`);
+      }
+      const body = (await response.json()) as { models?: { name?: string }[] };
+      // Served as "models/gemini-2.5-flash"; we configure the bare id.
+      const available = (body.models ?? []).map((model) => (model.name ?? "").replace(/^models\//, ""));
+
+      expect(available.length, "no models listed").toBeGreaterThan(0);
+      expect(available, "Gemini interpret model").toContain(GEMINI_DEFAULT_INTERPRET_MODEL);
+      expect(available, "Gemini respond model").toContain(GEMINI_DEFAULT_RESPOND_MODEL);
+    },
+    30_000,
+  );
 });

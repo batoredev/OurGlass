@@ -133,6 +133,17 @@ export class ProviderError extends Error {
   }
 }
 
+/**
+ * A payment problem, in the words the providers actually use.
+ *
+ * Matched against the error MESSAGE, not a status alone, because the status
+ * for "no credit" is provider-specific: Anthropic returns 400, others 402 or
+ * 429. Kept narrow on purpose — a pattern that also caught "invalid request"
+ * would make every malformed call fall back and triple the cost of a bug.
+ */
+const BILLING_FAILURE =
+  /credit balance|insufficient (?:credit|funds|quota|balance)|billing|payment required|exceeded your current quota|quota exceeded/i;
+
 /** HTTP status -> category. Shared by every provider, so the table lives once. */
 function categoryForStatus(status: number): ProviderFailureCategory {
   if (status === 401 || status === 403) return "auth";
@@ -201,6 +212,19 @@ export function classifyProviderError(provider: AIProviderName, error: unknown):
 
   const status = readStatus(error);
   if (status !== null) {
+    // A 4xx ABOUT MONEY IS NOT A 4xx ABOUT THE REQUEST.
+    //
+    // `bad_request` is terminal because a malformed request fails identically
+    // everywhere — but "your credit balance is too low" is the one 400 that a
+    // DIFFERENT provider would happily serve. Classifying it terminal turns
+    // the exact moment fallback exists for into a dead end. Seen live:
+    // Anthropic answers 400 invalid_request_error for an exhausted balance.
+    if (status === 402 || (status === 400 && BILLING_FAILURE.test(messageOf(error)))) {
+      return new ProviderError(provider, "unavailable", messageOf(error), {
+        status,
+        cause: error,
+      });
+    }
     return new ProviderError(provider, categoryForStatus(status), messageOf(error), {
       status,
       cause: error,
