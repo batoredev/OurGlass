@@ -278,7 +278,14 @@ export class AIModelRouter {
         latencyMs: Date.now() - started,
         ok: !result.degraded,
         fallbackUsed: index > 0,
-        ...(result.degraded ? { errorCategory: "unknown" as const } : {}),
+        // THE REASON THE STAGE COMPUTED, not a constant.
+        //
+        // This line used to write `errorCategory: "unknown"` for every
+        // degraded reply, which is a value nothing had derived: a 3-second
+        // timeout, a safety refusal and an exhausted token budget were
+        // indistinguishable in the one field operators are told to read. The
+        // reason was sitting in `result.trace` the whole time.
+        ...(result.degraded && reason !== undefined ? { fallbackReason: reason } : {}),
       });
 
       if (!result.degraded) {

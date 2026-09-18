@@ -26,6 +26,7 @@ import {
   RESPOND_MODEL,
   type CommittedFact,
   type Responder,
+  type RespondFallbackReason,
   type RespondInput,
   type RespondOutput,
 } from "@ourglass/shared";
@@ -39,13 +40,10 @@ import {
  * it, `degraded: true` says the template fired but not why, and a network
  * blip looks identical to a systematic refusal.
  */
-export type RespondFallbackReason =
-  | "sdk_error"
-  | "timeout"
-  | "refusal"
-  | "max_tokens"
-  | "empty_text"
-  | "too_long";
+// Declared in @ourglass/shared beside AIRequestLog, which is the only thing
+// that reads it from outside this stage. Re-exported so callers here are
+// unaffected by where it lives.
+export type { RespondFallbackReason };
 
 export interface RespondTrace {
   readonly model: string;

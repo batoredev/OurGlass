@@ -84,6 +84,22 @@ export interface ProviderHealth {
 }
 
 /**
+ * Why the Respond stage fell back to the deterministic template.
+ *
+ * Declared HERE, beside `AIRequestLog`, because the log is the only place
+ * anyone reads it from outside the Respond stage. `respond.ts` re-exports it
+ * so its own callers are unaffected. A second hand-written copy is exactly
+ * the drift `EXTRACTION_MODEL` already taught this codebase to avoid.
+ */
+export type RespondFallbackReason =
+  | "sdk_error"
+  | "timeout"
+  | "refusal"
+  | "max_tokens"
+  | "empty_text"
+  | "too_long";
+
+/**
  * One AI request, as it is logged (§21).
  *
  * NEVER carries a key, and never carries the user's utterance: the message
@@ -102,4 +118,14 @@ export interface AIRequestLog {
   readonly ok: boolean;
   readonly fallbackUsed: boolean;
   readonly errorCategory?: ProviderFailureCategory;
+  /**
+   * Set when Respond RETURNED a degraded reply rather than throwing.
+   *
+   * These are different events and the log used to flatten them: every
+   * degraded reply was written down as `errorCategory: "unknown"`, a value no
+   * code had computed. A 3-second timeout, a safety refusal and an exhausted
+   * token budget all looked identical, so the one field an operator is told
+   * to read said nothing. The reason is now recorded as the stage computed it.
+   */
+  readonly fallbackReason?: RespondFallbackReason;
 }

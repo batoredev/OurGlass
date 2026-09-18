@@ -4,6 +4,9 @@
  * Env is INJECTED, never read from process.env: a test that mutates the real
  * environment leaks into every other test in the file.
  */
+import { readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   NoProviderConfiguredError,
@@ -90,12 +93,60 @@ describe("numeric and boolean settings reject nonsense instead of applying it", 
     expect(loadAIConfig({ AI_MAX_RETRIES: "0" }).maxRetries).toBe(0);
   });
 
+  it("gives Respond its own budget, defaulting to the Haiku-calibrated 3s", () => {
+    expect(loadAIConfig({}).respondTimeoutMs).toBe(3_000);
+    expect(loadAIConfig({ AI_RESPOND_TIMEOUT_MS: "15000" }).respondTimeoutMs).toBe(15_000);
+    // Same typo-safety as every other numeric setting.
+    expect(loadAIConfig({ AI_RESPOND_TIMEOUT_MS: "0" }).respondTimeoutMs).toBe(3_000);
+    expect(loadAIConfig({ AI_RESPOND_TIMEOUT_MS: "abc" }).respondTimeoutMs).toBe(3_000);
+  });
+
+  it("keeps the Respond budget INDEPENDENT of the router budget", () => {
+    // They were one number until 2026-09-18 and that hid a product failure:
+    // the 3s Respond budget is right for Haiku and unreachable for Gemini,
+    // which measured 10-19s on every call. Raising AI_REQUEST_TIMEOUT_MS must
+    // not silently lengthen Respond, and vice versa.
+    const config = loadAIConfig({ AI_REQUEST_TIMEOUT_MS: "60000" });
+    expect(config.timeoutMs).toBe(60_000);
+    expect(config.respondTimeoutMs).toBe(3_000);
+  });
+
   it("treats only the literal 'false' as disabling fallback", () => {
     expect(loadAIConfig({ AI_ENABLE_FALLBACK: "false" }).enableFallback).toBe(false);
     expect(loadAIConfig({ AI_ENABLE_FALLBACK: "FALSE" }).enableFallback).toBe(false);
     expect(loadAIConfig({ AI_ENABLE_FALLBACK: "true" }).enableFallback).toBe(true);
     expect(loadAIConfig({ AI_ENABLE_FALLBACK: "yes" }).enableFallback).toBe(true);
   });
+});
+
+/**
+ * A settings field nothing reads is worse than no field.
+ *
+ * `respondTimeoutMs` is only real if `buildProvider` hands it to each
+ * provider, and that wiring is invisible from outside: the providers keep it
+ * private and the router never sees it. A source scan is the honest check —
+ * the same tactic as executor.callsites.test.ts — because the alternative is
+ * an env var that parses, validates, logs clean, and changes nothing.
+ */
+describe("the Respond budget reaches every provider", () => {
+  const source = readFileSync(
+    resolve(dirname(fileURLToPath(import.meta.url)), "./config.ts"),
+    "utf8",
+  );
+
+  // buildProvider ends where the next top-level declaration begins.
+  const factory = source.slice(source.indexOf("function buildProvider"));
+  const body = factory.slice(0, factory.indexOf("/** Raised when"));
+
+  for (const provider of ["claude", "gemini", "qwen"] as const) {
+    it(`passes it to ${provider}`, () => {
+      const start = body.indexOf(`case "${provider}":`);
+      expect(start, `no case for ${provider}`).toBeGreaterThan(-1);
+      const next = body.indexOf("case \"", start + 10);
+      const block = body.slice(start, next === -1 ? undefined : next);
+      expect(block).toContain("config.respondTimeoutMs");
+    });
+  }
 });
 
 describe("buildAIRouter", () => {

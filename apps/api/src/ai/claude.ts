@@ -28,6 +28,8 @@ export interface ClaudeProviderOptions {
   readonly apiKey: string;
   readonly interpretModel?: string | undefined;
   readonly respondModel?: string | undefined;
+  /** The Respond stage's budget. See AIConfig.respondTimeoutMs. */
+  readonly respondTimeoutMs?: number | undefined;
   /** Injected in tests so no network call is made. */
   readonly extractor?: Pick<AnthropicExtractor, "extract">;
   readonly responder?: Pick<HaikuResponder, "respondWithTrace">;
@@ -43,6 +45,7 @@ export class ClaudeProvider implements AIProvider {
   private builtResponder: Pick<HaikuResponder, "respondWithTrace"> | undefined;
   private readonly interpretModel: string;
   private readonly respondModel: string;
+  private readonly respondTimeoutMs: number | undefined;
 
   private lastFailureAt: string | null = null;
   private lastFailureCategory: ProviderFailureCategory | null = null;
@@ -51,6 +54,7 @@ export class ClaudeProvider implements AIProvider {
     this.apiKey = options.apiKey;
     this.interpretModel = options.interpretModel ?? EXTRACTION_MODEL;
     this.respondModel = options.respondModel ?? RESPOND_MODEL;
+    this.respondTimeoutMs = options.respondTimeoutMs;
     this.injectedExtractor = options.extractor;
     this.injectedResponder = options.responder;
 
@@ -94,6 +98,7 @@ export class ClaudeProvider implements AIProvider {
     this.builtResponder = new HaikuResponder({
       apiKey: this.apiKey,
       model: this.respondModel as never,
+      ...(this.respondTimeoutMs === undefined ? {} : { timeoutMs: this.respondTimeoutMs }),
     });
     return this.builtResponder;
   }

@@ -52,6 +52,7 @@ provider is configured does `/api/turn` fail — with a 500 that names the missi
 | `AI_INTERPRET_ORDER` | = `AI_PROVIDER_ORDER` | Per-stage override for Interpret |
 | `AI_RESPOND_ORDER` | = `AI_PROVIDER_ORDER` | Per-stage override for Respond (e.g. local Qwen for privacy) |
 | `AI_REQUEST_TIMEOUT_MS` | `20000` (bounds 1000–120000) | How long the router waits for one attempt. Out-of-range or non-numeric values fall back to the default, never to 0 |
+| `AI_RESPOND_TIMEOUT_MS` | `3000` (bounds 500–120000) | The **Respond stage's** budget, independent of the above. Short by design — the write has already committed. **Raise it for a Gemini- or Qwen-primary deployment**; see the measurement below |
 | `AI_MAX_RETRIES` | `1` (bounds 0–5) | Retries of the **same** provider after its first attempt, for retryable failures only |
 | `AI_ENABLE_FALLBACK` | `true` | Only `false` (any case) disables it; then only the first configured provider is used |
 | `ANTHROPIC_API_KEY` | — | Enables Claude |
@@ -106,6 +107,12 @@ Naming `qwen` in `AI_PROVIDER_ORDER` also includes it.
   Interpret fills a fixed schema at temperature 0, Respond writes one sentence about work
   already committed. (`thinkingLevel` is **not** a valid field — the API rejects it with 400.)
 - **The SDK is imported lazily**, only when a key exists.
+- **It cannot meet the default Respond budget.** Measured 2026-09-18, six calls:
+  10.0s, 10.3s, 11.3s, 11.8s, 18.8s — none under the 3-second default, which was calibrated
+  for Haiku. A Gemini-primary deployment that leaves `AI_RESPOND_TIMEOUT_MS` alone gets the
+  deterministic template on **every** turn, with `degraded: true` permanently on, which is
+  indistinguishable from a real outage. Set it to ~15000, or accept template replies
+  knowingly.
 
 ## Qwen via Ollama
 
@@ -162,7 +169,7 @@ internet needs authentication in front of it; Ollama itself has none.
 | Symptom | Likely cause | Check |
 |---|---|---|
 | `/api/turn` returns 500 "No AI provider is configured" | No key and no `OLLAMA_BASE_URL` | Set at least one provider variable |
-| Every reply has the fixed template shape ("Noted: … — …", "Reminder set for …") | Respond is degrading | `messages.trace` → `fallbackReason`; run `pnpm check:models` for a bad model id |
+| Every reply has the fixed template shape ("Noted: … — …", "Reminder set for …") | Respond is degrading | The `ai_request` log line now carries `fallbackReason` per attempt. `timeout` on Gemini or Qwen means `AI_RESPOND_TIMEOUT_MS` is too low for that model; run `pnpm check:models` for a bad model id |
 | "I couldn't process that just now — nothing was saved" | Every Interpret provider failed | `ai_request` log lines for that `requestId`: the `errorCategory` of each attempt |
 | "I can't help with that one." | A refusal — terminal by design, never retried elsewhere | Trace `reason: "refused"` |
 | "That got cut off" | Extraction hit its 1,200-token cap — terminal | Split the message; if frequent, the cap needs raising |

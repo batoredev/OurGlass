@@ -540,6 +540,51 @@ describe("observability", () => {
     expect(serialised).not.toContain("private sentence");
   });
 
+  it("records WHY a reply degraded, not a constant", async () => {
+    // This line used to log `errorCategory: "unknown"` for every degraded
+    // reply — a value nothing had computed. A 3-second timeout, a refusal and
+    // an exhausted token budget were indistinguishable in the one field the
+    // troubleshooting guide tells an operator to read, so a live Gemini
+    // timeout had to be identified from the LATENCY instead.
+    const records: AIRequestLog[] = [];
+    const claude = fake("claude", {
+      respond: async () => ({
+        reply: "Done.",
+        degraded: true,
+        trace: { model: "m", latencyMs: 1, degraded: true, fallbackReason: "timeout" },
+      }),
+    });
+    const gemini = fake("gemini", {
+      respond: async () => ({
+        reply: "Done.",
+        degraded: true,
+        trace: { model: "m", latencyMs: 1, degraded: true, fallbackReason: "refusal" },
+      }),
+    });
+
+    await router([claude.provider, gemini.provider], {
+      onLog: (record) => records.push(record),
+    }).respond({ committed: [], questions: [], declined: [] });
+
+    expect(records.map((r) => [r.provider, r.fallbackReason])).toEqual([
+      ["claude", "timeout"],
+      ["gemini", "refusal"],
+    ]);
+    // And the reason is never invented for a reply that did not degrade.
+    expect(records.every((r) => r.ok === false)).toBe(true);
+  });
+
+  it("leaves fallbackReason unset when Respond succeeds", async () => {
+    const records: AIRequestLog[] = [];
+    await router([fake("claude").provider], {
+      onLog: (record) => records.push(record),
+    }).respond({ committed: [], questions: [], declined: [] });
+
+    expect(records).toHaveLength(1);
+    expect(records[0]?.ok).toBe(true);
+    expect(records[0]?.fallbackReason).toBeUndefined();
+  });
+
   it("does not let a throwing logger take down a turn", async () => {
     const claude = fake("claude");
     const result = await router([claude.provider], {

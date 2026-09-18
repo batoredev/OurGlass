@@ -217,6 +217,53 @@ describe("respond never throws", () => {
  * and every reply silently became the template — which reads like the product
  * working. Delete `thinkingConfig` from either stage and one of these fails.
  */
+describe("the respond budget is the one it was given", () => {
+  it("degrades with reason `timeout` when the model outruns it", async () => {
+    // Not hypothetical: Gemini 3.5 Flash measured 10-19s on this stage, and
+    // the shipped 3s default (calibrated for Haiku) turned EVERY Gemini reply
+    // into the template. The budget is now configurable, so it has to be
+    // honoured rather than ignored in favour of the constant.
+    // The fake HONOURS abortSignal, because the real SDK does — that is the
+    // entire mechanism, and a fake that ignored it would let this pass with
+    // the timeout wired to nothing.
+    const slow: GeminiLikeClient = {
+      models: {
+        generateContent(params) {
+          const signal = params.config?.["abortSignal"] as AbortSignal | undefined;
+          return new Promise((resolve, reject) => {
+            const timer = setTimeout(
+              () => resolve({ text: "Reminder set.", candidates: [{ finishReason: "STOP" }] }),
+              200,
+            );
+            signal?.addEventListener("abort", () => {
+              clearTimeout(timer);
+              reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+            });
+          });
+        },
+      },
+    };
+
+    const impatient = new GeminiProvider({ apiKey: "", client: slow, timeoutMs: 20 });
+    const quick = await impatient.respond({
+      committed: [{ kind: "reminder_created", fireAtLocal: "5 PM" }],
+      questions: [],
+      declined: [],
+    });
+    expect(quick.degraded).toBe(true);
+    expect(quick.trace.fallbackReason).toBe("timeout");
+
+    const patient = new GeminiProvider({ apiKey: "", client: slow, timeoutMs: 5_000 });
+    const answered = await patient.respond({
+      committed: [{ kind: "reminder_created", fireAtLocal: "5 PM" }],
+      questions: [],
+      declined: [],
+    });
+    expect(answered.degraded).toBe(false);
+    expect(answered.reply).toBe("Reminder set.");
+  });
+});
+
 describe("the request disables thinking on both stages", () => {
   function capturing(): { calls: Record<string, unknown>[]; client: GeminiLikeClient } {
     const calls: Record<string, unknown>[] = [];

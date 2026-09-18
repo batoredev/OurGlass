@@ -23,6 +23,7 @@ import {
   type AIProviderName,
   type AIStage,
 } from "@ourglass/shared";
+import { RESPOND_TIMEOUT_MS } from "../assistant/respond.js";
 import { ClaudeProvider } from "./claude.js";
 import { GeminiProvider } from "./gemini.js";
 import { QwenProvider } from "./qwen.js";
@@ -36,6 +37,22 @@ export interface AIConfig {
   readonly order: readonly AIProviderName[];
   readonly stageOrder: Partial<Record<AIStage, readonly AIProviderName[]>>;
   readonly timeoutMs: number;
+  /**
+   * The Respond stage's own budget, separate from `timeoutMs`.
+   *
+   * MEASURED, not guessed: Gemini 3.5 Flash answered this stage in 10.0s,
+   * 10.3s, 11.3s, 11.8s and 18.8s across six calls on 2026-09-18 — never
+   * once inside the 3-second default. That default was calibrated for Haiku
+   * and its reasoning still holds for Haiku (see RESPOND_TIMEOUT_MS: the
+   * write has ALREADY committed, so a slow reply must not make a durable
+   * turn look failed). But a budget no configured provider can meet is not a
+   * safety valve, it is a guarantee of the template on every turn — which is
+   * how a Gemini-primary deployment ends up with `degraded: true` forever
+   * and no way to tell that apart from a real outage.
+   *
+   * So it stays 3s by default and becomes raisable: `AI_RESPOND_TIMEOUT_MS`.
+   */
+  readonly respondTimeoutMs: number;
   readonly maxRetries: number;
   readonly enableFallback: boolean;
   readonly anthropic: {
@@ -132,6 +149,10 @@ export function loadAIConfig(env: AIEnv): AIConfig {
     order,
     stageOrder,
     timeoutMs: readInt(env["AI_REQUEST_TIMEOUT_MS"], DEFAULT_TIMEOUT_MS, 1_000, 120_000),
+    // Upper bound is the router's own budget: a provider that outlives the
+    // router's timeout is aborted by it anyway, so allowing more would be a
+    // setting that silently does nothing.
+    respondTimeoutMs: readInt(env["AI_RESPOND_TIMEOUT_MS"], RESPOND_TIMEOUT_MS, 500, 120_000),
     maxRetries: readInt(env["AI_MAX_RETRIES"], DEFAULT_MAX_RETRIES, 0, 5),
     enableFallback: readBool(env["AI_ENABLE_FALLBACK"], true),
     anthropic: {
@@ -159,12 +180,14 @@ function buildProvider(name: AIProviderName, config: AIConfig): AIProvider {
         apiKey: config.anthropic.apiKey,
         interpretModel: config.anthropic.interpretModel,
         respondModel: config.anthropic.respondModel,
+        respondTimeoutMs: config.respondTimeoutMs,
       });
     case "gemini":
       return new GeminiProvider({
         apiKey: config.gemini.apiKey,
         interpretModel: config.gemini.interpretModel,
         respondModel: config.gemini.respondModel,
+        timeoutMs: config.respondTimeoutMs,
       });
     case "qwen":
       return new QwenProvider({
@@ -174,6 +197,7 @@ function buildProvider(name: AIProviderName, config: AIConfig): AIProvider {
         // waiting — otherwise AI_REQUEST_TIMEOUT_MS is a setting that cannot
         // lengthen anything.
         interpretTimeoutMs: config.timeoutMs,
+        timeoutMs: config.respondTimeoutMs,
       });
   }
 }
