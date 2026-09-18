@@ -2,14 +2,16 @@
  * Gemini — the second provider.
  *
  * ================================ READ THIS ================================
- * ⚠ UNVERIFIED AGAINST A LIVE ENDPOINT. There is no `GEMINI_API_KEY` in the
- * environment this was built in, so every test here injects a fake client.
- * The SDK surface was read from `@google/genai` 2.22.0's own type
- * declarations rather than recalled, but the MODEL NAMES are defaults that
- * nobody has confirmed exist — they are configurable for exactly that reason.
+ * VERIFIED AGAINST THE LIVE ENDPOINT on 2026-09-18: both stages answered a
+ * real request on a real key — Interpret returned a correct extraction,
+ * Respond returned its own sentence. Before that date this header said the
+ * opposite, and the two bugs found the hour a key arrived (a model id that
+ * 404s for new keys, and thinking tokens eating the whole reply budget) are
+ * why the distinction is kept in the file rather than only in a report.
  *
- * Stated here rather than only in a report, because the next person to touch
- * this file deserves to know which parts are checked and which are not.
+ * Still NOT verified: extraction QUALITY across the eval set. `pnpm eval:ai`
+ * has never run against Gemini. One correct extraction is evidence the wiring
+ * works, not that the model is good enough to be primary.
  * ===========================================================================
  *
  * It produces the SAME `Extraction` Claude does. Provider-specific JSON stops
@@ -72,13 +74,44 @@ export interface GeminiLikeResponse {
 }
 
 /**
- * ⚠ UNVERIFIED DEFAULTS. Both stages default to Flash deliberately: it is one
- * name to be wrong about instead of two, and the cheaper tier is the safer
- * default for a fallback provider. Point interpret at a stronger model with
- * `GEMINI_INTERPRET_MODEL` once a key exists to confirm it against.
+ * VERIFIED LIVE on 2026-09-18: a real extraction call on a new API key.
+ *
+ * ┌─ WHY THE PREVIOUS DEFAULT WAS WORSE THAN WRONG ────────────────────────┐
+ * │ It was `gemini-2.5-flash`, which `models.list` STILL RETURNS — and      │
+ * │ which a new key cannot call:                                           │
+ * │                                                                        │
+ * │   404 "This model models/gemini-2.5-flash is no longer available to    │
+ * │        new users."                                                     │
+ * │                                                                        │
+ * │ A name can be listed and unusable at the same time, so membership in   │
+ * │ the catalogue proves nothing. `pnpm check:models` therefore CALLS the  │
+ * │ model rather than looking it up.                                       │
+ * └────────────────────────────────────────────────────────────────────────┘
+ *
+ * Flash for both stages: cheap is the right default for a fallback provider.
+ * `gemini-3.6-flash` is what Google's 404 recommends, but it answered 503
+ * ("high demand") on every attempt here; 3.5 answered immediately and
+ * extracted correctly. Override either stage with GEMINI_INTERPRET_MODEL /
+ * GEMINI_RESPONSE_MODEL.
  */
-export const GEMINI_DEFAULT_INTERPRET_MODEL = "gemini-2.5-flash";
-export const GEMINI_DEFAULT_RESPOND_MODEL = "gemini-2.5-flash";
+/**
+ * THINKING OFF. Measured, not assumed.
+ *
+ * Gemini 3.x Flash reasons before answering and those tokens come out of the
+ * SAME budget as the reply. The Respond stage allows 200 tokens; a live turn
+ * spent them on 64 thinking tokens and emitted FOUR, so the answer hit
+ * MAX_TOKENS and every Gemini reply silently became the template.
+ *
+ * Neither stage wants deliberation: Interpret fills a fixed schema at
+ * temperature 0, and Respond writes one short sentence about work already
+ * committed. Verified against the live API — `thinkingBudget: 0` is accepted
+ * and drops thinking tokens to zero, while `thinkingLevel` is rejected as an
+ * unknown field.
+ */
+const NO_THINKING = { thinkingBudget: 0 } as const;
+
+export const GEMINI_DEFAULT_INTERPRET_MODEL = "gemini-3.5-flash";
+export const GEMINI_DEFAULT_RESPOND_MODEL = "gemini-3.5-flash";
 
 /**
  * `finishReason` -> our failure taxonomy.
@@ -169,6 +202,7 @@ export class GeminiProvider implements AIProvider {
           maxOutputTokens: 1_200,
           // Deterministic-leaning: this is extraction, not composition.
           temperature: 0,
+          thinkingConfig: NO_THINKING,
         },
       });
 
@@ -284,6 +318,7 @@ export class GeminiProvider implements AIProvider {
         config: {
           systemInstruction: RESPOND_SYSTEM_PROMPT,
           maxOutputTokens: MAX_RESPOND_TOKENS,
+          thinkingConfig: NO_THINKING,
           abortSignal: controller.signal,
           // NO TOOLS, and no `tools` key at all — not an empty allowlist a
           // config change could widen. This stage holds no DB handle, so even

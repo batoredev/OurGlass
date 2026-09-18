@@ -13,7 +13,7 @@ rules: [AI_FALLBACK.md](AI_FALLBACK.md).
 | Provider | Transport | Interpret model | Respond model | Verified against the live service? |
 |---|---|---|---|---|
 | **Claude** (primary) | `@anthropic-ai/sdk` 0.124.0 | `claude-sonnet-5` | `claude-haiku-4-5-20251001` | **Model ids: yes** — `pnpm check:models` passed on 2026-09-17. **Extraction quality: no** — `pnpm test:live` has never run. |
-| **Gemini** (second) | `@google/genai` 2.22.0 | `gemini-2.5-flash` | `gemini-2.5-flash` | **No.** No `GEMINI_API_KEY` exists on the build machine. Model names are unverified defaults. |
+| **Gemini** (second) | `@google/genai` 2.22.0 | `gemini-3.5-flash` | `gemini-3.5-flash` | **Both stages: yes** — a real extraction AND a real reply on 2026-09-18. **Quality: not measured** (`pnpm eval:ai` has not run). |
 | **Qwen** (local) | `fetch` → Ollama `/api/chat` | `qwen3:8b` | same model | **No.** Ollama was not installed on the build machine. |
 
 Every provider's adapter is unit-tested with an injected fake client: request shape,
@@ -21,11 +21,17 @@ normalisation into the shared `Extraction`, failure mapping, and the never-throw
 guarantee. Those tests say the adapter is correct **given** the vendor behaves as documented.
 They say nothing about whether it does.
 
-> **Why the Claude model ids get their own check.** Until 2026-09-17 the Respond model was
-> `claude-haiku-5`, which does not exist. Nothing failed: Respond never throws, so every live
-> 404 degraded to the deterministic template reply, which is correct and concise and looks
-> like the product working. A model id is a claim about a remote service; only asking the
-> service verifies it. Run `pnpm check:models` (free) after changing either id.
+> **Why model ids get their own check, and why it CALLS the model.** Two failures taught this:
+>
+> 1. The Respond model was `claude-haiku-5` until 2026-09-17 — a model that has never existed.
+>    Nothing failed loudly: Respond never throws, so every live 404 degraded to the template
+>    reply, which is correct and concise and looks like the product working.
+> 2. The Gemini default was `gemini-2.5-flash` until 2026-09-18. `models.list` returns it to
+>    this day, and a new key calling it gets `404 "no longer available to new users"`. A
+>    membership check passed while the provider was unusable.
+>
+> So `pnpm check:models` (free) sends a real one-token request per model. Listed and callable
+> are different facts, and only the second one matters.
 
 **Owner constraint: Claude is Sonnet and Haiku only. Never Opus.** Recorded in
 `docs/DECISIONS.md`, asserted in `claude.test.ts` and `check:models`. The provider layer must
@@ -52,7 +58,7 @@ provider is configured does `/api/turn` fail — with a 500 that names the missi
 | `ANTHROPIC_INTERPRET_MODEL` | `claude-sonnet-5` | Must remain a Sonnet |
 | `ANTHROPIC_RESPONSE_MODEL` | `claude-haiku-4-5-20251001` | Must remain a Haiku |
 | `GEMINI_API_KEY` | — | Enables Gemini |
-| `GEMINI_INTERPRET_MODEL` / `GEMINI_RESPONSE_MODEL` | `gemini-2.5-flash` | Unverified defaults |
+| `GEMINI_INTERPRET_MODEL` / `GEMINI_RESPONSE_MODEL` | `gemini-3.5-flash` | Verified callable 2026-09-18 |
 | `OLLAMA_BASE_URL` | — (provider default `http://localhost:11434`) | **Setting it is the opt-in** that adds Qwen to the default order |
 | `OLLAMA_MODEL` | `qwen3:8b` | One model serves both stages |
 
@@ -93,6 +99,12 @@ Naming `qwen` in `AI_PROVIDER_ORDER` also includes it.
   `PROHIBITED_CONTENT`, `SPII` and the `IMAGE_*` variants → `refused`. Both are terminal.
 - **Respond:** same system prompt and fact rendering as Haiku, same caps, same 3-second budget,
   same template fallback.
+- **Thinking is OFF on both stages** — `thinkingConfig: { thinkingBudget: 0 }`. Gemini 3.x
+  Flash reasons before answering and those tokens come out of the SAME budget as the output.
+  A live turn spent the whole 200-token reply allowance on 64 thinking tokens, emitted four,
+  finished `MAX_TOKENS`, and degraded to the template. Neither stage wants deliberation:
+  Interpret fills a fixed schema at temperature 0, Respond writes one sentence about work
+  already committed. (`thinkingLevel` is **not** a valid field — the API rejects it with 400.)
 - **The SDK is imported lazily**, only when a key exists.
 
 ## Qwen via Ollama
@@ -158,6 +170,7 @@ internet needs authentication in front of it; Ollama itself has none.
 | Qwen always `timeout` | Model too slow for `AI_REQUEST_TIMEOUT_MS`, or thinking mode | Raise the timeout; try a smaller model |
 | Qwen always `network` | Ollama not running, or wrong URL | `curl $OLLAMA_BASE_URL/api/tags` |
 | Qwen `unavailable` (HTTP 404) | Model probably not pulled | `ollama list`; `ollama pull $OLLAMA_MODEL` |
+| Gemini replies always template, trace says `max_tokens` with ~4 output tokens | Thinking is eating the reply budget | `thinkingConfig: { thinkingBudget: 0 }` must be in BOTH `config` blocks in `gemini.ts` |
 | Gemini `schema_invalid` often | Output shape drifting from the contract | Run `pnpm eval:ai` with Gemini configured and read its failures |
 | Turns slow but succeeding | Fallback firing on every turn | `fallbackUsed: true` in the trace; fix the primary |
 

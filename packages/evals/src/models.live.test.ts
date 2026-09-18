@@ -90,23 +90,45 @@ const geminiKey = process.env["GEMINI_API_KEY"];
 const geminiSuite = geminiKey ? describe : describe.skip;
 
 geminiSuite("shipped Gemini model ids (free, live)", () => {
-  it(
-    "names models the API actually serves",
-    async () => {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}&pageSize=200`,
-      );
-      if (!response.ok) {
-        throw new Error(`GET /v1beta/models returned HTTP ${response.status}`);
-      }
-      const body = (await response.json()) as { models?: { name?: string }[] };
-      // Served as "models/gemini-2.5-flash"; we configure the bare id.
-      const available = (body.models ?? []).map((model) => (model.name ?? "").replace(/^models\//, ""));
+  /**
+   * CALLS the model. Does not look it up.
+   *
+   * The first version of this check asked `models.list` and passed — while
+   * `gemini-2.5-flash`, the shipped default, answered every real request with
+   * 404 "no longer available to new users". Listed and callable are different
+   * facts, and only the second one matters. One token per model, which on
+   * Gemini's free tier is free.
+   */
+  async function callable(model: string): Promise<string | null> {
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: "ping" }] }],
+          generationConfig: { maxOutputTokens: 1 },
+        }),
+      },
+    );
+    if (response.ok) return null;
+    const body = (await response.text()).slice(0, 300);
+    return `HTTP ${response.status}: ${body}`;
+  }
 
-      expect(available.length, "no models listed").toBeGreaterThan(0);
-      expect(available, "Gemini interpret model").toContain(GEMINI_DEFAULT_INTERPRET_MODEL);
-      expect(available, "Gemini respond model").toContain(GEMINI_DEFAULT_RESPOND_MODEL);
+  it(
+    "answers a real request on the interpret model",
+    async () => {
+      expect(await callable(GEMINI_DEFAULT_INTERPRET_MODEL)).toBeNull();
     },
-    30_000,
+    45_000,
+  );
+
+  it(
+    "answers a real request on the respond model",
+    async () => {
+      expect(await callable(GEMINI_DEFAULT_RESPOND_MODEL)).toBeNull();
+    },
+    45_000,
   );
 });

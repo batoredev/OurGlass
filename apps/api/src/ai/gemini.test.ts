@@ -2,14 +2,15 @@
  * GeminiProvider — normalisation, and the failure taxonomy.
  *
  * ================================ READ THIS ================================
- * ⚠ NO LIVE CALL IS MADE HERE, AND NONE HAS EVER BEEN MADE. There is no
- * GEMINI_API_KEY in this environment. Every test injects a fake client, so
- * what is verified is the ADAPTER — the normalisation into the shared
- * contract, the finish-reason mapping, the never-throws respond guarantee —
- * and NOT that `gemini-2.5-flash` exists or that the SDK behaves as its type
- * declarations say.
+ * ⚠ NO LIVE CALL IS MADE HERE. Every test injects a fake client, so what is
+ * verified is the ADAPTER — normalisation into the shared contract, the
+ * finish-reason mapping, the never-throws respond guarantee, and the request
+ * shape — and NOT that any model id exists or that the SDK behaves as its
+ * type declarations say. `pnpm check:models` answers the first; nothing here
+ * answers the second.
  *
- * That distinction is why it is stated here rather than only in a report.
+ * That distinction earned its place: the shipped default model `404`d for new
+ * keys while this file was green, because a fake client accepts any name.
  * ===========================================================================
  */
 import { describe, expect, it } from "vitest";
@@ -203,6 +204,59 @@ describe("respond never throws", () => {
       expect(result.degraded, expected).toBe(true);
       expect(result.trace.fallbackReason, expected).toBe(expected);
     }
+  });
+});
+
+/**
+ * THE REQUEST SHAPE — the half a fake client can still check.
+ *
+ * A fake accepts any model name and any config, so these tests cannot say the
+ * call SUCCEEDS. They can say we send what we decided to send, and that is
+ * exactly the guard the thinking-budget bug needed: Gemini 3.x Flash spent the
+ * entire 200-token reply budget thinking, emitted four tokens, hit MAX_TOKENS,
+ * and every reply silently became the template — which reads like the product
+ * working. Delete `thinkingConfig` from either stage and one of these fails.
+ */
+describe("the request disables thinking on both stages", () => {
+  function capturing(): { calls: Record<string, unknown>[]; client: GeminiLikeClient } {
+    const calls: Record<string, unknown>[] = [];
+    return {
+      calls,
+      client: {
+        models: {
+          async generateContent(params) {
+            calls.push(params as unknown as Record<string, unknown>);
+            return {
+              text: JSON.stringify(VALID_EXTRACTION),
+              candidates: [{ finishReason: "STOP" }],
+            };
+          },
+        },
+      },
+    };
+  }
+
+  it("sends thinkingBudget 0 when interpreting", async () => {
+    const { calls, client: fake } = capturing();
+    await new GeminiProvider({ apiKey: "", client: fake }).interpret({ utterance: "hi" });
+
+    const config = calls[0]?.["config"] as Record<string, unknown>;
+    expect(config["thinkingConfig"]).toEqual({ thinkingBudget: 0 });
+    // The budget is shared with the OUTPUT, so this is what keeps the
+    // extraction cap meaningful rather than a ceiling on deliberation.
+    expect(config["maxOutputTokens"]).toBe(1_200);
+  });
+
+  it("sends thinkingBudget 0 when responding", async () => {
+    const { calls, client: fake } = capturing();
+    await new GeminiProvider({ apiKey: "", client: fake }).respond({
+      committed: [{ kind: "reminder_created", fireAtLocal: "5 PM" }],
+      questions: [],
+      declined: [],
+    });
+
+    const config = calls[0]?.["config"] as Record<string, unknown>;
+    expect(config["thinkingConfig"]).toEqual({ thinkingBudget: 0 });
   });
 });
 
