@@ -12,7 +12,7 @@
  * │ mistakes (§28).                                                         │
  * └────────────────────────────────────────────────────────────────────────┘
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Icon } from "./icons";
 
 interface StoredMessage {
@@ -55,6 +55,30 @@ function greeting(now: Date): string {
   return "Good evening.";
 }
 
+/**
+ * The current time AS THE READER SEES IT — null while rendering on the server.
+ *
+ * The date and the greeting are facts about where the person is sitting: their
+ * locale orders "18 September" differently from the server's, and their
+ * timezone decides whether it is evening. Rendering either on the server makes
+ * it guess, React finds two different strings, and the tree is thrown away
+ * (hydration mismatch — reported from a real browser).
+ *
+ * `useSyncExternalStore` is React's own answer for a value that exists only on
+ * the client: it renders the server snapshot (null), then the client snapshot,
+ * with no state written from an effect. The snapshot is cached because the hook
+ * demands a STABLE reference — a fresh `new Date()` per call would re-render
+ * forever.
+ */
+let readerNow: Date | null = null;
+const subscribeToNothing = () => () => undefined;
+const clientNow = (): Date => (readerNow ??= new Date());
+const serverNow = (): null => null;
+
+function useReaderNow(): Date | null {
+  return useSyncExternalStore(subscribeToNothing, clientNow, serverNow);
+}
+
 export function Conversation() {
   const [entries, setEntries] = useState<readonly Entry[]>([]);
   const [draft, setDraft] = useState("");
@@ -63,20 +87,8 @@ export function Conversation() {
   const [loaded, setLoaded] = useState(false);
   const streamRef = useRef<HTMLDivElement | null>(null);
 
-  /**
-   * THE READER'S CLOCK, NOT THE SERVER'S — and only after mount.
-   *
-   * The date and the greeting are facts about where the person is sitting:
-   * their locale orders "18 September" differently from the server's, and
-   * their timezone decides whether it is evening. Rendering either during SSR
-   * makes the server guess, and React then finds two different strings and
-   * throws away the tree (hydration mismatch). Null until mounted, so the
-   * server renders nothing rather than something wrong.
-   */
-  const [now, setNow] = useState<Date | null>(null);
-  useEffect(() => {
-    setNow(new Date());
-  }, []);
+  // THE READER'S CLOCK, NOT THE SERVER'S. See `useReaderNow` below.
+  const now = useReaderNow();
 
   // History first, so a reload does not look like amnesia.
   useEffect(() => {
@@ -187,7 +199,7 @@ export function Conversation() {
       <header className="chat-head">
         <div>
           <h1>OurGlass</h1>
-          <div className="date" suppressHydrationWarning>
+          <div className="date">
             {now
               ? now.toLocaleDateString(undefined, {
                   weekday: "long",
@@ -204,7 +216,7 @@ export function Conversation() {
           <div className="greeting">
             <div>
               <div className="hello-kicker">Your world, in context</div>
-              <h2 suppressHydrationWarning>{now ? greeting(now) : "Hello."}</h2>
+              <h2>{now ? greeting(now) : "Hello."}</h2>
               <p>Tell me what is happening.</p>
             </div>
             <div className="chat-illustration" aria-hidden="true">
