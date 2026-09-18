@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "apps/web/app/prototype.css"
+        ],
+        "createdAt": "2026-09-17T19:32:17.002Z",
+        "reason": "Supplied design stylesheet, used verbatim per the user's instruction 'use the ui files i gave'. Both flagged rules (.context-list, .appointment.requested) belong to prototype screens not ported to the app."
+      }
+    ]
+  }
+}
