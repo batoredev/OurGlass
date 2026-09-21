@@ -93,22 +93,23 @@ describe("numeric and boolean settings reject nonsense instead of applying it", 
     expect(loadAIConfig({ AI_MAX_RETRIES: "0" }).maxRetries).toBe(0);
   });
 
-  it("gives Respond its own budget, defaulting to the Haiku-calibrated 3s", () => {
-    expect(loadAIConfig({}).respondTimeoutMs).toBe(3_000);
+  it("leaves the Respond budget to each provider unless it is overridden", () => {
+    // Unset means "no override", NOT 3s: one number cannot be right for Haiku
+    // (3s) and Gemini (measured 5-19s) at once.
+    expect(loadAIConfig({}).respondTimeoutMs).toBeUndefined();
     expect(loadAIConfig({ AI_RESPOND_TIMEOUT_MS: "15000" }).respondTimeoutMs).toBe(15_000);
-    // Same typo-safety as every other numeric setting.
-    expect(loadAIConfig({ AI_RESPOND_TIMEOUT_MS: "0" }).respondTimeoutMs).toBe(3_000);
-    expect(loadAIConfig({ AI_RESPOND_TIMEOUT_MS: "abc" }).respondTimeoutMs).toBe(3_000);
+    // Same typo-safety as every other numeric setting: invalid is "unset",
+    // never a 0ms budget.
+    expect(loadAIConfig({ AI_RESPOND_TIMEOUT_MS: "0" }).respondTimeoutMs).toBeUndefined();
+    expect(loadAIConfig({ AI_RESPOND_TIMEOUT_MS: "abc" }).respondTimeoutMs).toBeUndefined();
   });
 
   it("keeps the Respond budget INDEPENDENT of the router budget", () => {
-    // They were one number until 2026-09-18 and that hid a product failure:
-    // the 3s Respond budget is right for Haiku and unreachable for Gemini,
-    // which measured 10-19s on every call. Raising AI_REQUEST_TIMEOUT_MS must
-    // not silently lengthen Respond, and vice versa.
+    // They were one number until 2026-09-18 and that hid a product failure.
+    // Raising AI_REQUEST_TIMEOUT_MS must not silently lengthen Respond.
     const config = loadAIConfig({ AI_REQUEST_TIMEOUT_MS: "60000" });
     expect(config.timeoutMs).toBe(60_000);
-    expect(config.respondTimeoutMs).toBe(3_000);
+    expect(config.respondTimeoutMs).toBeUndefined();
   });
 
   it("treats only the literal 'false' as disabling fallback", () => {

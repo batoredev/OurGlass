@@ -15,6 +15,7 @@ import { createWorkflowTool, evaluateWorkflowTool } from "./workflow-tools.js";
 import { attachContextTool } from "./attach-context.js";
 import { createEntityRecordTool } from "./create-entity-record.js";
 import { createEventTool } from "./create-event.js";
+import { createPersonTool } from "./create-person.js";
 import {
   declinePendingActionTool,
   releasePendingActionTool,
@@ -69,6 +70,10 @@ export function buildToolRegistry(): ToolRegistry {
   // surface, and nothing that could write to it. Section 24 conflict detection
   // was querying a table that could only ever be empty.
   registry.register(createEventTool);
+  // Designed in PHASE-1-DESIGN §3 and never registered: without it Resolve
+  // could not emit create_person -> create_commitment, and every person the
+  // assistant had not met became an unanswerable "Who's Karthik?".
+  registry.register(createPersonTool);
   // Phase 7a (§35) — the CONTROL PLANE. Registered so they run through the
   // same validate/commit/log/undo path, and never emitted by a planner: the
   // orchestrator's gate throws if one ever is (PHASE-7-PERMISSIONS-DESIGN §1).

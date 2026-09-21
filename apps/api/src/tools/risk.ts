@@ -67,6 +67,9 @@ export const RISK_BY_TOOL: Readonly<Record<string, RiskLevel>> = {
   evaluate_workflow: "REVERSIBLE_WRITE",
   attach_context: "REVERSIBLE_WRITE",
   create_event: "REVERSIBLE_WRITE",
+  // Internal state only, and its undo keeps the person if anything else now
+  // references them — so undoing it can never orphan a row.
+  create_person: "REVERSIBLE_WRITE",
   create_entity_record: "REVERSIBLE_WRITE",
   remember: "REVERSIBLE_WRITE",
 

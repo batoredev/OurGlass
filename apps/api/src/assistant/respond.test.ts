@@ -101,7 +101,7 @@ describe("templateReply", () => {
             {
               kind: "commitment_created",
               ownerName: "Barkha",
-              recipientName: "You",
+              recipientName: "you",
               objectText: "the article",
               expectedAtLocal: "Fri 6:00 PM",
             },
@@ -111,9 +111,27 @@ describe("templateReply", () => {
         }),
       ),
     ).toBe(
-      "Noted: Barkha → You — the article, due Fri 6:00 PM. " +
+      "Noted: Barkha owes you the article, due Fri 6:00 PM. " +
         "Reminder set for Fri 5:00 PM. Updated: the schema — pending.",
     );
+  });
+
+  it("states WHO OWES WHOM in words, in both directions", () => {
+    // §7: direction is the product's differentiator. The old arrow form
+    // ("Karthik → You") was read backwards by a live model.
+    const owed = (ownerName: string, recipientName: string | null) =>
+      templateReply(
+        input({
+          committed: [
+            { kind: "commitment_created", ownerName, recipientName, objectText: "the deck", expectedAtLocal: null },
+          ],
+        }),
+      );
+
+    expect(owed("Karthik", "you")).toBe("Noted: Karthik owes you the deck.");
+    expect(owed("you", "Priya")).toBe("Noted: you owe Priya the deck.");
+    expect(owed("Karthik", "Priya")).toBe("Noted: Karthik owes Priya the deck.");
+    expect(owed("Karthik", null)).toBe("Noted: Karthik owes the deck.");
   });
 });
 

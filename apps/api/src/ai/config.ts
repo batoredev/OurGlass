@@ -23,7 +23,6 @@ import {
   type AIProviderName,
   type AIStage,
 } from "@ourglass/shared";
-import { RESPOND_TIMEOUT_MS } from "../assistant/respond.js";
 import { ClaudeProvider } from "./claude.js";
 import { GeminiProvider } from "./gemini.js";
 import { QwenProvider } from "./qwen.js";
@@ -38,21 +37,19 @@ export interface AIConfig {
   readonly stageOrder: Partial<Record<AIStage, readonly AIProviderName[]>>;
   readonly timeoutMs: number;
   /**
-   * The Respond stage's own budget, separate from `timeoutMs`.
+   * The Respond stage's budget — an OVERRIDE, undefined unless set.
    *
-   * MEASURED, not guessed: Gemini 3.5 Flash answered this stage in 10.0s,
-   * 10.3s, 11.3s, 11.8s and 18.8s across six calls on 2026-09-18 — never
-   * once inside the 3-second default. That default was calibrated for Haiku
-   * and its reasoning still holds for Haiku (see RESPOND_TIMEOUT_MS: the
-   * write has ALREADY committed, so a slow reply must not make a durable
-   * turn look failed). But a budget no configured provider can meet is not a
-   * safety valve, it is a guarantee of the template on every turn — which is
-   * how a Gemini-primary deployment ends up with `degraded: true` forever
-   * and no way to tell that apart from a real outage.
+   * Unset, each provider applies its own measured default, because one number
+   * cannot be right for all of them. Haiku keeps 3s, and the reason is sound:
+   * the write has ALREADY committed, so a slow reply must not make a durable
+   * turn look failed. Gemini cannot meet 3s at all — it measured 10–19s on
+   * 2026-09-18 and ~5s on 2026-09-19 — so a single global 3s turned every
+   * Gemini reply into the template with `degraded: true` permanently on, which
+   * is indistinguishable from an outage. See GEMINI_RESPOND_TIMEOUT_MS.
    *
-   * So it stays 3s by default and becomes raisable: `AI_RESPOND_TIMEOUT_MS`.
+   * Set `AI_RESPOND_TIMEOUT_MS` to force one budget on every provider.
    */
-  readonly respondTimeoutMs: number;
+  readonly respondTimeoutMs: number | undefined;
   readonly maxRetries: number;
   readonly enableFallback: boolean;
   readonly anthropic: {
@@ -82,6 +79,13 @@ function readInt(raw: string | undefined, fallback: number, min: number, max: nu
   // behaviour drastically while still looking like configuration.
   if (!Number.isFinite(parsed) || parsed < min || parsed > max) return fallback;
   return parsed;
+}
+
+/** readInt for an OVERRIDE: anything unset or invalid means "no override". */
+function readOptionalInt(raw: string | undefined, min: number, max: number): number | undefined {
+  const sentinel = Number.NaN;
+  const value = readInt(raw, sentinel, min, max);
+  return Number.isNaN(value) ? undefined : value;
 }
 
 function readBool(raw: string | undefined, fallback: boolean): boolean {
@@ -152,7 +156,7 @@ export function loadAIConfig(env: AIEnv): AIConfig {
     // Upper bound is the router's own budget: a provider that outlives the
     // router's timeout is aborted by it anyway, so allowing more would be a
     // setting that silently does nothing.
-    respondTimeoutMs: readInt(env["AI_RESPOND_TIMEOUT_MS"], RESPOND_TIMEOUT_MS, 500, 120_000),
+    respondTimeoutMs: readOptionalInt(env["AI_RESPOND_TIMEOUT_MS"], 500, 120_000),
     maxRetries: readInt(env["AI_MAX_RETRIES"], DEFAULT_MAX_RETRIES, 0, 5),
     enableFallback: readBool(env["AI_ENABLE_FALLBACK"], true),
     anthropic: {

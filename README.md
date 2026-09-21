@@ -20,8 +20,8 @@ TypeScript end-to-end, pnpm monorepo:
 
 | Path | What |
 |---|---|
-| `apps/web` | Next.js 16 — the minimal conversational UI (deliberately last-priority; see the execution plan) |
-| `apps/api` | Fastify — the API, the typed tool registry, the assistant orchestrator (Phase 2+) |
+| `apps/web` | Next.js 16 — the app: the conversation, the read surfaces, and every HTTP route under `/api` |
+| `apps/api` | The assistant itself — orchestrator, typed tool registry, AI providers, reminder poller. **A library the web app imports, not a server.** `pnpm dev` here runs the poller |
 | `packages/shared` | Types shared between `web` and `api` — the tool-call contract |
 | `packages/db` | Schema, migrations (`node-pg-migrate`), repositories |
 | `packages/evals` | Extraction eval harness — recorded fixtures (free, CI) + a live-model lane (manual, costs tokens) |
@@ -33,7 +33,10 @@ together, on purpose (see `docs/DECISIONS.md`).
 
 - Node.js ≥ 24 (`node --version`)
 - pnpm — if not installed: `npm install -g pnpm`
-- Docker (for local Postgres) — or a Postgres 17 instance with the `vector` extension available
+- Postgres 17 with the `vector` extension — either Docker locally (`docker-compose.yml` is
+  here) or a hosted one such as Supabase. Set `DATABASE_URL` to whichever you use.
+- At least one model key. Without one, `/api/turn` returns 500 naming what is missing;
+  everything else still runs. See [`docs/AI_PROVIDERS.md`](docs/AI_PROVIDERS.md).
 
 ## Quickstart
 
@@ -45,65 +48,58 @@ pnpm install
 cp .env.example .env
 # .env's defaults already match docker-compose.yml — no edits needed for local dev
 
-docker compose up -d postgres
+docker compose up -d postgres     # or point DATABASE_URL at a hosted Postgres
 pnpm db:migrate
 
-pnpm typecheck && pnpm lint && pnpm test
+pnpm dev                          # http://localhost:3000
 ```
 
 That sequence is the whole fresh-clone path — no other setup exists. If any step here doesn't
 work as described, that's a bug in this README or the scaffold, not a step you're missing.
 
-### Running the API
+`pnpm dev` builds the shared libraries first and then runs two things: the Next.js app on
+port 3000, and the reminder poller. The web app imports `@ourglass/api` from its built
+`dist/`, so the build step is not optional — skipping it on a fresh clone fails to resolve
+the package.
+
+To run the checks instead: `pnpm typecheck && pnpm lint && pnpm test`.
+
+**Trying it out:** [`docs/DEMO-GUIDE.md`](docs/DEMO-GUIDE.md) is a scripted walkthrough —
+what to type, what should happen, and what is deliberately not built yet.
+
+### Talking to the assistant
+
+Open <http://localhost:3000> and type. There is no separate API server: every route lives in
+the Next.js app under `/api`, and `apps/api` is the library behind them.
+
+The spec's own Barkha narrative, in the UI or over HTTP:
 
 ```bash
-pnpm --filter @ourglass/api dev
-# GET http://localhost:3001/health  ->  { ok: true, service: "api", db: true }
-```
-
-### Talking to the assistant (Phase 3 demo)
-
-There is no UI until Phase 5, so this is the only way to *read* the replies — and reading
-them matters: tone, brevity, and whether it asks instead of guessing are judgements no test
-suite can settle.
-
-**This endpoint is off by default and is a test surface, not a product surface.** It is
-unauthenticated and it spends model tokens on whatever it is sent, so when enabled it binds
-`127.0.0.1` only and refuses to start without an API key. Do not enable it on a shared host.
-
-```bash
-docker compose up -d postgres
-pnpm db:migrate
-
-# Needs a real key — this lane calls Sonnet (Interpret) and Haiku (Respond).
-ENABLE_DEMO_ENDPOINT=true pnpm --filter @ourglass/api dev
-```
-
-Then walk the spec's own Barkha narrative:
-
-```bash
-# 1. Create — one commitment and one reminder, correctly owned and timed.
-curl -s localhost:3001/turn -H 'content-type: application/json' \
+curl -s localhost:3000/api/turn -H 'content-type: application/json' \
   -d '{"utterance":"Barkha needs to give me the article by 6. Remind me at 5 to ask her."}'
 
-# 2. Complete it, late. This takes TWO turns, and that is correct behaviour,
-#    not a degraded demo — see the note below.
-curl -s localhost:3001/turn -H 'content-type: application/json' \
+# Complete it, late. This takes TWO turns, and that is correct behaviour --
+# see the note below.
+curl -s localhost:3000/api/turn -H 'content-type: application/json' \
   -d '{"utterance":"Barkha gave the article at 11."}'
-curl -s localhost:3001/turn -H 'content-type: application/json' \
-  -d '{"utterance":"Yes."}'
 
-# 3. Undo — pass the turnId from any response above.
-curl -s localhost:3001/undo -H 'content-type: application/json' \
+# Undo -- pass the turnId from any response above.
+curl -s localhost:3000/api/undo -H 'content-type: application/json' \
   -d '{"turnId":"<turnId from step 1>"}'
 ```
 
-**Why step 2 asks first.** Completion auto-matching requires the content-token sets to be
-identical, so it fires only when you repeat the stored wording verbatim. `"give me the
-article"` vs `"the article"` scores 0.850 against a 0.92 threshold — so it asks. That is spec
-§27 working ("never guess when guessing can cause a meaningful mistake"), not failing:
-marking the wrong commitment complete is both a real mistake and a near-invisible one.
-Full arithmetic in [`docs/PHASE-3-DESIGN.md`](docs/PHASE-3-DESIGN.md) §10.
+**Why the completion asks first.** Completion auto-matching requires the content-token sets to
+be identical, so it fires only when you repeat the stored wording. `"give me the article"` vs
+`"the article"` scores 0.850 against a 0.92 threshold — so it asks. That is spec §27 working
+("never guess when guessing can cause a meaningful mistake"), not failing: marking the wrong
+commitment complete is both a real mistake and a near-invisible one. Full arithmetic in
+[`docs/PHASE-3-DESIGN.md`](docs/PHASE-3-DESIGN.md) §10.
+
+**Answer a question with a whole sentence, not "yes".** Every message is interpreted on its
+own — the model is never shown the conversation so far. So when it asks *"Which one — the
+article, due 6 PM?"*, reply *"Barkha gave me the article at 11"*, repeating the wording it
+used. Multi-turn context is not built; `docs/DEMO-GUIDE.md` says so plainly rather than
+leaving a demo to discover it.
 
 **On PowerShell**, `curl` is an alias for `Invoke-WebRequest` and the quoting differs — use
 `curl.exe` explicitly, or `Invoke-RestMethod -Method Post -ContentType application/json -Body '...'`.
@@ -112,12 +108,12 @@ Reminders fire on a 30-second poll against real timestamps, so seeing one fire l
 setting it a minute out and waiting. That is also why the poller's own tests inject a clock
 rather than sleeping.
 
-### Running the web app
+### Access control
 
-```bash
-pnpm --filter @ourglass/web dev
-# http://localhost:3000
-```
+With no `OURGLASS_ACCESS_TOKEN` set, the app runs in one of two modes: **demo** (if
+`ENABLE_DEMO_ENDPOINT=true`) where every route is open, or **closed**, where nothing is
+served. Set a token of 32+ characters to require sign-in at `/login`. Never deploy anywhere
+reachable without one.
 
 ### Integration tests (require the Postgres container running)
 
@@ -145,16 +141,23 @@ because it needs a live database.
 ## Project status
 
 Phased build, features before UI. Current phase and full checklist:
-[`docs/PHASES.md`](docs/PHASES.md). Phases 0–2 are done and CI-verified. Phase 3 adds the
-end-to-end conversational loop (Interpret → Resolve → Mutate → Respond), the reminder poller,
-conditional rules, and the demo endpoint above; see
-[`docs/PHASE-3-DESIGN.md`](docs/PHASE-3-DESIGN.md). The UI remains Phase 5.
+[`docs/PHASES.md`](docs/PHASES.md); stage board in
+[`docs/MASTER-EXECUTION-PLAN.md`](docs/MASTER-EXECUTION-PLAN.md).
 
-**One standing caveat, carried since Phase 2 and still true:** there is no recorded model
-output in this repo. The eval harness has 69 hand-labelled fixtures and a comparator verified
-by mutation, but `pnpm test:live` — the only lane that speaks to whether the model actually
-extracts correctly — has never been run. Everything green here is evidence about the code,
-not about the model.
+Phases 0–5 are built and CI-verified: the schema and tool layer, extraction and resolution,
+the four-stage conversational loop with reminders and conditional rules, memory and
+inspection, the dynamic entity registry, the UI, multi-provider AI with a measured fallback
+chain, and the §35 permission model with its control plane. Phases 6–8 — ingestion,
+external integrations, voice — are not started.
+
+**Standing caveats, kept here because a green CI badge does not cover them:**
+
+- Model *quality* is barely measured. `pnpm eval:ai` and `pnpm test:live` exercise the
+  hand-labelled fixtures against a real model and have been run rarely; everything else green
+  is evidence about the code, not the model.
+- Single-user by construction. There is no tenant boundary, no login beyond one shared
+  access token, and entity resolution searches all people. Do not put a second organisation's
+  data in it.
 
 ## Contributing
 

@@ -75,16 +75,34 @@ export function statusLabel(status: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
+/**
+ * The last millisecond of a local day — what the resolver stores when the
+ * user named a DAY and no clock time ("by Friday").
+ *
+ * See END_OF_DAY in apps/api/src/assistant/time.ts. It is a convention, not
+ * something anyone said, so these surfaces print the date alone: the reply in
+ * chat says "by Friday, September 25", and a card reading "Fri, 25 Sept,
+ * 11:59 pm" beside it invents a precision the conversation never had.
+ */
+function isEndOfLocalDay(date: Date): boolean {
+  return (
+    date.getHours() === 23 &&
+    date.getMinutes() === 59 &&
+    date.getSeconds() === 59 &&
+    date.getMilliseconds() === 999
+  );
+}
+
 /** A date a person can read, or "No date" — never an empty cell. */
 export function when(value: string | null): string {
   if (!value) return "No date";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "No date";
+  const dayOnly = isEndOfLocalDay(date);
   return date.toLocaleString(undefined, {
     weekday: "short",
     month: "short",
     day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+    ...(dayOnly ? {} : { hour: "numeric" as const, minute: "2-digit" as const }),
   });
 }

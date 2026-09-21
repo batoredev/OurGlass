@@ -2,6 +2,8 @@
 # Local process output (dev-server logs, one-off probe scripts). Machine state,
 # not source — a dev-server log reached commit a1ae1f1 before this line existed.
 scratchpad/
+# Playwright MCP session artifacts (snapshots, console logs) from browser QA.
+.playwright-mcp/
 .claude-backup-before-os/
 .env
 .env.*

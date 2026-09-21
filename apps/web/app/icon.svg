@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="OurGlass">
+  <!-- The conversation surface's own motif: a sun over the arc of a day.
+       Next.js serves app/icon.svg as the favicon; without it every page load
+       logged a 404 for /favicon.ico and the tab showed a blank sheet. -->
+  <rect width="32" height="32" rx="8" fill="#232220" />
+  <circle cx="16" cy="13" r="5" fill="#f7f5f0" />
+  <path d="M6 23a10 10 0 0 1 20 0" fill="none" stroke="#aa5d43" stroke-width="2.5" stroke-linecap="round" />
+</svg>
