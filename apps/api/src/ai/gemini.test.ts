@@ -13,9 +13,15 @@
  * keys while this file was green, because a fake client accepts any name.
  * ===========================================================================
  */
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RespondInput } from "@ourglass/shared";
-import { GeminiProvider, type GeminiLikeClient, type GeminiLikeResponse } from "./gemini.js";
+import { RESPOND_TIMEOUT_MS } from "../assistant/respond.js";
+import {
+  GEMINI_RESPOND_TIMEOUT_MS,
+  GeminiProvider,
+  type GeminiLikeClient,
+  type GeminiLikeResponse,
+} from "./gemini.js";
 import type { ProviderError } from "./errors.js";
 
 const VALID_EXTRACTION = {
@@ -261,6 +267,47 @@ describe("the respond budget is the one it was given", () => {
     });
     expect(answered.degraded).toBe(false);
     expect(answered.reply).toBe("Reminder set.");
+  });
+});
+
+describe("Gemini's default respond budget is its own, not Haiku's", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("waits out a reply that takes longer than Haiku's 3s", async () => {
+    // A ~5s reply was the NORMAL case on 2026-09-19. Under the inherited 3s
+    // default this degraded to the template every single time.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const fiveSeconds: GeminiLikeClient = {
+      models: {
+        generateContent(params) {
+          const signal = params.config?.["abortSignal"] as AbortSignal | undefined;
+          return new Promise((resolve, reject) => {
+            const timer = setTimeout(
+              () => resolve({ text: "Noted.", candidates: [{ finishReason: "STOP" }] }),
+              5_000,
+            );
+            signal?.addEventListener("abort", () => {
+              clearTimeout(timer);
+              reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+            });
+          });
+        },
+      },
+    };
+
+    const pending = new GeminiProvider({ apiKey: "", client: fiveSeconds }).respond({
+      committed: [{ kind: "reminder_created", fireAtLocal: "5 PM" }],
+      questions: [],
+      declined: [],
+    });
+    await vi.advanceTimersByTimeAsync(5_000);
+    const result = await pending;
+
+    expect(result.degraded).toBe(false);
+    expect(result.reply).toBe("Noted.");
+    expect(GEMINI_RESPOND_TIMEOUT_MS).toBeGreaterThan(RESPOND_TIMEOUT_MS);
   });
 });
 

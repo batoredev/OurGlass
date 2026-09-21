@@ -41,7 +41,12 @@ export const RESPOND_MODEL = "claude-haiku-4-5-20251001" as const;
 
 export interface CommitmentCreatedFact {
   readonly kind: "commitment_created";
+  /**
+   * WHO OWES. The literal "you" when the owner is the user — decided by the
+   * orchestrator from the person id, never from the display name.
+   */
   readonly ownerName: string;
+  /** Owed TO whom, same "you" convention; null when nobody was named. */
   readonly recipientName: string | null;
   readonly objectText: string;
   /** Already formatted in the user's local timezone, or null if no deadline. */

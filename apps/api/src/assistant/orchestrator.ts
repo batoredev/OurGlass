@@ -51,9 +51,10 @@ import {
   renderProactiveLine,
   selectProactiveLine,
 } from "./proactive.js";
-import { templateReply, type RespondTrace } from "./respond.js";
+import { YOU, templateReply, type RespondTrace } from "./respond.js";
 import { resolveTime, timeDirectionForIntent, type ResolvedTime } from "./time.js";
 import { executeTurn, type Deps as ExecutorDeps } from "../tools/index.js";
+import { MAX_DISPLAY_NAME_LENGTH } from "../tools/create-person.js";
 import type { QueryEmbedder } from "../embeddings/backfill.js";
 import { gateIntentCalls, loadGrants, type GateDecision } from "../permissions/gate.js";
 import { PENDING_ACTION_TTL_SECONDS } from "../permissions/policy.js";
@@ -233,6 +234,9 @@ export async function runTurn(req: TurnRequest, deps: OrchestratorDeps): Promise
       timezone,
       selfPersonId,
       queryEmbeddings,
+      // Fresh per turn: a person "planned" in one turn and never committed
+      // must not leak into the next.
+      newPeople: new Map(),
     }),
     grants: await loadGrants(tx),
   }));
@@ -652,6 +656,22 @@ interface PlanContext {
    * make a network call — see `embedRecallQueries`.
    */
   readonly queryEmbeddings: ReadonlyMap<string, readonly number[]>;
+  /**
+   * People Resolve has decided to CREATE this turn, keyed by lower-cased name.
+   *
+   * Planning runs before anything commits, so a person created by intent 0
+   * is not in the database when intent 1 mentions them. Without this map,
+   * "Karthik owes me the quote. Karthik also owes me the invoice." would
+   * create two Karthiks — the duplicate §23 exists to prevent.
+   */
+  readonly newPeople: Map<string, NewPerson>;
+}
+
+/** A person Resolve decided to create, and the intent whose calls create them. */
+interface NewPerson {
+  readonly id: string;
+  readonly displayName: string;
+  readonly createdByIntent: number;
 }
 
 async function planIntents(
@@ -772,11 +792,15 @@ async function planOneIntent(
       // when nothing matched, and then creating it is right — the user is
       // telling us about a commitment we have not heard of.
       const statusPlan = intent.newStatus ? await planStatusUpdate(intent, ctx) : null;
-      const plan = statusPlan ?? (await planCommitment(intent, ctx));
+      const plan = statusPlan ?? (await planCommitment(intent, ctx, index));
       questions.push(...plan.questions);
       calls.push(...plan.calls);
       facts.push(...plan.facts);
       declined.push(...(plan.declined ?? []));
+      // A person CREATED by an earlier intent this turn makes this intent
+      // depend on that one: if it is blocked, its create_person never runs,
+      // and this intent's commitment would name a person who does not exist.
+      dependsOn.push(...(plan.dependsOn ?? []));
       if (plan.commitmentId) commitmentIdByIntent.set(index, plan.commitmentId);
       break;
     }
@@ -842,11 +866,46 @@ interface IntentPlan {
 }
 
 /** An `information` intent that bears a commitment: "Barkha needs to give me the article by 6." */
-async function planCommitment(intent: ExtractedIntent, ctx: PlanContext): Promise<IntentPlan> {
+async function planCommitment(
+  intent: ExtractedIntent,
+  ctx: PlanContext,
+  index: number,
+): Promise<IntentPlan> {
+  const plan = await planCommitmentCalls(intent, ctx, index);
+
+  // A person is PLANNED only if this intent will actually create them.
+  //
+  // Resolve registers a new person the moment it decides one is needed, so
+  // that a second mention in the same intent reuses them. But this intent may
+  // then stop short — an unresolved time, a missing object — and emit
+  // nothing. Left registered, that phantom would make a LATER intent that
+  // names the same person depend on this blocked one and silently drop with
+  // it: "Priya owes me something by the launch. Priya owes me the invoice."
+  // would save neither. Forgotten, the later intent creates Priya itself.
+  const emitted = new Set(
+    plan.calls
+      .filter((call) => call.name === "create_person")
+      .map((call) => (call.input as { readonly id?: string }).id),
+  );
+  for (const [key, person] of ctx.newPeople) {
+    if (person.createdByIntent === index && !emitted.has(person.id)) ctx.newPeople.delete(key);
+  }
+  return plan;
+}
+
+async function planCommitmentCalls(
+  intent: ExtractedIntent,
+  ctx: PlanContext,
+  index: number,
+): Promise<IntentPlan> {
   const questions: string[] = [];
 
-  const owner = await resolveParty(intent.owner, ctx);
-  const recipient = await resolveParty(intent.recipient, ctx);
+  // THE ONE PLACE A PERSON MAY BE CREATED — PHASE-1-DESIGN §3's sequence,
+  // create_person -> create_commitment, in one turn so undo reverses the pair.
+  // Opt-in, never a side effect of resolveParty: planStatusUpdate resolves the
+  // same mention first and must not register a person it will not create.
+  const owner = await resolveParty(intent.owner, ctx, { createFor: index });
+  const recipient = await resolveParty(intent.recipient, ctx, { createFor: index });
   if (owner.question) questions.push(owner.question);
   if (recipient.question) questions.push(recipient.question);
   if (!intent.objectText) questions.push(`What is it ${describeMention(intent.owner)} owes?`);
@@ -943,7 +1002,13 @@ async function planCommitment(intent: ExtractedIntent, ctx: PlanContext): Promis
   return {
     commitmentId,
     questions: [],
+    dependsOn: [...owner.dependsOn, ...recipient.dependsOn],
     calls: [
+      // FIRST, so the executor's per-call validation finds them: it runs
+      // validate-then-commit call by call inside one transaction, and
+      // create_commitment rejects an owner that does not exist.
+      ...owner.creates,
+      ...recipient.creates,
       {
         name: "create_commitment",
         input: {
@@ -959,8 +1024,15 @@ async function planCommitment(intent: ExtractedIntent, ctx: PlanContext): Promis
     facts: [
       {
         kind: "commitment_created",
-        ownerName: owner.displayName ?? describeMention(intent.owner),
-        recipientName: recipient.displayName,
+        // "you" for the user, decided by ID rather than by display name: the
+        // user's own row is called "You" only by bootstrap convention, and a
+        // linked account carries their real name. See CommitmentCreatedFact.
+        ownerName:
+          owner.id === ctx.selfPersonId
+            ? YOU
+            : (owner.displayName ?? describeMention(intent.owner)),
+        recipientName:
+          recipient.id !== null && recipient.id === ctx.selfPersonId ? YOU : recipient.displayName,
         objectText: intent.objectText,
         expectedAtLocal: expectedAt ? formatLocal(expectedAt, ctx.timezone) : null,
       },
@@ -1816,13 +1888,89 @@ interface ResolvedParty {
   readonly id: string | null;
   readonly displayName: string | null;
   readonly question: string | null;
+  /** `create_person` calls that must run before anything naming this id. */
+  readonly creates: readonly ToolCall[];
+  /** Earlier intents whose `create_person` this party relies on. */
+  readonly dependsOn: readonly number[];
+}
+
+const NO_PARTY: ResolvedParty = {
+  id: null,
+  displayName: null,
+  question: null,
+  creates: [],
+  dependsOn: [],
+};
+
+/**
+ * Words that open a DESCRIPTION of someone rather than their name.
+ *
+ * PHASE-3-DESIGN's worked example is the reason this list exists: "remind me
+ * to call the plumber at 6" must still ask "Who's the plumber?". A person
+ * called "the plumber" would be junk the user never asked for, and it would
+ * then out-score the real plumber's name the day they mention it.
+ */
+const DESCRIPTIVE_OPENERS = new Set([
+  "the", "a", "an", "my", "our", "your", "his", "her", "their", "its",
+  "this", "that", "these", "those", "some", "someone", "somebody", "anyone",
+  "anybody", "everyone", "everybody", "whoever",
+]);
+
+/**
+ * Is this mention a person's NAME — safe to create a row for — or something
+ * to ask about?
+ *
+ * Conservative in every direction, because the failure modes are unequal. A
+ * wrongly-refused name costs one question, which is the pre-existing
+ * behaviour. A wrongly-accepted one plants a junk person that entity
+ * resolution will then match against forever.
+ *
+ *   - kind must be "person". "unknown" asks: "Hult" is an organisation the
+ *     model was unsure of, and a person called Hult would be wrong.
+ *   - UNCERTAIN asks. §12's levels exist so a guess is not written as fact.
+ *   - A proper name: starts with an upper-case letter, no digits, at most
+ *     four words, and not a description ("the plumber", "my landlord").
+ */
+function looksLikeANewPersonsName(mention: NonNullable<ExtractedIntent["owner"]>): boolean {
+  if (mention.kind !== "person") return false;
+  if (mention.inferenceLevel === "UNCERTAIN") return false;
+  const name = mention.name.trim();
+  if (name === "" || name.length > MAX_DISPLAY_NAME_LENGTH || /\d/.test(name)) return false;
+  const words = name.split(/\s+/);
+  if (words.length > 4) return false;
+  if (DESCRIPTIVE_OPENERS.has(words[0]!.toLowerCase())) return false;
+  return /^\p{Lu}/u.test(words[0]!);
+}
+
+function nameKey(name: string): string {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 async function resolveParty(
   mention: ExtractedIntent["owner"],
   ctx: PlanContext,
+  /**
+   * `createFor` is the intent index that may create this person if nobody
+   * matches. Only planCommitment passes it — see the call site for why.
+   */
+  options: { readonly createFor?: number } = {},
 ): Promise<ResolvedParty> {
-  if (!mention) return { id: null, displayName: null, question: null };
+  if (!mention) return NO_PARTY;
+
+  // Someone this turn has ALREADY decided to create: reuse them. Checked
+  // before the database, which cannot contain them yet.
+  if (options.createFor !== undefined) {
+    const planned = ctx.newPeople.get(nameKey(mention.name));
+    if (planned) {
+      return {
+        id: planned.id,
+        displayName: planned.displayName,
+        question: null,
+        creates: [],
+        dependsOn: planned.createdByIntent === options.createFor ? [] : [planned.createdByIntent],
+      };
+    }
+  }
 
   const resolution = await resolvePersonMention(ctx.tx, mention, ctx.selfPersonId);
   if (resolution.band === "auto") {
@@ -1835,13 +1983,35 @@ async function resolveParty(
       id: person?.id ?? resolution.id,
       displayName: person?.display_name ?? mention.name,
       question: null,
+      creates: [],
+      dependsOn: [],
     };
   }
-  return {
-    id: null,
-    displayName: null,
-    question: questionForMention(mention.name, resolution),
-  };
+
+  // REJECT means entity resolution compared this mention against EVERY
+  // current person and found nobody close enough — the band DECISIONS.md #6
+  // defines as "a new entity". The ambiguous band never reaches here: a name
+  // that might be someone we know is a question, because a wrong merge is the
+  // worst failure in the system (#9). Only a clear non-match that is plainly a
+  // name is created, and the id is minted now so the commitment can name it.
+  if (
+    resolution.band === "reject" &&
+    options.createFor !== undefined &&
+    looksLikeANewPersonsName(mention)
+  ) {
+    const id = randomUUID();
+    const displayName = mention.name.trim().replace(/\s+/g, " ");
+    ctx.newPeople.set(nameKey(displayName), { id, displayName, createdByIntent: options.createFor });
+    return {
+      id,
+      displayName,
+      question: null,
+      creates: [{ name: "create_person", input: { id, display_name: displayName } }],
+      dependsOn: [],
+    };
+  }
+
+  return { ...NO_PARTY, question: questionForMention(mention.name, resolution) };
 }
 
 /**

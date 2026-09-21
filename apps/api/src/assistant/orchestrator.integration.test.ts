@@ -48,7 +48,12 @@ import { AIModelRouter, RoutedExtractor } from "../ai/router.js";
 import type { AIProvider } from "../ai/provider.js";
 import type { QueryEmbedder } from "../embeddings/backfill.js";
 import { EMBEDDING_DIMENSIONS } from "../embeddings/voyage.js";
-import { ToolRegistry, buildToolRegistry } from "../tools/index.js";
+import {
+  ToolRegistry,
+  buildToolRegistry,
+  undoTurn,
+  type Deps as UndoDeps,
+} from "../tools/index.js";
 import { ExtractionError, type Extractor } from "./extract.js";
 import { runTurn, type OrchestratorDeps } from "./orchestrator.js";
 
@@ -248,17 +253,21 @@ suite("runTurn (integration)", () => {
   // §3.3 — the partial-commit rule
   // -------------------------------------------------------------------------
 
-  it("asks about an unknown person and writes NOTHING for that intent", async () => {
+  it("asks about someone DESCRIBED rather than named, and writes NOTHING for that intent", async () => {
+    // Until create_person existed this test used "Priya" — a plain new name
+    // — and pinned the bug: PHASE-1-DESIGN §3 says a clearly-new person is
+    // CREATED. What must still ask is PHASE-3-DESIGN's own example: "the
+    // plumber" is a description, and a person row called that would be junk.
     const { responder, calls } = recordingResponder();
 
     const result = await runTurn(
-      { utterance: "Priya needs to send the deck.", userId },
+      { utterance: "The plumber needs to send a quote.", userId },
       deps(
         fakeExtractor([
           intent({
             kind: "information",
-            owner: mention("Priya"),
-            objectText: "the deck",
+            owner: mention("the plumber"),
+            objectText: "a quote",
           }),
         ]),
         responder,
@@ -266,22 +275,25 @@ suite("runTurn (integration)", () => {
     );
 
     expect(result.turnId).toBeNull();
-    expect(result.asked.length).toBeGreaterThan(0);
+    expect(result.asked).toEqual(["Who's the plumber?"]);
     expect(calls[0]!.committed).toEqual([]);
 
     const rows = await pool.query(`SELECT 1 FROM commitments`);
     expect(rows.rows).toHaveLength(0);
+    // Only the user's own row, which ensureUser creates. No "the plumber".
+    const names = await pool.query<{ display_name: string }>(`SELECT display_name FROM people`);
+    expect(names.rows.map((row) => row.display_name)).toEqual(["You"]);
   });
 
   it("commits the resolvable intent and asks about the blocked one, in one turn", async () => {
     // §3.3's whole point: a partial commit is SAFE only if it is VISIBLE.
-    // Barkha resolves and commits; Priya does not and is asked about.
+    // Barkha resolves and commits; the plumber does not and is asked about.
     await seedBarkha();
     const { responder, calls } = recordingResponder();
 
     const result = await runTurn(
       {
-        utterance: "Barkha needs to give me the article. Priya needs to send the deck.",
+        utterance: "Barkha needs to give me the article. The plumber needs to send a quote.",
         userId,
       },
       deps(
@@ -293,8 +305,8 @@ suite("runTurn (integration)", () => {
           }),
           intent({
             kind: "information",
-            owner: mention("Priya"),
-            objectText: "the deck",
+            owner: mention("the plumber"),
+            objectText: "a quote",
           }),
         ]),
         responder,
@@ -312,6 +324,159 @@ suite("runTurn (integration)", () => {
     // Respond is told BOTH halves, so the user can say "undo that".
     expect(calls[0]!.committed).toHaveLength(1);
     expect(calls[0]!.questions.length).toBeGreaterThan(0);
+  });
+
+  // -------------------------------------------------------------------------
+  // PHASE-1-DESIGN §3 — a first mention: create_person -> create_commitment
+  //
+  // Designed, documented in three places, and never built until 2026-09-19.
+  // Every new name was "Who's Karthik?" — a question with no answer, because
+  // the answer produced the same question.
+  // -------------------------------------------------------------------------
+
+  async function currentPeople(): Promise<readonly { id: string; display_name: string }[]> {
+    const { rows } = await pool.query<{ id: string; display_name: string }>(
+      `SELECT id, display_name FROM people_current WHERE display_name <> 'You' ORDER BY display_name`,
+    );
+    return rows;
+  }
+
+  function undoDeps(): UndoDeps {
+    return { db: { withTransaction: (fn) => withTransaction(pool, fn) }, registry: buildToolRegistry() };
+  }
+
+  it("creates a clearly-new person AND their commitment in one turn, and undo reverses the pair", async () => {
+    const { responder, calls } = recordingResponder();
+
+    const result = await runTurn(
+      { utterance: "Priya needs to send the deck.", userId },
+      deps(
+        fakeExtractor([intent({ kind: "information", owner: mention("Priya"), objectText: "the deck" })]),
+        responder,
+      ),
+    );
+
+    expect(result.asked).toEqual([]);
+    expect(result.committed).toEqual(["create_person", "create_commitment"]);
+    expect(result.turnId).not.toBeNull();
+
+    const [priya] = await currentPeople();
+    expect(priya?.display_name).toBe("Priya");
+    const owned = await pool.query<{ owner_id: string }>(`SELECT owner_id FROM commitments_current`);
+    expect(owned.rows.map((row) => row.owner_id)).toEqual([priya!.id]);
+
+    // ONE turn: the pair shares a turn_id, so undo cannot split them.
+    const logged = await pool.query<{ tool_name: string }>(
+      `SELECT tool_name FROM action_log WHERE turn_id = $1 ORDER BY seq`,
+      [result.turnId],
+    );
+    expect(logged.rows.map((row) => row.tool_name)).toEqual(["create_person", "create_commitment"]);
+
+    // Respond names the person the user named.
+    expect(calls[0]!.committed[0]).toMatchObject({ kind: "commitment_created", ownerName: "Priya" });
+
+    await undoTurn(result.turnId!, undoDeps());
+    expect(await currentPeople()).toEqual([]);
+    const left = await pool.query(`SELECT 1 FROM commitments_current`);
+    expect(left.rows).toHaveLength(0);
+  });
+
+  it("creates ONE person when two intents in the same turn name them", async () => {
+    // Planning runs before anything commits, so the database cannot dedupe
+    // this: without the per-turn registry there would be two Priyas — the
+    // duplicate §23 exists to prevent.
+    const result = await runTurn(
+      { utterance: "Priya owes me the deck. Priya also owes me the invoice.", userId },
+      deps(
+        fakeExtractor([
+          intent({ kind: "information", owner: mention("Priya"), objectText: "the deck" }),
+          intent({ kind: "information", owner: mention("Priya"), objectText: "the invoice" }),
+        ]),
+        recordingResponder().responder,
+      ),
+    );
+
+    expect(result.committed).toEqual(["create_person", "create_commitment", "create_commitment"]);
+    const everyone = await currentPeople();
+    expect(everyone.map((person) => person.display_name)).toEqual(["Priya"]);
+    const owners = await pool.query<{ owner_id: string }>(
+      `SELECT DISTINCT owner_id FROM commitments_current`,
+    );
+    expect(owners.rows.map((row) => row.owner_id)).toEqual([everyone[0]!.id]);
+  });
+
+  it("undo KEEPS a person that a later turn now depends on", async () => {
+    // Any turn can be undone, not just the latest. PHASE-1-DESIGN §3 names
+    // this as the reason auto-create was rejected: invalidating Priya here
+    // would leave the invoice owned by nobody.
+    const first = await runTurn(
+      { utterance: "Priya owes me the deck.", userId },
+      deps(
+        fakeExtractor([intent({ kind: "information", owner: mention("Priya"), objectText: "the deck" })]),
+        recordingResponder().responder,
+      ),
+    );
+    const second = await runTurn(
+      { utterance: "Priya owes me the invoice.", userId },
+      deps(
+        fakeExtractor([
+          intent({ kind: "information", owner: mention("Priya"), objectText: "the invoice" }),
+        ]),
+        recordingResponder().responder,
+      ),
+    );
+    // The second turn FOUND her — no second person.
+    expect(second.committed).toEqual(["create_commitment"]);
+
+    await undoTurn(first.turnId!, undoDeps());
+
+    expect((await currentPeople()).map((person) => person.display_name)).toEqual(["Priya"]);
+    const open = await pool.query<{ object_text: string }>(
+      `SELECT object_text FROM commitments_current`,
+    );
+    expect(open.rows.map((row) => row.object_text)).toEqual(["the invoice"]);
+  });
+
+  it("never creates a person the extractor was unsure of, or could not classify", async () => {
+    // §12: a guess is not written as fact. "unknown" asks because the
+    // likeliest unclassified capitalised word here is an organisation.
+    const owners: readonly EntityMention[] = [
+      { name: "Priya", kind: "person", inferenceLevel: "UNCERTAIN" },
+      { name: "Hult", kind: "unknown", inferenceLevel: "CONFIRMED" },
+      { name: "Hult", kind: "organization", inferenceLevel: "CONFIRMED" },
+    ];
+    for (const owner of owners) {
+      const result = await runTurn(
+        { utterance: "Someone needs to send the deck.", userId },
+        deps(
+          fakeExtractor([intent({ kind: "information", owner, objectText: "the deck" })]),
+          recordingResponder().responder,
+        ),
+      );
+      const label = `${owner.name}/${owner.kind}/${owner.inferenceLevel}`;
+      expect(result.turnId, label).toBeNull();
+      expect(result.asked.length, label).toBeGreaterThan(0);
+    }
+    expect(await currentPeople()).toEqual([]);
+  });
+
+  it("a blocked intent does not strand the person a later intent needs", async () => {
+    // Intent 0 cannot commit (nothing owed is named), so it must not keep
+    // "Priya" reserved: intent 1 creates her itself and its commitment lands.
+    const result = await runTurn(
+      { utterance: "Priya owes me something. Priya owes me the invoice.", userId },
+      deps(
+        fakeExtractor([
+          intent({ kind: "information", owner: mention("Priya") }),
+          intent({ kind: "information", owner: mention("Priya"), objectText: "the invoice" }),
+        ]),
+        recordingResponder().responder,
+      ),
+    );
+
+    expect(result.committed).toEqual(["create_person", "create_commitment"]);
+    expect(result.asked.length).toBeGreaterThan(0);
+    expect((await currentPeople()).map((person) => person.display_name)).toEqual(["Priya"]);
   });
 
   // -------------------------------------------------------------------------

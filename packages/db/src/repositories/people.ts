@@ -39,6 +39,14 @@ export interface Person {
 }
 
 export interface CreatePersonInput {
+  /**
+   * Optional caller-minted id. Resolve needs it: `create_person` and the
+   * `create_commitment` naming that person run in ONE turn, and the
+   * commitment's `owner_id` must be known before the person row exists —
+   * the same client-minted-UUID pattern `events.createEvent` already uses.
+   * Omitted, the column default generates one.
+   */
+  id?: string | null;
   displayName: string;
   organizationId?: string | null;
   notes?: string | null;
@@ -49,13 +57,48 @@ export async function createPerson(
   input: CreatePersonInput,
 ): Promise<Person> {
   const { rows } = await tx.query<Person>(
-    `INSERT INTO people (display_name, organization_id, notes)
-     VALUES ($1, $2, $3)
+    `INSERT INTO people (id, display_name, organization_id, notes)
+     VALUES (COALESCE($1::uuid, gen_random_uuid()), $2, $3, $4)
      RETURNING *`,
-    [input.displayName, input.organizationId ?? null, input.notes ?? null],
+    [input.id ?? null, input.displayName, input.organizationId ?? null, input.notes ?? null],
   );
   // INSERT ... RETURNING always yields exactly one row or throws.
   return rows[0]!;
+}
+
+/**
+ * How many CURRENT rows still point at this person, anywhere.
+ *
+ * The question `create_person`'s undo must ask before invalidating. Any turn
+ * can be undone, not just the latest, so the person a turn created may since
+ * have acquired commitments, relationships or memories in LATER turns —
+ * PHASE-1-DESIGN §3 names exactly this as the reason auto-create was
+ * rejected. Invalidating them then would leave live rows owned by nobody.
+ *
+ * Every reference to `people.id` in the schema is listed here, including the
+ * polymorphic ones no foreign key can see (relationship objects, memory
+ * subjects, `person_ref` fields inside entity-record payloads). A new column
+ * that references people must be added here, or undo can orphan it.
+ */
+export async function countCurrentReferences(tx: Queryable, id: string): Promise<number> {
+  const { rows } = await tx.query<{ references: string }>(
+    `SELECT (
+        (SELECT count(*) FROM commitments
+          WHERE t_invalid IS NULL AND (owner_id = $1 OR recipient_id = $1))
+      + (SELECT count(*) FROM relationships
+          WHERE t_invalid IS NULL
+            AND (subject_id = $1 OR (object_kind = 'person' AND object_id = $1)))
+      + (SELECT count(*) FROM memories
+          WHERE t_invalid IS NULL AND subject_kind = 'person' AND subject_id = $1)
+      + (SELECT count(*) FROM entity_records
+          WHERE t_invalid IS NULL
+            AND jsonb_path_exists(payload, '$.* ? (@ == $id)', jsonb_build_object('id', $1::text)))
+      + (SELECT count(*) FROM people WHERE merged_into_id = $1)
+      + (SELECT count(*) FROM users WHERE person_id = $1)
+     )::text AS references`,
+    [id],
+  );
+  return Number(rows[0]?.references ?? 0);
 }
 
 /**

@@ -32,7 +32,6 @@ import {
   MAX_REPLY_CHARS,
   MAX_RESPOND_TOKENS,
   RESPOND_SYSTEM_PROMPT,
-  RESPOND_TIMEOUT_MS,
   renderFacts,
   templateReply,
   type RespondFallbackReason,
@@ -110,6 +109,19 @@ export interface GeminiLikeResponse {
  */
 const NO_THINKING = { thinkingBudget: 0 } as const;
 
+/**
+ * Gemini's own Respond budget. MEASURED on the shipped model, thinking off:
+ *
+ *   2026-09-18  10.0s 10.3s 11.3s 11.8s 18.8s          (Google under load; 503s seen)
+ *   2026-09-19   1.2s  4.2s  4.7s  4.8s  4.9s  5.1s  5.3s 11.5s
+ *
+ * Never once inside Haiku's 3s, so inheriting RESPOND_TIMEOUT_MS guaranteed
+ * the template on every turn. 10s answers the normal case and still bounds
+ * the bad one: past it the deterministic template replies, which is correct
+ * and readable. The write committed before this stage started either way.
+ */
+export const GEMINI_RESPOND_TIMEOUT_MS = 10_000;
+
 export const GEMINI_DEFAULT_INTERPRET_MODEL = "gemini-3.5-flash";
 export const GEMINI_DEFAULT_RESPOND_MODEL = "gemini-3.5-flash";
 
@@ -158,7 +170,7 @@ export class GeminiProvider implements AIProvider {
     this.apiKey = options.apiKey;
     this.interpretModel = options.interpretModel ?? GEMINI_DEFAULT_INTERPRET_MODEL;
     this.respondModel = options.respondModel ?? GEMINI_DEFAULT_RESPOND_MODEL;
-    this.timeoutMs = options.timeoutMs ?? RESPOND_TIMEOUT_MS;
+    this.timeoutMs = options.timeoutMs ?? GEMINI_RESPOND_TIMEOUT_MS;
     this.injected = options.client;
   }
 

@@ -90,6 +90,13 @@ export const RESPOND_TIMEOUT_MS = 3_000;
 export const MAX_RESPOND_TOKENS = 200;
 
 /**
+ * How a commitment fact names the USER. The orchestrator substitutes it by
+ * person id, so the renderer can conjugate ("you owe") and the model reads a
+ * pronoun instead of a display name that happens to be "You".
+ */
+export const YOU = "you";
+
+/**
  * The system prompt carries spec §30's examples VERBATIM.
  *
  * §30/§31 are unusually specific about voice, and the examples are the
@@ -142,9 +149,15 @@ function describeFact(fact: CommittedFact): string {
   // is exactly the state spec §28 exists to prevent.
   switch (fact.kind) {
     case "commitment_created": {
+      // A SENTENCE, not "Karthik → You". The arrow was ambiguous about the one
+      // thing this product exists to get right (§7, who owes whom): a live
+      // Gemini reply rendered "Karthik → You — the venue quote" as "you owe
+      // Karthik the venue quote", and the template put the same arrow in
+      // front of users whenever the reply model was down.
       const due = fact.expectedAtLocal ? `, due ${fact.expectedAtLocal}` : "";
-      const recipient = fact.recipientName ? ` → ${fact.recipientName}` : "";
-      return `Noted: ${fact.ownerName}${recipient} — ${fact.objectText}${due}.`;
+      const verb = fact.ownerName === YOU ? "owe" : "owes";
+      const whom = fact.recipientName ? ` ${fact.recipientName}` : "";
+      return `Noted: ${fact.ownerName} ${verb}${whom} ${fact.objectText}${due}.`;
     }
     case "reminder_created":
       return `Reminder set for ${fact.fireAtLocal}.`;
