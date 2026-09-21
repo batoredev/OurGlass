@@ -92,13 +92,19 @@ integration tests do not run on the dev machine here, so a local pass is not evi
 | 10 | AI documentation | ✅ done | `ade2183` |
 | 11 | Hybrid retrieval *(closes Phase 4)* | ✅ done *(Voyage unverified live)* | *(this commit)* |
 | 12 | §35 permission model *(Phase 7a)* | ✅ done — 12a model/gate/hold/release/UI, 12b access control | `c3d87ab`, *(this commit)* |
+| 12d | Demo readiness — first-mention people, time precision, provider budgets | ✅ done | `8b3fc68`, `c382868` |
 | 13 | Phase 6 — ingestion | ⬜ next | |
 | 14 | Phase 7 — integrations (§34) | ⬜ | |
 | 15 | Phase 8 — voice | ⬜ | |
 | 16 | Full recheck + run | ⬜ | |
 
-Graphify runs after each major stage. Last refresh: after stage 12 — 2280 nodes, 3503
-edges, 185 communities, health clean (0 dangling, 0 missing, 0 collapsed), no import cycles.
+Graphify runs after each major stage. Last refresh: after stage 12d — 2467 nodes, 3769
+edges, 227 communities, health clean (0 dangling, 0 missing, 0 collapsed), no import cycles.
+Re-verified from it and by direct grep: the AI layer still reaches neither `@ourglass/db`
+nor the tool layer, and the Respond stage still holds no database handle — the §37 boundary
+survives `create_person`. `authorize()` remains the second-largest hub (33 edges).
+
+Earlier (stage 12) — 2280 nodes, 3503 edges, 185 communities.
 Verified from it: `demoEnabled()` no longer exists anywhere in the graph, and `authorize()` is
 now the second-largest hub (33 edges) — every data route depends on ONE access guard, which is
 the intended shape. `ExtractionError` / `ProviderError` / `classifyProviderError` remain hubs
@@ -109,9 +115,29 @@ as the failure contract crossing ai → assistant. The provider layer still has 
 
 | What | Why it matters |
 |---|---|
-| `GEMINI_API_KEY` absent | Stage 3 ships untested against a live endpoint |
-| Ollama not installed | Stage 4 ships untested against a live endpoint |
-| `pnpm test:live` never run | ~99 paid Sonnet calls. The only measurement of extraction quality against a real model |
+| ~~`GEMINI_API_KEY` absent~~ | **Resolved 2026-09-18/19.** Both Gemini stages verified against the live endpoint; two defects found only because of it (a model id that 404s for new keys, and thinking tokens consuming the whole reply budget) |
+| Ollama not installed | Stage 4 ships untested against a live endpoint. Also the only provider with no quota — worth installing if the hosted ones stay throttled |
+| **No provider has capacity (2026-09-21)** | Anthropic account out of credit (`400 … credit balance is too low`); the Gemini free-tier key returns `429 … exceeded your current quota`. **With neither, Interpret cannot run and no turn succeeds.** Not a code fault, and nothing in the build can route around it |
+| `pnpm test:live` never run | ~99 paid Sonnet calls. The only measurement of extraction quality against a real model. Blocked on the credit above |
+
+### Stage 12d — demo readiness (2026-09-19 → 21)
+
+Not a planned stage. It came out of driving the product like a user before showing it to
+anyone, and every item below was found that way rather than by a failing test.
+
+| Fixed | What was wrong |
+|---|---|
+| `create_person` | Designed in PHASE-1-DESIGN §3, DECISIONS #5 and the executor's header — and never built. Every unfamiliar name became "Who's Karthik?", a question answering could not resolve, because nothing could write a person |
+| Ownership direction in replies | Facts rendered as "Karthik → You". A live Gemini reply read that backwards as "you owe Karthik the venue quote" — on the one distinction (§7) the product exists to get right |
+| Fabricated clock times | "by 6 tomorrow" resolved to "due Tuesday at 11:25 AM", 11:25 being the moment the user pressed enter. chrono implies the reference clock and `.get("hour")` cannot tell that from a real parse |
+| Respond budget | 3s is Haiku's. Gemini measured 5–19s, so every Gemini reply degraded to the template with `degraded: true` permanently on — indistinguishable from an outage |
+| `errorCategory: "unknown"` | The router logged a constant for every degraded reply, so a timeout, a refusal and an exhausted budget were identical in the one field operators are told to read |
+| `pnpm dev` | Never started the web app: `pnpm -r` runs in dependency order and the poller never exits. The documented way to run the product ran only the poller |
+| Two connection pools | `/api/turn` held a byte-identical copy of `_lib`'s pool singleton, so the app reserved twenty Supabase connections where both copies' comments argued for ten |
+| A stale README | Still described Phase 3: no UI, a server on port 3001, curl against routes that no longer exist |
+
+Every fix is mutation-verified and CI-green. `docs/DEMO-GUIDE.md` is the walkthrough, and its
+first section is the provider capacity above, because that is what actually stops a demo.
 
 ### Defects found while executing (not waiting for stage 16)
 
