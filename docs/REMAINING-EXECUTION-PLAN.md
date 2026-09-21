@@ -63,10 +63,11 @@ Track D (open decisions)    ── needed inputs, not engineering work
 **Recommended order:** Gate 0 → Track B → **Track P** → Phase 6 → Phase 7 → Phase 8, with
 Track C inserted before Phase 7 *only if* a second customer is committed. Track P comes before
 the remaining features because an app that only runs on one laptop is not a product, and
-because deploying early means every later phase ships through a pipeline that already works. Rationale: Track B is cheap and tells
-you whether the model behaves, Phase 6 is the largest remaining product gap, and Phase 7 is the
-one with real external blast radius — it deserves to run after ingestion has exercised the
-untrusted-input boundary.
+because deploying early means every later phase ships through a pipeline that already works.
+
+The rest of the order: Track B is cheap and tells you whether the model behaves, Phase 6 is the
+largest remaining product gap, and Phase 7 is the one with real external blast radius — it
+deserves to run after ingestion has exercised the untrusted-input boundary.
 
 ---
 
