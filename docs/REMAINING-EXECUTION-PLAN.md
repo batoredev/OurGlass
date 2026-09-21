@@ -51,15 +51,19 @@ Until then every turn answers *"I couldn't process that just now — nothing was
 ```
 Gate 0 (provider capacity)  ─┬─> Track B (live verification)  ─> Stage 16 recheck
                              │
+                             ├─> Track P: deploy ──> harden        <- needed for ANY production use
+                             │
                              └─> Track A: Phase 6 ──> Phase 7 ──> Phase 8
                                           (ingestion) (integrations) (voice)
 
-Track C (multi-tenant SaaS) ── independent of A, gated on a BUSINESS decision, not a technical one
+Track C (multi-tenant SaaS) ── independent of A and P, gated on a BUSINESS decision
 Track D (open decisions)    ── needed inputs, not engineering work
 ```
 
-**Recommended order:** Gate 0 → Track B → Phase 6 → Phase 7 → Phase 8, with Track C inserted
-before Phase 7 *only if* a second customer is committed. Rationale: Track B is cheap and tells
+**Recommended order:** Gate 0 → Track B → **Track P** → Phase 6 → Phase 7 → Phase 8, with
+Track C inserted before Phase 7 *only if* a second customer is committed. Track P comes before
+the remaining features because an app that only runs on one laptop is not a product, and
+because deploying early means every later phase ships through a pipeline that already works. Rationale: Track B is cheap and tells
 you whether the model behaves, Phase 6 is the largest remaining product gap, and Phase 7 is the
 one with real external blast radius — it deserves to run after ingestion has exercised the
 untrusted-input boundary.
@@ -202,6 +206,65 @@ them.
 
 ---
 
+## Track P — production deployment and hardening
+
+**Needed for any production use, single-tenant or not.** This track was missing from the first
+version of this plan: deployment had been filed under Track C, which was wrong — Track C is
+about a *second customer*, while this is about the product running anywhere other than a
+laptop.
+
+### P1 — make it deploy (finishes `DEPLOYMENT-DESIGN.md` §6)
+
+That document lists six tasks. Verified state on 2026-09-21:
+
+| # | Task | State |
+|---|---|---|
+| 1 | Pin `pg` ≥ 8.16.3 | ✅ `^8.16.3` in both packages |
+| 2 | Move the routes to `apps/web/app/api/**` | ✅ thirteen route handlers |
+| 3 | Retire Fastify | ✅ not a dependency anywhere |
+| 4 | `wrangler.toml` + the Cloudflare adapter | ⚠ **half** — `apps/web/wrangler.toml` exists and is security-reviewed (cron triggers, observability on, the demo flag deliberately absent). **`@opennextjs/cloudflare` is not installed**, so `.open-next/worker.js` — which `main` points at — is never produced. The Worker cannot build |
+| 5 | `scheduled()` calling `pollOnce` | ⚠ `apps/web/worker/scheduled.ts` is written and calls `pollOnce` unchanged. Never executed, because of task 4 |
+| 6 | CI deploy step on push to `main` | ❌ No deploy workflow exists — `ci.yml`, `codeql.yml`, `evals.yml` only |
+
+The same shape this project keeps finding: the config and the handler exist, and nothing can
+produce the artifact they reference. **Nothing here is verified until a real request is served
+by a real Worker.**
+
+Work: install the adapter, add `preview`/`deploy` scripts, build, deploy, put the secrets in
+with `wrangler secret put` (`docs/YOUR-ACTIONS.md` §6–8 lists what the owner must do first),
+verify a real request and a real cron tick, then add the CI deploy step.
+
+**Expect surprises here.** Two are already flagged in the design: `pg` must use Supabase's
+**direct** connection, never the transaction pooler, and Cloudflare's cron granularity is one
+minute against the 30-second local interval. A third is unflagged: OpenNext's support matrix
+for Next 16 should be verified from primary sources before assuming the adapter is a drop-in.
+
+**Definition of done:** the routes answer from the deployed Worker; the cron tick fires and
+`pollOnce` runs; migrations applied to Supabase over the direct connection; a smoke check after
+deploy (`production.md`); no secret in any committed file.
+
+### P2 — hardening before anyone else can reach it
+
+Each of these is absent today, and each was verified absent rather than assumed:
+
+| Missing | Why it matters in production | Size |
+|---|---|---|
+| **Rate limiting on `/api/turn`** | Every request spends model tokens. One leaked access token is unbounded spend, and there is no cap of any kind today | Small — but decide the limit with the cost budget (Track D) |
+| **Security headers / CSP** | `next.config.ts` sets none. A Worker is a public URL: CSP, `frame-ancestors`, HSTS, `X-Content-Type-Options`, `Referrer-Policy` | Small |
+| **Error boundaries** | No `error.tsx`, `global-error.tsx` or `not-found.tsx`. A server error shows Next's default page, which leaks framework detail and tells the user nothing | Small |
+| **Alerting** | `[observability] enabled = true` gives Cloudflare logs; nothing aggregates or alerts on them. The per-attempt `ai_request` lines are excellent and nobody is watching them | Medium |
+| **Uptime check** | `/api/health` exists and nothing polls it | Small |
+| **Runbook** | `production.md` requires a rollback and recovery story. None is written | Small |
+| **Backups** | Confirm Supabase PITR is on. `db:reset` is the only recovery path today and it is destructive | Owner action |
+| **Accessibility pass** | Never audited. The UI *is* the product surface: keyboard navigation, focus order, contrast, the composer's ARIA | Medium — `accessibility-engineer`, read-only |
+| **Staging** | `wrangler.toml` defines one environment. Deploying straight to production with real data in it has no safety net | Small |
+
+**Team (Mission 6, 3 teammates):** `devops-sre` (owns `wrangler.toml`, workflows, the runbook),
+`backend-lead` (rate limiting, headers, error boundaries), `security-cso` (read-only — public
+URL, stored secrets, and the access guard now facing the internet).
+
+---
+
 ## Track C — multi-tenant SaaS readiness
 
 **Gated on a business decision, not a technical one.** Today the product is single-user by
@@ -263,6 +326,30 @@ These are inputs, not engineering work. Each one blocks something above.
 | Second customer: yes or no | All of Track C | The only thing that makes tenancy urgent |
 | Pricing model | C3 | Product decision |
 | Terms of service / privacy policy | Any external user | You store commitments and relationships about real people. Needs legal input before a second tenant |
+
+---
+
+## How much is left, in sessions
+
+A "session" here means a working session of the size that produced stage 12d: several commits,
+a feature plus its tests, CI green, docs updated. Ranges, not promises — and the wider number
+is the more likely one, because **every phase of this build so far has surfaced two to four
+defects nobody planned for.** Stage 12d was itself entirely unplanned.
+
+| Target | Sessions | What it buys |
+|---|---|---|
+| **Deployed and usable internally** — Track B + Track P | **3–4** | What exists today, live on Cloudflare, hardened, monitored, with a rollback story. No new features |
+| **Spec-complete** — the above plus Phases 6, 7, 8 | **+6–8** → 9–12 total | Ingestion (2–3), integrations (3–4, one per surface), voice (0.5–1) |
+| **Multi-tenant SaaS** — the above plus Track C | **+6–9** → 15–21 total | Tenancy and RLS (1–2), identity (1–2), billing (1–2), rollback (1), load (1), independent review (1) |
+
+**Every number assumes** a model provider with capacity (Gate 0), Track D decisions arriving
+when the work needs them rather than after, and that the owner actions in
+`docs/YOUR-ACTIONS.md` are done before Track P starts. Waiting on any of those converts
+sessions into calendar time at an unpredictable rate.
+
+**The cheapest meaningful next step is Track P1.** It is one or two sessions, it turns a
+laptop demo into a URL you can send someone, and it de-risks every later phase by making the
+pipeline real before there is more to push through it.
 
 ---
 
