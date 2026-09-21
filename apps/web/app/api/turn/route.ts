@@ -35,8 +35,8 @@ import { VoyageClient } from "@ourglass/api/embeddings";
 import { buildToolRegistry } from "@ourglass/api/tools";
 import { authorize } from "../_auth";
 import { rejectCrossSite } from "../_http";
-import { createPool, users, withTransaction } from "@ourglass/db";
-import type { DatabaseTransaction } from "@ourglass/shared";
+import { users } from "@ourglass/db";
+import { db } from "../_lib";
 
 // Node runtime, not Edge. `pg` needs `nodejs_compat`, which the Cloudflare
 // adapter supplies for the Node runtime; the Edge runtime has no TCP sockets.
@@ -44,34 +44,15 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * One pool per isolate, created lazily.
+ * THE POOL IS `_lib`'s, not this route's.
  *
- * A Worker isolate handles many requests, so building a pool per request
- * would open a connection per turn and exhaust Supabase's limit under any
- * real load. Module scope is the isolate's lifetime, which is exactly the
- * scope a pool wants.
+ * This file used to carry a byte-identical copy of that singleton, and both
+ * copies' comments explained that a pool per request would exhaust Supabase's
+ * connection limit — while the two of them together held two pools, each with
+ * pg's default max of 10, for twenty connections where ten was intended. Two
+ * declarations of one fact, which is this project's most-repeated defect.
  */
-// Typed from createPool rather than importing `pg` — this package has no
-// Postgres dependency of its own, and adding one for a type would blur a
-// boundary that is otherwise clean.
-type Pool = ReturnType<typeof createPool>;
-
-let pool: Pool | null = null;
 let bootstrapUserId: string | null = null;
-
-function getPool(): Pool {
-  if (!pool) {
-    const url = process.env["DATABASE_URL"];
-    if (!url) throw new Error("DATABASE_URL is required");
-    pool = createPool(url);
-  }
-  return pool;
-}
-
-const db = {
-  withTransaction: <T>(fn: (tx: DatabaseTransaction) => Promise<T>) =>
-    withTransaction(getPool(), fn),
-};
 
 /**
  * The bootstrap user, resolved once and cached.
