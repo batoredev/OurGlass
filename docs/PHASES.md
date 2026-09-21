@@ -256,6 +256,9 @@ and add the completion date/commit as each phase lands.
   > is a real interactive feature and Phase 5's job was inspection; the home page says so and
   > points at the demo endpoint rather than showing an empty box.
 
+> **How these three get built** — sequencing, the decisions each one needs settled first, and
+> the verification gates: [`REMAINING-EXECUTION-PLAN.md`](REMAINING-EXECUTION-PLAN.md).
+
 - [ ] **Phase 6 — Ingestion** *(Mission 4 team)*
   Images and documents (§32, §33). Extract and associate with people/projects/commitments.
   Interpret first, act only when appropriate. Ingested content is untrusted input.

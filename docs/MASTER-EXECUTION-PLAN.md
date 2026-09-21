@@ -98,6 +98,11 @@ integration tests do not run on the dev machine here, so a local pass is not evi
 | 15 | Phase 8 — voice | ⬜ | |
 | 16 | Full recheck + run | ⬜ | |
 
+**Stages 13–16 and everything after them are planned in
+[`REMAINING-EXECUTION-PLAN.md`](REMAINING-EXECUTION-PLAN.md)** — sequencing, the decisions to
+settle before each one starts, team composition, verification gates, and the multi-tenant
+track that sits outside this plan entirely.
+
 Graphify runs after each major stage. Last refresh: after stage 12d — 2467 nodes, 3769
 edges, 227 communities, health clean (0 dangling, 0 missing, 0 collapsed), no import cycles.
 Re-verified from it and by direct grep: the AI layer still reaches neither `@ourglass/db`
