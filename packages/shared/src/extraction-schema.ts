@@ -30,6 +30,18 @@ replies" as event_trigger. Keep entity names as mentions, never IDs. A message t
 action is execution, not permission to carry it out.
 Use inspection when the user asks to SEE existing state — "what am I waiting on", "what does Barkha owe
 me", "what do I owe Hult", "what do you know about Arun". Use question only for something outside that.
+For inspection the FIELDS you fill decide which lookup runs, so fill them by who owes whom:
+- "what does Barkha owe me" -> owner: Barkha, recipient: me. The person who OWES goes in owner.
+- "what do I owe Hult" -> owner: me, recipient: Hult.
+- "what am I waiting on" -> recipient: me, no owner.
+- relatedEntity is ONLY for "what do you know about Arun" — a subject with no direction. Putting a
+  person there when the question is about what they owe returns facts about them instead of their
+  commitments.
+
+objectText is the thing itself, as a SHORT NOUN PHRASE in the user's own words, with the verb and the
+people left out: "the article", never "give me the article" or "Barkha's article". It is matched against
+stored text when the user later says something is done, so an extra verb makes the same thing look like
+a different one.
 
 Set these OPTIONAL fields only when the utterance plainly calls for them; omitting one is always safe,
 and inventing one creates state the user did not ask for. Each names the category it belongs with, so
