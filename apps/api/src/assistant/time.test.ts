@@ -9,6 +9,7 @@ describe("resolveTime", () => {
       tier: "deterministic",
       sourcePhrase: "tomorrow at 5pm",
       at: "2026-09-10T11:30:00.000Z",
+      precision: "minute",
     });
   });
 
@@ -101,8 +102,12 @@ describe("resolveTime direction", () => {
   it("resolves completion phrases backwards, never into the future", () => {
     // Reference is Wed 2026-09-09 13:30 IST.
     expect(past("at 11")).toMatchObject({ at: "2026-09-09T05:30:00.000Z" });        // today 11:00, not tomorrow
-    expect(past("this morning")).toMatchObject({ at: "2026-09-09T00:30:00.000Z" }); // today, not tomorrow
-    expect(past("last Friday")).toMatchObject({ at: "2026-09-04T06:30:00.000Z" });  // the PREVIOUS Friday
+    // "this morning" and "last Friday" state no clock time, so they are DAY
+    // precision now: the latest instant consistent with the words, bounded by
+    // the present. Previously these took chrono's implied hour (6 AM, noon) —
+    // conventions the user never said, printed back as "Wed 6:00 AM".
+    expect(past("this morning")).toMatchObject({ at: now.toISOString(), precision: "day" });
+    expect(past("last Friday")).toMatchObject({ at: "2026-09-04T18:29:59.999Z", precision: "day" });
     expect(past("yesterday at 11")).toMatchObject({ at: "2026-09-08T05:30:00.000Z" });
   });
 
@@ -118,7 +123,36 @@ describe("resolveTime direction", () => {
   it("still resolves reminders forwards", () => {
     expect(forward("at 5")).toMatchObject({ at: "2026-09-09T23:30:00.000Z" });
     expect(forward("tomorrow at 5pm")).toMatchObject({ at: "2026-09-10T11:30:00.000Z" });
-    expect(forward("next Friday")).toMatchObject({ at: "2026-09-18T06:30:00.000Z" });
+    // End of Friday, not chrono's implied noon: "by Friday" is a day you have
+    // all of, and the reply says "Fri, Sep 18" rather than inventing 12:00 PM.
+    expect(forward("next Friday")).toMatchObject({
+      at: "2026-09-18T18:29:59.999Z",
+      precision: "day",
+    });
+  });
+
+  it("NEVER reports a clock time the user did not state", () => {
+    // ┌─ THE LIVE DEFECT ──────────────────────────────────────────────┐
+    // │ "Barkha needs to send me the article by 6 tomorrow" came back as    │
+    // │ "due Tuesday at 11:25 AM" — 11:25 being the moment the user pressed │
+    // │ enter. chrono drops the "6" in that phrasing and implies the        │
+    // │ CURRENT clock, and `.get("hour")` cannot tell the two apart.        │
+    // └───────────────────────────────────────────────────────────────────┘
+    for (const phrase of ["tomorrow", "today", "next week", "by 6 tomorrow"]) {
+      const resolved = forward(phrase);
+      expect(resolved.tier, phrase).toBe("deterministic");
+      if (resolved.tier !== "deterministic") throw new Error("unreachable");
+      expect(resolved.precision, phrase).toBe("day");
+      // Never the reference clock, which is what the bug produced.
+      expect(resolved.at, phrase).not.toContain("T08:00:00");
+      expect(resolved.at, phrase).toContain("T18:29:59.999Z"); // 23:59:59 IST
+    }
+  });
+
+  it("keeps minute precision when a clock time IS stated", () => {
+    for (const phrase of ["at 5", "tomorrow at 5pm", "at 11:15 tomorrow"]) {
+      expect(forward(phrase), phrase).toMatchObject({ precision: "minute" });
+    }
   });
 
   it("maps spec §5 intent kinds to the direction their tense implies", () => {

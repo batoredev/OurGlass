@@ -3,7 +3,19 @@ import * as chrono from "chrono-node";
 import type { IntentKind, TimeReference } from "@ourglass/shared";
 
 export type ResolvedTime =
-  | { readonly tier: "deterministic"; readonly sourcePhrase: string; readonly at: string }
+  | {
+      readonly tier: "deterministic";
+      readonly sourcePhrase: string;
+      readonly at: string;
+      /**
+       * Did the user actually state a CLOCK TIME, or only a day?
+       *
+       * "day" means chrono resolved the date and nothing said when. The
+       * instant is then end of that day by convention, and the reply must not
+       * print a time — see END_OF_DAY below.
+       */
+      readonly precision: TimePrecision;
+    }
   | { readonly tier: "relational"; readonly sourcePhrase: string; readonly relation: "before" | "after"; readonly target: string }
   | { readonly tier: "event_trigger"; readonly sourcePhrase: string; readonly event: string }
   | { readonly tier: "unresolved"; readonly sourcePhrase: string; readonly reason: string };
@@ -18,6 +30,30 @@ export type ResolvedTime =
  * distinguishes them.
  */
 export type TimeDirection = "forward" | "past" | "none";
+
+export type TimePrecision = "minute" | "day";
+
+/**
+ * What a date with no stated time means: the END of that day, local.
+ *
+ * ┌─ A GUESSED CLOCK TIME, PRESENTED AS FACT ──────────────────────────┐
+ * │ `parsed.start.get("hour")` returns chrono's value whether it was KNOWN │
+ * │ or IMPLIED, and chrono implies the CURRENT hour and minute. So "by 6   │
+ * │ tomorrow" — where chrono parses the day and drops the "6" — became     │
+ * │ "due Tuesday at 11:25 AM", 11:25 being simply the time the user hit    │
+ * │ enter. Live, on a real turn.                                           │
+ * │                                                                        │
+ * │ The code already refused the mirror image of this: an implied DATE is  │
+ * │ `incomplete_date`, because "silently substituting today's date is how  │
+ * │ 'later' becomes a confident wrong timestamp". An implied TIME is the   │
+ * │ same defect and was not checked.                                       │
+ * │                                                                        │
+ * │ End of day is the honest reading of "by Friday" — a deadline you have  │
+ * │ all day to meet — and because `precision` travels with it, the reply   │
+ * │ says "due Friday" and claims no clock time it was not given.           │
+ * └───────────────────────────────────────────────────────────────────────┘
+ */
+const END_OF_DAY = { hour: 23, minute: 59, second: 59, millisecond: 999 } as const;
 
 /**
  * Direction per spec §5 intent kind.
@@ -131,14 +167,20 @@ export function resolveTime(
   // Passing the IANA name straight to chrono does NOT fix this; it produces a
   // worse answer. So we take chrono's civil components and do the conversion
   // ourselves, sampling the zone offset AT THE TARGET DATE.
+  //
+  // `isCertain` distinguishes what the user SAID from what chrono filled in.
+  // Only an hour the user actually stated makes this a clock time.
+  const statedClockTime = parsed.start.isCertain("hour");
   const civil = {
     year: parsed.start.get("year"),
     month: parsed.start.get("month"),
     day: parsed.start.get("day"),
-    hour: parsed.start.get("hour") ?? 0,
-    minute: parsed.start.get("minute") ?? 0,
-    second: parsed.start.get("second") ?? 0,
-    millisecond: parsed.start.get("millisecond") ?? 0,
+    hour: statedClockTime ? (parsed.start.get("hour") ?? 0) : END_OF_DAY.hour,
+    minute: statedClockTime ? (parsed.start.get("minute") ?? 0) : END_OF_DAY.minute,
+    second: statedClockTime ? (parsed.start.get("second") ?? 0) : END_OF_DAY.second,
+    millisecond: statedClockTime
+      ? (parsed.start.get("millisecond") ?? 0)
+      : END_OF_DAY.millisecond,
   };
   if (civil.year === null || civil.month === null || civil.day === null) {
     // chrono parsed something without a resolvable calendar date. Refusing is
@@ -147,10 +189,20 @@ export function resolveTime(
     return { tier: "unresolved", sourcePhrase: phrase, reason: "incomplete_date" };
   }
 
+  const at = civilToUtc(civil as CivilDateTime, timezone);
+
+  // A PAST phrase must never resolve into the future. End of day would do
+  // exactly that for "today" or "this morning", and a completion recorded
+  // ahead of `now` makes lateness arithmetic nonsense. The latest instant
+  // consistent with what was said, and no later than the present.
+  const bounded =
+    !statedClockTime && direction === "past" && at.getTime() > now.getTime() ? now : at;
+
   return {
     tier: "deterministic",
     sourcePhrase: phrase,
-    at: civilToUtc(civil as CivilDateTime, timezone).toISOString(),
+    at: bounded.toISOString(),
+    precision: statedClockTime ? "minute" : "day",
   };
 }
 

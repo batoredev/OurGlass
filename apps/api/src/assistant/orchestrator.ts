@@ -52,7 +52,12 @@ import {
   selectProactiveLine,
 } from "./proactive.js";
 import { YOU, templateReply, type RespondTrace } from "./respond.js";
-import { resolveTime, timeDirectionForIntent, type ResolvedTime } from "./time.js";
+import {
+  resolveTime,
+  timeDirectionForIntent,
+  type ResolvedTime,
+  type TimePrecision,
+} from "./time.js";
 import { executeTurn, type Deps as ExecutorDeps } from "../tools/index.js";
 import { MAX_DISPLAY_NAME_LENGTH } from "../tools/create-person.js";
 import type { QueryEmbedder } from "../embeddings/backfill.js";
@@ -1034,7 +1039,9 @@ async function planCommitmentCalls(
         recipientName:
           recipient.id !== null && recipient.id === ctx.selfPersonId ? YOU : recipient.displayName,
         objectText: intent.objectText,
-        expectedAtLocal: expectedAt ? formatLocal(expectedAt, ctx.timezone) : null,
+        expectedAtLocal: expectedAt
+          ? formatLocal(expectedAt, ctx.timezone, timePrecision(time))
+          : null,
       },
     ],
   };
@@ -1546,7 +1553,7 @@ async function planWorkflow(intent: ExtractedIntent, ctx: PlanContext): Promise<
       {
         kind: "workflow_created",
         actionBody: condition.actionBody,
-        evaluateAtLocal: formatLocal(deadline.at, ctx.timezone),
+        evaluateAtLocal: formatLocal(deadline.at, ctx.timezone, timePrecision(deadline)),
       },
     ],
   };
@@ -1692,7 +1699,13 @@ async function planEvent(intent: ExtractedIntent, ctx: PlanContext): Promise<Int
         input: { title, starts_at: time.at, ends_at: null, location: null, notes: null },
       },
     ],
-    facts: [{ kind: "event_scheduled", title, startsAtLocal: formatLocal(time.at, ctx.timezone) }],
+    facts: [
+      {
+        kind: "event_scheduled",
+        title,
+        startsAtLocal: formatLocal(time.at, ctx.timezone, timePrecision(time)),
+      },
+    ],
   };
 }
 
@@ -1876,7 +1889,12 @@ function planReminder(
         },
       },
     ],
-    facts: [{ kind: "reminder_created", fireAtLocal: formatLocal(time.at, ctx.timezone) }],
+    facts: [
+      {
+        kind: "reminder_created",
+        fireAtLocal: formatLocal(time.at, ctx.timezone, timePrecision(time)),
+      },
+    ],
   };
 }
 
@@ -2068,6 +2086,11 @@ function describeMention(mention: ExtractedIntent["owner"]): string {
 // Time and formatting.
 // ---------------------------------------------------------------------------
 
+/** A resolved time's precision, defaulting to "minute" for the other tiers. */
+function timePrecision(time: ResolvedTime | null | undefined): TimePrecision {
+  return time?.tier === "deterministic" ? time.precision : "minute";
+}
+
 function resolveIntentTime(intent: ExtractedIntent, ctx: PlanContext): ResolvedTime | null {
   if (!intent.time) return null;
   // NEVER a literal direction. See §2.2 and the comment in planCompletion.
@@ -2081,15 +2104,25 @@ function resolveIntentTime(intent: ExtractedIntent, ctx: PlanContext): ResolvedT
  * sees is pre-formatted here (§5.1). Short by §31: "6 PM", "Fri 6 PM" — never
  * a full ISO timestamp, which reads as machine output.
  */
-export function formatLocal(iso: string, timezone: string): string {
+export function formatLocal(
+  iso: string,
+  timezone: string,
+  /**
+   * "day" drops the clock time. Not cosmetic: at day precision the instant is
+   * end-of-day by CONVENTION, not something the user said, and printing
+   * "Fri 11:59 PM" would invent the very precision `precision` exists to
+   * record the absence of.
+   */
+  precision: TimePrecision = "minute",
+): string {
   const instant = new Date(iso);
   if (Number.isNaN(instant.getTime())) return iso;
   return new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
     weekday: "short",
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: true,
+    ...(precision === "day"
+      ? { month: "short" as const, day: "numeric" as const }
+      : { hour: "numeric" as const, minute: "2-digit" as const, hour12: true }),
   }).format(instant);
 }
 
