@@ -87,6 +87,48 @@ export const OLLAMA_DEFAULT_MODEL = "qwen3:8b";
  */
 export const QWEN_DEFAULT_INTERPRET_TIMEOUT_MS = 20_000;
 
+/**
+ * THINKING OFF — measured against a real Ollama, the first time this adapter
+ * met one (2026-09-21, Ollama 0.34.2, qwen3:4b, RTX 3050 Laptop).
+ *
+ * Qwen3 is a hybrid reasoning model and Ollama leaves thinking ON when `think`
+ * is not sent. Thinking tokens come out of the same `num_predict` budget as
+ * the answer, so on the real Interpret request:
+ *
+ *   think omitted   224s cold / 114s warm   done=length   out=1200   content ""
+ *   think: false    ~10s                    done=stop     out=110    valid JSON
+ *
+ * Every turn would have spent all 1,200 tokens reasoning, written nothing, and
+ * failed as `truncated` — two minutes at a time. The provider could never
+ * have worked as shipped, and nothing could have said so: every test injected
+ * a fake `fetch`. The same defect class as Gemini 3.5 Flash's reply budget.
+ *
+ * Neither stage wants deliberation: Interpret fills a fixed schema at
+ * temperature 0; Respond writes one sentence about work already committed.
+ */
+const NO_THINKING = { think: false } as const;
+
+/**
+ * THE SCHEMA, SHOWN TO THE MODEL — not only enforced on it.
+ *
+ * Claude receives the extraction schema as a tool definition and Gemini as a
+ * response schema: both models READ the field names and their structure.
+ * Ollama's `format` only CONSTRAINS decoding — the model never sees it, so it
+ * can emit only the keys it can guess. Measured on the first live run: across
+ * twenty labelled utterances on qwen3:4b and qwen3:8b, `owner` and `recipient`
+ * were filled ZERO times, because the system prompt never names them — while
+ * the optional fields it does describe (memoryBody, eventTitle, ...) came
+ * through. With the schema appended, both were filled in every case, and
+ * qwen3:8b went from 4/10 to 6/10 on the same set.
+ *
+ * Appended here rather than to EXTRACTION_SYSTEM_PROMPT: Claude and Gemini
+ * already see the schema, and the shared prompt is what the eval harness
+ * measures for all three.
+ */
+const QWEN_EXTRACTION_PROMPT =
+  `${EXTRACTION_SYSTEM_PROMPT}\n\n` +
+  `Respond with JSON that matches this JSON Schema exactly:\n${JSON.stringify(EXTRACTION_INPUT_SCHEMA)}`;
+
 export interface QwenProviderOptions {
   readonly baseUrl?: string | undefined;
   readonly model?: string | undefined;
@@ -160,10 +202,11 @@ export class QwenProvider implements AIProvider {
         {
           model: this.model,
           messages: [
-            { role: "system", content: EXTRACTION_SYSTEM_PROMPT },
+            { role: "system", content: QWEN_EXTRACTION_PROMPT },
             { role: "user", content: input.utterance },
           ],
           stream: false,
+          ...NO_THINKING,
           // Ollama takes a JSON SCHEMA here, not the string "json". Passing
           // the schema is what makes the output structured rather than merely
           // JSON-shaped — and unlike Gemini, Ollama accepts our schema as-is,
@@ -271,6 +314,7 @@ export class QwenProvider implements AIProvider {
             { role: "user", content: renderFacts(input) },
           ],
           stream: false,
+          ...NO_THINKING,
           // NO `format` here: this stage wants prose, and a schema would turn
           // the reply into JSON. NO `tools` either — absent, not an empty
           // allowlist a config change could widen.

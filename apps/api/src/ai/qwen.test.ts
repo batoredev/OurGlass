@@ -2,13 +2,14 @@
  * QwenProvider — the request Ollama receives, and the failure taxonomy.
  *
  * ================================ READ THIS ================================
- * ⚠ NO OLLAMA WAS CONTACTED. It is not installed on this machine and nothing
- * serves :11434. Every test injects a fake `fetch`, so what is verified is
- * the adapter: the request body, normalisation into the shared contract, the
- * failure mapping, and the never-throws respond guarantee.
+ * ⚠ NO OLLAMA IS CONTACTED HERE. Every test injects a fake `fetch`, so what
+ * is verified is the adapter: the request body, normalisation into the shared
+ * contract, the failure mapping, and the never-throws respond guarantee.
  *
- * NOT verified: that a real Ollama answers this way, or that `qwen3:8b` is
- * pulled anywhere.
+ * The adapter WAS verified against a real Ollama on 2026-09-22 (0.34.2,
+ * qwen3:8b) — and that first contact found two defects these fakes could
+ * not: thinking consuming the whole budget, and the model never seeing the
+ * schema. The two request-shape tests below pin both fixes.
  * ===========================================================================
  */
 import { describe, expect, it } from "vitest";
@@ -100,6 +101,43 @@ describe("the request Ollama actually receives", () => {
 
     expect(captured.body).not.toHaveProperty("format");
     expect(captured.body).not.toHaveProperty("tools");
+  });
+
+  it("SHOWS the model the schema, not only enforces it", async () => {
+    // Ollama's `format` constrains decoding but the model never reads it.
+    // Live, qwen3 filled `owner` and `recipient` zero times in twenty labelled
+    // utterances until the schema was in the prompt. Remove it and this fails.
+    const captured: Captured = {};
+    await provider(
+      { message: { content: JSON.stringify(VALID) }, done_reason: "stop" },
+      { captured },
+    ).interpret({ utterance: "Arun handles the backend" });
+
+    const messages = captured.body?.["messages"] as { role: string; content: string }[];
+    const system = messages.find((message) => message.role === "system")?.content ?? "";
+    expect(system).toContain(JSON.stringify(EXTRACTION_INPUT_SCHEMA));
+    expect(system).toContain('"owner"');
+  });
+
+  it("turns Qwen3's thinking OFF on both stages", async () => {
+    // Measured on a real Ollama: with `think` omitted, the Interpret request
+    // spent all 1,200 output tokens reasoning, wrote nothing, and took 114s
+    // warm. Every turn failed as `truncated`. Delete `think: false` from
+    // either stage and this fails.
+    const interpret: Captured = {};
+    await provider(
+      { message: { content: JSON.stringify(VALID) }, done_reason: "stop" },
+      { captured: interpret },
+    ).interpret({ utterance: "Arun handles the backend" });
+    expect(interpret.body?.["think"]).toBe(false);
+
+    const respond: Captured = {};
+    await provider({ message: { content: "Got it." }, done_reason: "stop" }, { captured: respond }).respond({
+      committed: [],
+      questions: [],
+      declined: [],
+    });
+    expect(respond.body?.["think"]).toBe(false);
   });
 });
 

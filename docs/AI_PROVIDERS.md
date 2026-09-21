@@ -14,7 +14,7 @@ rules: [AI_FALLBACK.md](AI_FALLBACK.md).
 |---|---|---|---|---|
 | **Claude** (primary) | `@anthropic-ai/sdk` 0.124.0 | `claude-sonnet-5` | `claude-haiku-4-5-20251001` | **Model ids: yes** — `pnpm check:models` passed on 2026-09-17. **Extraction quality: no** — `pnpm test:live` has never run. |
 | **Gemini** (second) | `@google/genai` 2.22.0 | `gemini-3.5-flash` | `gemini-3.5-flash` | **Both stages: yes** — a real extraction AND a real reply on 2026-09-18. **Quality: not measured** (`pnpm eval:ai` has not run). |
-| **Qwen** (local) | `fetch` → Ollama `/api/chat` | `qwen3:8b` | same model | **No.** Ollama was not installed on the build machine. |
+| **Qwen** (local) | `fetch` → Ollama `/api/chat` | `qwen3:8b` | same model | **Yes** — 2026-09-22, Ollama 0.34.2 on an RTX 3050 Laptop (4 GB). Two defects found on first contact and fixed (thinking, schema). ~34s Interpret, ~3s Respond. 6/10 on a 10-case labelled subset — below Claude/Gemini |
 
 Every provider's adapter is unit-tested with an injected fake client: request shape,
 normalisation into the shared `Extraction`, failure mapping, and the never-throws Respond
@@ -151,12 +151,31 @@ Ollama's documented CLI and HTTP API.
 6. **Allow for CPU speed.** A local 8B model can need well over 20 seconds to extract. Raise
    `AI_REQUEST_TIMEOUT_MS` (up to 120000) if Interpret times out; Qwen's own abort follows it.
 
-**Thinking mode — unverified latency risk.** Qwen3 models can "think" before answering.
-Ollama returns that text in `message.thinking`, separate from `message.content`, and the
-adapter reads only `content` — so thinking cannot corrupt the parse, but it can cost time.
-The adapter does not send Ollama's `think` parameter, because its effect on models without
-thinking support is unverified here and `OLLAMA_MODEL` is configurable. If extraction is slow,
-testing `think: false` is the first experiment to run.
+**Two defects found the first time this adapter met a real Ollama (2026-09-22), both fixed:**
+
+1. **Thinking consumed the whole budget.** Ollama leaves Qwen3's thinking on unless `think` is
+   sent. On the real Interpret request it spent all 1,200 tokens reasoning, wrote nothing, and
+   took 114–224 seconds — every turn would have failed as `truncated`. The adapter now sends
+   `think: false` on both stages: ~10s, valid JSON.
+2. **The model could not see the schema.** Ollama's `format` constrains decoding, but the model
+   never reads it — unlike Claude (tool definition) and Gemini (response schema). Across twenty
+   labelled utterances `owner` and `recipient` were filled **zero** times. The adapter now
+   appends the schema to the system prompt; both are filled every time.
+
+**Model choice on a 4 GB GPU, measured on the same ten labelled cases:** `qwen3:4b` 4/10,
+~18s; `qwen3:8b` 6/10, ~34s. The 4B confuses intent kinds (a commitment read as an action);
+the 8B gets the headline cases right. A wrong write is worse than a slow one, so 8B.
+
+**Local-only configuration** (what `.env` holds for Ollama alone):
+
+```sh
+AI_PROVIDER_ORDER=qwen          # skip Claude and Gemini entirely
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=qwen3:8b
+AI_REQUEST_TIMEOUT_MS=120000    # Interpret measured 18–60s warm, plus model load
+AI_RESPOND_TIMEOUT_MS=60000
+AI_MAX_RETRIES=0                # a retry doubles a minute-long wait
+```
 
 **Deployment note.** A Cloudflare Worker cannot reach `localhost`. In production,
 `OLLAMA_BASE_URL` must be a host the Worker can resolve — and an Ollama server exposed to the
