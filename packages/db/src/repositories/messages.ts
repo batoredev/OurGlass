@@ -156,6 +156,22 @@ export async function listRecent(
   return rows;
 }
 
+/**
+ * How many turns were STARTED since `since` — the rate limit's meter.
+ *
+ * Counts user messages, because the orchestrator writes one BEFORE Interpret
+ * on every turn, failed ones included: the count is exactly the number of
+ * times a model was asked to spend tokens. Reads `messages`, not
+ * `messages_current` — an undone turn was still paid for.
+ */
+export async function countUserMessagesSince(tx: Queryable, since: Date): Promise<number> {
+  const { rows } = await tx.query<{ n: number }>(
+    `SELECT count(*)::int AS n FROM messages WHERE role = 'user' AND t_created > $1`,
+    [since],
+  );
+  return rows[0]?.n ?? 0;
+}
+
 /** Every message belonging to one turn. */
 export async function listByTurn(
   tx: Queryable,

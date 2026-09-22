@@ -76,3 +76,27 @@ crons = ["*/1 * * * *"]
 
 [observability]
 enabled = true
+
+#
+# STAGING (Track P2 of docs/REMAINING-EXECUTION-PLAN.md): the same Worker under
+# another name, so a change is deployed and smoke-tested before production
+# sees it.
+#
+#     npx wrangler deploy --env staging
+#
+# Secrets are per Worker: staging needs its own, set with `--env staging`. And
+# its DATABASE_URL MUST be a separate database — a staging Worker pointed at
+# the production database is production with fewer safeguards.
+#
+# Verified against Cloudflare's configuration docs (2026-09-22): `name`,
+# `main`, `assets`, `compatibility_*` and `triggers` inherit into an
+# environment; `vars` and `observability` do NOT, so both are restated here.
+#
+[env.staging]
+name = "ourglass-staging"
+
+[env.staging.vars]
+# Non-secret configuration only, as above.
+
+[env.staging.observability]
+enabled = true

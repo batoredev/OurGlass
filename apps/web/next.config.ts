@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { NextConfig } from "next";
+import { securityHeaders } from "./lib/security-headers";
 
 /**
  * Local development reads the REPO-ROOT `.env`.
@@ -44,6 +45,13 @@ loadRootEnv();
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@ourglass/shared"],
+  // Every route, pages and /api alike. See lib/security-headers.ts for what
+  // the CSP does and — stated there on purpose — does not do.
+  async headers() {
+    return [
+      { source: "/:path*", headers: [...securityHeaders(process.env.NODE_ENV !== "production")] },
+    ];
+  },
 };
 
 export default nextConfig;

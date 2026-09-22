@@ -35,8 +35,9 @@ import { VoyageClient } from "@ourglass/api/embeddings";
 import { buildToolRegistry } from "@ourglass/api/tools";
 import { authorize } from "../_auth";
 import { rejectCrossSite } from "../_http";
-import { users } from "@ourglass/db";
-import { db } from "../_lib";
+import { rejectOverLimit, turnLimits } from "../_rate-limit";
+import { messages, users } from "@ourglass/db";
+import { db, read } from "../_lib";
 
 // Node runtime, not Edge. `pg` needs `nodejs_compat`, which the Cloudflare
 // adapter supplies for the Node runtime; the Edge runtime has no TCP sockets.
@@ -90,6 +91,14 @@ export async function POST(request: Request) {
   if (typeof body.utterance !== "string" || body.utterance.trim() === "") {
     return NextResponse.json({ error: "utterance must be a non-empty string" }, { status: 400 });
   }
+
+  // The spend cap (_rate-limit.ts), before anything touches a model. A
+  // refused turn writes no message and spends no tokens.
+  const limited = await rejectOverLimit(
+    (since) => read((tx) => messages.countUserMessagesSince(tx, since)),
+    turnLimits(process.env),
+  );
+  if (limited) return limited;
 
   // ONE ROUTER, built from the environment. The provider chain, its order, the
   // timeout and the retry budget are configuration now — this file knows only
