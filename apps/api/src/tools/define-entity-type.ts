@@ -238,9 +238,11 @@ async function validate(
     ]);
   }
 
-  // type_key must be globally unique (entity_types.type_key UNIQUE).
+  // type_key must be unique among CURRENT types (migration 012's partial
+  // index). Counting invalidated rows made a type impossible to define again
+  // after "undo" — the row undo invalidates still carried the key.
   const { rows: existingRows } = await ctx.tx.query<{ id: string }>(
-    `SELECT id FROM entity_types WHERE type_key = $1`,
+    `SELECT id FROM entity_types WHERE type_key = $1 AND t_invalid IS NULL`,
     [input.type_key],
   );
   if (existingRows.length > 0) {

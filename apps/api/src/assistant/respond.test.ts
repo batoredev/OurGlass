@@ -16,6 +16,7 @@ import {
   formatDuration,
   renderFacts,
   templateReply,
+  ungroundedClaim,
 } from "./respond.js";
 
 function input(over: Partial<RespondInput> = {}): RespondInput {
@@ -142,6 +143,32 @@ describe("renderFacts", () => {
     // that leaks one fails here rather than in production prose.
     const rendered = renderFacts(input({ committed: [completedLate] }));
     expect(rendered).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+  });
+
+  it("flags a reply that claims a state change no fact mentions", () => {
+    // Live qwen3:8b, after a turn that only CREATED a commitment.
+    const created: CommittedFact = {
+      kind: "commitment_created",
+      ownerName: "Zoya",
+      recipientName: "you",
+      objectText: "the brochure draft",
+      expectedAtLocal: "Wed 6:00 PM",
+    };
+    const reply = "Zoya's brochure draft is marked complete. Noted: Zoya owes you the brochure draft.";
+    expect(ungroundedClaim(reply, input({ committed: [created] }))).toBe("complet");
+    // The same claim is fine when a completion is among the facts.
+    expect(ungroundedClaim("Got it — the Hult poster marked complete.", input({ committed: [completedLate] }))).toBeNull();
+    // And an ordinary reply claims nothing.
+    expect(ungroundedClaim("Noted — Zoya owes you the brochure draft by Wed 6 PM.", input({ committed: [created] }))).toBeNull();
+  });
+
+  it("never heads fresh writes with words that mean 'nothing new happened'", () => {
+    // Models echo these headings. qwen3:8b replied "Already recorded: you owe
+    // Zoya the budget sheet" about a commitment created that same turn — the
+    // user reads "duplicate". A heading that stays true when echoed is the fix.
+    const rendered = renderFacts(input({ committed: [completedLate] }));
+    expect(rendered).not.toMatch(/already/i);
+    expect(rendered).toMatch(/^Done just now/m);
   });
 });
 

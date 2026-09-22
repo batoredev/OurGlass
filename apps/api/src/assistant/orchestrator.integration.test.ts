@@ -993,6 +993,44 @@ suite("runTurn (integration)", () => {
     expect(type?.fields.map((field) => field.field_key).sort()).toEqual(["note", "session_date"]);
   });
 
+  it("can define a type again after undoing it, and normalises camelCase keys", async () => {
+    // Both found by the live Qwen end-to-end run (2026-09-22): qwen3:8b wrote
+    // `bookTitle`, which the tool rejected; and once a definition was undone,
+    // the invalidated row still held the UNIQUE key, so the same sentence
+    // failed forever with "already exists". Migration 012 + toSnakeKey.
+    const define = async () => {
+      const { responder } = recordingResponder();
+      return runTurn(
+        { utterance: "Track my reading with a book title.", userId },
+        deps(
+          fakeExtractor([
+            intent({
+              kind: "action",
+              entityTypeDefinition: {
+                typeKey: "reading",
+                displayName: "Reading",
+                fields: [{ fieldKey: "bookTitle", fieldKind: "text", label: "Book title", required: false }],
+              },
+            }),
+          ]),
+          responder,
+        ),
+      );
+    };
+
+    const first = await define();
+    expect(first.committed).toEqual(["define_entity_type"]);
+    await undoTurn(first.turnId!, {
+      db: { withTransaction: (fn) => withTransaction(pool, fn) },
+      registry: buildToolRegistry(),
+    });
+
+    const second = await define();
+    expect(second.committed).toEqual(["define_entity_type"]);
+    const type = await withTransaction(pool, (tx) => entityRecords.getTypeByKey(tx, "reading"));
+    expect(type?.fields.map((field) => field.field_key)).toEqual(["book_title"]);
+  });
+
   it("ASKS for enum options rather than inventing them", async () => {
     const { responder, calls } = recordingResponder();
     const result = await runTurn(
@@ -1468,7 +1506,7 @@ suite("runTurn (integration)", () => {
   it("a read-only turn leaves the audit log untouched", async () => {
     // The inverse guard: an inspection must not mint a turn_id or write an
     // action_log row, or undo would offer to reverse a question.
-    const { responder } = recordingResponder();
+    const { responder, calls } = recordingResponder();
 
     const result = await runTurn(
       { utterance: "What am I waiting on?", userId },
@@ -1478,5 +1516,9 @@ suite("runTurn (integration)", () => {
     expect(result.committed).toEqual([]);
     expect(result.turnId).toBeNull();
     expect((await pool.query("SELECT 1 FROM action_log")).rows).toEqual([]);
+    // And no Respond call: the answer IS the reply. Given empty facts, a live
+    // model appended "Nothing was recorded. Nothing needs asking." to it.
+    expect(calls).toHaveLength(0);
+    expect(result.reply).not.toMatch(/nothing was recorded/i);
   });
 });

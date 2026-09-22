@@ -39,6 +39,8 @@ import type { AIProvider } from "./provider.js";
  *   refusal    - a safety decision. Shopping past it is not a behaviour we want.
  *   too_long   - the model was verbose. The template is already correct and
  *                concise; a second call for prose is not worth it.
+ *   ungrounded - the model claimed a state change no fact mentions. The
+ *                template states exactly the facts; that IS the fix.
  *   max_tokens - OUR cap, identical at the next provider.
  */
 const RESPOND_FALLBACK_REASONS = new Set(["sdk_error", "timeout", "empty_text"]);

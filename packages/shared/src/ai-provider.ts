@@ -97,7 +97,9 @@ export type RespondFallbackReason =
   | "refusal"
   | "max_tokens"
   | "empty_text"
-  | "too_long";
+  | "too_long"
+  /** Claimed a state change no fact mentions — see `ungroundedClaim`. */
+  | "ungrounded";
 
 /**
  * One AI request, as it is logged (§21).

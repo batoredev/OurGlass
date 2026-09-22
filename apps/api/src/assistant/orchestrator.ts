@@ -63,6 +63,7 @@ import { MAX_DISPLAY_NAME_LENGTH } from "../tools/create-person.js";
 import type { QueryEmbedder } from "../embeddings/backfill.js";
 import { gateIntentCalls, loadGrants, type GateDecision } from "../permissions/gate.js";
 import { PENDING_ACTION_TTL_SECONDS } from "../permissions/policy.js";
+import { toSnakeKey } from "./snake-key.js";
 
 export interface TurnRequest {
   readonly utterance: string;
@@ -364,21 +365,36 @@ export async function runTurn(req: TurnRequest, deps: OrchestratorDeps): Promise
   let modelReply: string;
   let degraded: boolean;
   let respondTrace: RespondTrace | { model: null; degraded: boolean };
-  try {
-    ({ reply: modelReply, degraded, trace: respondTrace } = await respondWithTrace(
-      deps.responder,
-      respondInput,
-    ));
-  } catch (error: unknown) {
-    // The deterministic template is always correct and always available — it
-    // is pure, synchronous, and separately unit-tested precisely because it is
-    // the thing that must work when nothing else does.
-    modelReply = templateReply(respondInput);
-    degraded = true;
-    respondTrace = { model: null, degraded: true };
-    // Swallowed but NOT silent: "degrade honestly" applies to observability
-    // too, and this is the only record that a responder broke its contract.
-    console.error("[turn] responder threw; fell back to the template:", error);
+  // A PURE READ has nothing for Respond to say: the §28 answer below is the
+  // whole reply. Calling the model anyway handed it "Nothing was recorded and
+  // nothing needs asking." — and qwen3:8b appended exactly that to "What does
+  // Zoya owe me?" (live, 2026-09-22), after spending up to 30s producing it.
+  const pureRead =
+    answers.length > 0 &&
+    respondInput.committed.length === 0 &&
+    respondInput.questions.length === 0 &&
+    respondInput.declined.length === 0;
+  if (pureRead) {
+    modelReply = "";
+    degraded = false;
+    respondTrace = { model: null, degraded: false };
+  } else {
+    try {
+      ({ reply: modelReply, degraded, trace: respondTrace } = await respondWithTrace(
+        deps.responder,
+        respondInput,
+      ));
+    } catch (error: unknown) {
+      // The deterministic template is always correct and always available — it
+      // is pure, synchronous, and separately unit-tested precisely because it is
+      // the thing that must work when nothing else does.
+      modelReply = templateReply(respondInput);
+      degraded = true;
+      respondTrace = { model: null, degraded: true };
+      // Swallowed but NOT silent: "degrade honestly" applies to observability
+      // too, and this is the only record that a responder broke its contract.
+      console.error("[turn] responder threw; fell back to the template:", error);
+    }
   }
 
   // ---- §28 answers are PREPENDED VERBATIM, never paraphrased --------------
@@ -1569,10 +1585,12 @@ async function planWorkflow(intent: ExtractedIntent, ctx: PlanContext): Promise<
  * utterance and a working table.
  *
  * Field shape is remapped camelCase -> snake_case because the contract speaks
- * TypeScript and the tool boundary speaks the wire format. No validation here
- * beyond presence: `define_entity_type` owns the closed `field_kind` enum,
- * the reserved-name check and the field cap, and duplicating any of that
- * would give two answers to one question.
+ * TypeScript and the tool boundary speaks the wire format. The KEYS the model
+ * wrote are normalised the same way (toSnakeKey): qwen3:8b wrote `bookTitle`
+ * and the whole definition was rejected. No validation here beyond presence:
+ * `define_entity_type` owns the closed `field_kind` enum, the reserved-name
+ * check and the field cap, and duplicating any of that would give two answers
+ * to one question.
  */
 function planDefineEntityType(intent: ExtractedIntent): IntentPlan {
   const definition = intent.entityTypeDefinition;
@@ -1607,10 +1625,10 @@ function planDefineEntityType(intent: ExtractedIntent): IntentPlan {
       {
         name: "define_entity_type",
         input: {
-          type_key: definition.typeKey,
+          type_key: toSnakeKey(definition.typeKey),
           display_name: definition.displayName,
           fields: definition.fields.map((field) => ({
-            field_key: field.fieldKey,
+            field_key: toSnakeKey(field.fieldKey),
             field_kind: field.fieldKind,
             label: field.label,
             required: field.required,
@@ -1722,7 +1740,14 @@ async function planCreateEntityRecord(intent: ExtractedIntent, ctx: PlanContext)
   const record = intent.entityRecord;
   if (!record) return { calls: [], facts: [], questions: [] };
 
-  const type = await entityRecords.getTypeByKey(ctx.tx, record.typeKey);
+  // Same normalisation as definition, or a type defined from `readingLog`
+  // (stored as reading_log) could never be found again by the same model.
+  const typeKey = toSnakeKey(record.typeKey);
+  const payload = Object.fromEntries(
+    Object.entries(record.values).map(([key, value]) => [toSnakeKey(key), value]),
+  );
+
+  const type = await entityRecords.getTypeByKey(ctx.tx, typeKey);
   if (!type) {
     return {
       calls: [],
@@ -1737,7 +1762,7 @@ async function planCreateEntityRecord(intent: ExtractedIntent, ctx: PlanContext)
     calls: [
       {
         name: "create_entity_record",
-        input: { type_key: record.typeKey, payload: { ...record.values } },
+        input: { type_key: typeKey, payload },
       },
     ],
     facts: [{ kind: "entity_record_created", displayName: type.display_name }],

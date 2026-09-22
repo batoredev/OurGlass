@@ -122,7 +122,37 @@ Rules:
 - Do not make judgmental statements. Report what happened; never evaluate the user's behaviour, never offer advice, encouragement, or life-coaching.
 - Do not offer to do things. Do not ask whether the user wants anything else.
 - If something committed AND something needs asking, say both, in that order, in one short reply.
-- If a question is provided, ask it as written or more briefly. Never expand it.`;
+- If a question is provided, ask it as written or more briefly. Never expand it.
+- The facts arrive under headings, as a list. Never copy a heading or the list into the reply.`;
+
+/**
+ * A STATE CHANGE the reply claims and no fact mentions, or null.
+ *
+ * "State ONLY what the provided facts say" is a prompt rule, and a prompt rule
+ * is a request. Live on qwen3:8b (2026-09-22), after a turn that only CREATED
+ * a commitment, the reply began "Zoya's brochure draft is marked complete" —
+ * most likely the voice example above, copied. A user who reads "complete"
+ * stops chasing a thing that is still owed.
+ *
+ * Deliberately narrow and one-sided: only the words that change what the user
+ * believes about a commitment's state, checked against everything the model
+ * was shown. A false alarm costs a plainer, template reply — which is always
+ * correct. A miss costs a false statement.
+ */
+const STATE_CLAIMS: readonly (readonly [claim: RegExp, evidence: string])[] = [
+  [/\bcomplet/i, "complet"],
+  [/\bcancel/i, "cancel"],
+  [/\bdelet/i, "delet"],
+  [/\bforg[eo]t/i, "forg"],
+];
+
+export function ungroundedClaim(reply: string, input: RespondInput): string | null {
+  const shown = renderFacts(input).toLowerCase();
+  for (const [claim, evidence] of STATE_CLAIMS) {
+    if (claim.test(reply) && !shown.includes(evidence)) return evidence;
+  }
+  return null;
+}
 
 /**
  * The deterministic fallback (§5.2). Pure, synchronous, no model, no clock.
@@ -349,6 +379,7 @@ export class HaikuResponder implements Responder {
 
     if (text.length === 0) return fallback("empty_text", common);
     if (text.length > MAX_REPLY_CHARS) return fallback("too_long", common);
+    if (ungroundedClaim(text, input)) return fallback("ungrounded", common);
 
     return {
       reply: text,
@@ -385,7 +416,13 @@ function isAbort(error: unknown, controller: AbortController): boolean {
 export function renderFacts(input: RespondInput): string {
   const lines: string[] = [];
   if (input.committed.length > 0) {
-    lines.push("Already recorded (state these as done):");
+    // NOT "Already recorded". That heading meant "the backend has committed
+    // this", but a model that copies it verbatim — qwen3:8b did, live,
+    // 2026-09-22 — tells the user "Already recorded: you owe Zoya the budget
+    // sheet" about a commitment created that very turn, which reads as "that
+    // was a duplicate, nothing happened". Every heading here must stay TRUE
+    // if it is echoed into the reply.
+    lines.push("Done just now (state these as done):");
     for (const fact of input.committed) lines.push(`- ${describeFact(fact)}`);
   }
   if (input.questions.length > 0) {

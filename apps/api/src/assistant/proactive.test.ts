@@ -107,10 +107,25 @@ describe("rendering (§24, §26, §31)", () => {
     // §26's own good example: "Barkha's article is five hours overdue and you
     // haven't marked it as received."
     const line = renderProactiveLine(overdue, fmt);
-    expect(line).toContain("Barkha");
-    expect(line).toContain("the article");
-    expect(line).toContain("5 hours");
-    expect(line).toMatch(/not marked complete/i);
+    // The WHOLE phrase, not its parts: `toContain("Barkha")` plus
+    // `toContain("the article")` passed while the line read "Barkha's the
+    // article" — seen live, 2026-09-22.
+    expect(line).toBe("Barkha's article is 5 hours overdue and not marked complete.");
+  });
+
+  it("reads as English for every owner and object shape", () => {
+    const as = (ownerName: string | null, objectText: string) =>
+      renderProactiveLine({ ...overdue, ownerName, objectText }, fmt);
+    expect(as("Barkha", "a draft")).toMatch(/^Barkha's draft is/);
+    // The user's own row is called "You" by bootstrap convention.
+    expect(as("You", "the budget sheet")).toMatch(/^Your budget sheet is/);
+    // An object that already carries a possessive keeps it.
+    expect(as("Barkha", "her notes")).toMatch(/^Her notes from Barkha /);
+  });
+
+  it("says 1 minute, not 1 minutes", () => {
+    expect(renderProactiveLine({ ...overdue, overdueByMs: 40_000 }, fmt)).toContain("is 1 minute overdue");
+    expect(renderProactiveLine({ ...overdue, overdueByMs: 5 * 60_000 }, fmt)).toContain("is 5 minutes overdue");
   });
 
   it("omits the owner cleanly when the name is unknown", () => {
@@ -120,7 +135,8 @@ describe("rendering (§24, §26, §31)", () => {
     const line = renderProactiveLine({ ...overdue, ownerName: null }, fmt);
     expect(line).not.toContain("null");
     expect(line).not.toContain("undefined");
-    expect(line.startsWith("the article")).toBe(true);
+    // Capitalised: it is a sentence of its own in the reply.
+    expect(line.startsWith("The article")).toBe(true);
   });
 
   // -------------------------------------------------------------------------

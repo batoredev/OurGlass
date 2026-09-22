@@ -156,14 +156,37 @@ export function renderProactiveLine(
     );
   }
 
-  const who = candidate.ownerName ? `${candidate.ownerName}'s ` : "";
-  return `${who}${candidate.objectText} is ${formatDuration(candidate.overdueByMs)} overdue and not marked complete.`;
+  return `${ownedThing(candidate.ownerName, candidate.objectText)} is ${formatDuration(candidate.overdueByMs)} overdue and not marked complete.`;
+}
+
+/**
+ * "Barkha's article" — §26's own wording — from owner "Barkha" and objectText
+ * "the article".
+ *
+ * objectText is a noun phrase WITH its article ("the article" is what the
+ * extraction prompt asks for), so a bare `${owner}'s ${objectText}` rendered
+ * "Barkha's the article" for every correctly extracted commitment. Seen live
+ * on 2026-09-22. The article goes after a possessive; a phrase that already
+ * has a possessive ("her notes") keeps it and names the owner with "from".
+ */
+function ownedThing(ownerName: string | null, objectText: string): string {
+  const text = objectText.trim();
+  if (!ownerName) return capitalize(text);
+  if (/^(my|your|his|her|their|our|its)\s/i.test(text)) return `${capitalize(text)} from ${ownerName}`;
+  const bare = text.replace(/^(the|a|an)\s+/i, "");
+  // The user's own row is "You" by bootstrap convention: "Your report", not "You's".
+  return /^you$/i.test(ownerName) ? `Your ${bare}` : `${ownerName}'s ${bare}`;
+}
+
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /** Whole units only, matching respond.ts's register. Never "3.7 hours". */
 function formatDuration(ms: number): string {
   const minutes = Math.round(ms / 60_000);
-  if (minutes < 90) return `${Math.max(minutes, 1)} minutes`;
+  if (minutes <= 1) return "1 minute";
+  if (minutes < 90) return `${minutes} minutes`;
   const hours = Math.round(minutes / 60);
   if (hours < 48) return `${hours} hours`;
   return `${Math.round(hours / 24)} days`;
