@@ -2,12 +2,12 @@
  * Qwen via Ollama — the third provider, and the local/private one.
  *
  * ================================ READ THIS ================================
- * ⚠ UNVERIFIED AGAINST A LIVE ENDPOINT. Ollama is not installed on the
- * machine this was built on and nothing is serving on :11434, so every test
- * injects a fake `fetch`. What is verified is the ADAPTER — request shape,
- * normalisation, the failure taxonomy, the never-throws respond guarantee.
- * What is NOT verified is that a real Ollama answers the way its documented
- * contract says, or that any particular Qwen tag is pulled.
+ * VERIFIED AGAINST A LIVE OLLAMA since 2026-09-21 (0.34.2, qwen3:8b), and the
+ * first contact found three defects no fake-`fetch` test could: thinking left
+ * on (NO_THINKING), a schema the model never saw (QWEN_EXTRACTION_PROMPT), and
+ * a field order the grammar could not recover from (QWEN_FIELD_ORDER). The
+ * unit tests below still inject `fetch`, so they pin the REQUEST; whether the
+ * model answers well is measured by `pnpm eval:ai` — see docs/AI_PROVIDERS.md.
  *
  * PLAIN `fetch`, NOT THE `ollama` NPM PACKAGE. Two reasons:
  *   - No new dependency for two HTTP calls.
@@ -33,6 +33,7 @@ import {
   RESPOND_TIMEOUT_MS,
   renderFacts,
   templateReply,
+  ungroundedClaim,
   type RespondFallbackReason,
   type RespondResult,
   type RespondTrace,
@@ -125,9 +126,102 @@ const NO_THINKING = { think: false } as const;
  * already see the schema, and the shared prompt is what the eval harness
  * measures for all three.
  */
+/**
+ * WHAT EACH INTENT KIND MEANS — the shared prompt names the seven kinds and
+ * never defines them.
+ *
+ * Claude and Gemini infer "completion_update" from the word. An 8B local model
+ * does not, and the full eval (99 labelled utterances, 2026-09-22) showed the
+ * confusions were systematic, not noise:
+ *
+ *   action -> execution            13   reminders declined as "external"
+ *   completion_update -> information 9  "X gave me Y" filed as a NEW commitment
+ *   information -> execution        5   "I owe Hult the deck" declined
+ *   context -> information          5
+ *
+ * The first is a feature silently missing (no reminder is ever created on
+ * Qwen); the second is a wrong write (a duplicate instead of a completion).
+ *
+ * The examples below deliberately use names and objects that appear NOWHERE in
+ * packages/evals/src/fixtures.ts, so this prompt cannot leak the answers the
+ * eval checks and inflate its own score.
+ */
+const INTENT_KIND_GUIDE = `What each intent kind means. Choose the kind by what the user is DOING, then fill EVERY field the sentence gives you:
+- information: a STATEMENT that someone OWES something to someone — a commitment. A QUESTION about what someone owes ("what does Meera owe me?") is inspection, never information. Fill owner (who owes it), recipient (who it is owed to), objectText, and time if one is said. "Meera owes me the logo files by Monday" -> owner Meera, recipient me, objectText "the logo files", time "by Monday".
+- completion_update: something owed has now been DONE or delivered. Fill owner (who did it), recipient, objectText, and time if one is said. "Meera sent me the logo files" -> owner Meera, recipient me, objectText "the logo files". Never a new commitment.
+- action: something to do INSIDE this assistant — a reminder ("remind me to…"), a meeting to schedule (eventTitle), a conditional rule, or a new kind of thing to track. A reminder or a meeting is ALWAYS action, never execution. A reminder fills reminderBody and time, plus relatedEntity when it names a person or organization: "Remind me on Friday to call Dev" -> {"kind":"action","reminderBody":"call Dev","time":{"kind":"deterministic","sourcePhrase":"on Friday"},"relatedEntity":{"name":"Dev","kind":"person","inferenceLevel":"CONFIRMED"}}. Use eventTitle ONLY when the user asks to schedule a meeting, and condition ONLY for "if … by …" rules, never for a plain reminder. In a rule, relatedEntity is the person who owes the thing and condition.subjectText is the THING being waited for, never the person: "If Dev hasn't sent the floor plan by the 15th, remind me" -> relatedEntity Dev, condition {"subjectText":"the floor plan","deadlinePhrase":"by the 15th","action":"remind","actionBody":"Dev hasn't sent the floor plan"}.
+- time.kind: deterministic for a clock or calendar time ("at 5", "tomorrow", "by Friday"); relational when tied to another scheduled thing ("after the meeting", "before the call"); event_trigger only when it waits on someone doing something ("when Dev replies").
+- execution: ONLY a request to act OUTSIDE this assistant — send an email, add to Google Calendar, share a Drive file. Still fill recipient and objectText if the sentence names them.
+- context: background that is not itself a commitment — a reason or delay (fill objectText with what it is about), a durable fact to remember (memoryBody), or a correction (correctionTarget).
+- inspection: the user asks to SEE what is tracked. "what am I waiting on", "what does Meera owe me" -> owner Meera, recipient me.
+- question: anything else the user asks.`;
+
+/**
+ * THE FIELD ORDER IS PART OF THE PROMPT — for a grammar-constrained model.
+ *
+ * Ollama compiles `format` into a grammar that emits properties in SCHEMA
+ * ORDER, and the model cannot go back. The shared schema lists `time` before
+ * `reminderBody`, `condition` and `eventTitle`, so by the time Qwen has written
+ * that it is a reminder, the `time` slot is already behind it. Measured on the
+ * eval (2026-09-22): every reminder with a time came back without one — the
+ * phrase went into `condition.deadlinePhrase`, the last time-shaped slot still
+ * ahead, or into nothing. Two prompt rewrites, one with a verbatim JSON
+ * example, changed none of the six. And it is a WRONG WRITE, not a missed
+ * field: the planner checks `condition` first and `eventTitle` second, so
+ * "remind me tonight to…" created a conditional rule and "remind me tomorrow
+ * to…" a calendar event.
+ *
+ * So Qwen gets the same schema with the fields that say WHAT the intent is
+ * first, and every slot that depends on that decision after. Qwen only:
+ * property order means nothing to validation, and Claude and Gemini are
+ * measured on the shared order.
+ */
+const QWEN_FIELD_ORDER = [
+  "kind",
+  "inferenceLevel",
+  "sourceText",
+  // Who and what stay EARLY, where the shared order has them. Moved behind the
+  // six fields below, Qwen skipped them: "what does Zoya owe me?" came back as
+  // an inspection with no owner and no recipient, and listed EVERY open
+  // commitment as Zoya's (seen live, 2026-09-22). A grammar that offers six
+  // optional keys in a row makes closing the object look like the next step.
+  "owner",
+  "recipient",
+  "objectText",
+  // What the intent IS — decided before `time`.
+  "reminderBody",
+  "eventTitle",
+  "memoryBody",
+  "correctionTarget",
+  "entityTypeDefinition",
+  "entityRecord",
+  "time",
+  "relatedEntity",
+  "newStatus",
+  // Last, so a plain reminder has already put its time in `time`.
+  "condition",
+] as const;
+
+function inGrammarOrder(schema: typeof EXTRACTION_INPUT_SCHEMA): Record<string, unknown> {
+  const intent = schema.properties.intents.items;
+  const fields: Record<string, unknown> = intent.properties;
+  const ordered: Record<string, unknown> = {};
+  // Unlisted fields are appended, never dropped: `additionalProperties: false`
+  // would make a field missing here one Qwen could never emit.
+  for (const key of [...QWEN_FIELD_ORDER, ...Object.keys(fields)]) {
+    if (key in fields && !(key in ordered)) ordered[key] = fields[key];
+  }
+  return {
+    ...schema,
+    properties: { intents: { ...schema.properties.intents, items: { ...intent, properties: ordered } } },
+  };
+}
+
+export const QWEN_EXTRACTION_SCHEMA = inGrammarOrder(EXTRACTION_INPUT_SCHEMA);
+
 const QWEN_EXTRACTION_PROMPT =
-  `${EXTRACTION_SYSTEM_PROMPT}\n\n` +
-  `Respond with JSON that matches this JSON Schema exactly:\n${JSON.stringify(EXTRACTION_INPUT_SCHEMA)}`;
+  `${EXTRACTION_SYSTEM_PROMPT}\n\n${INTENT_KIND_GUIDE}\n\n` +
+  `Respond with JSON that matches this JSON Schema exactly:\n${JSON.stringify(QWEN_EXTRACTION_SCHEMA)}`;
 
 export interface QwenProviderOptions {
   readonly baseUrl?: string | undefined;
@@ -210,8 +304,8 @@ export class QwenProvider implements AIProvider {
           // Ollama takes a JSON SCHEMA here, not the string "json". Passing
           // the schema is what makes the output structured rather than merely
           // JSON-shaped — and unlike Gemini, Ollama accepts our schema as-is,
-          // `additionalProperties` included.
-          format: EXTRACTION_INPUT_SCHEMA,
+          // `additionalProperties` included. Reordered — see QWEN_FIELD_ORDER.
+          format: QWEN_EXTRACTION_SCHEMA,
           options: { temperature: 0, num_predict: 1_200 },
         },
         controller.signal,
@@ -342,6 +436,7 @@ export class QwenProvider implements AIProvider {
     const text = response.message?.content?.trim() ?? "";
     if (text.length === 0) return fallback("empty_text", common);
     if (text.length > MAX_REPLY_CHARS) return fallback("too_long", common);
+    if (ungroundedClaim(text, input)) return fallback("ungrounded", common);
 
     return {
       reply: text,

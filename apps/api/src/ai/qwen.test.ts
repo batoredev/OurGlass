@@ -14,7 +14,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { RespondInput } from "@ourglass/shared";
-import { EXTRACTION_INPUT_SCHEMA } from "@ourglass/shared";
+import { EXTRACTION_INPUT_SCHEMA, INTENT_KINDS } from "@ourglass/shared";
 import { QwenProvider, type FetchLike, type OllamaChatResponse } from "./qwen.js";
 import type { ProviderError } from "./errors.js";
 
@@ -115,8 +115,56 @@ describe("the request Ollama actually receives", () => {
 
     const messages = captured.body?.["messages"] as { role: string; content: string }[];
     const system = messages.find((message) => message.role === "system")?.content ?? "";
-    expect(system).toContain(JSON.stringify(EXTRACTION_INPUT_SCHEMA));
+    // The SAME schema the grammar enforces, byte for byte — order included.
+    expect(system).toContain(JSON.stringify(captured.body?.["format"]));
     expect(system).toContain('"owner"');
+  });
+
+  it("orders the grammar so a reminder decides WHAT it is before WHEN", async () => {
+    // Ollama emits properties in schema order and cannot go back. On the
+    // shared order `time` precedes `reminderBody`, and live, all six timed
+    // reminders lost their time — into `condition`, which the planner checks
+    // first, so "remind me tonight to…" became a conditional rule. Restore the
+    // shared order and this fails.
+    const captured: Captured = {};
+    await provider(
+      { message: { content: JSON.stringify(VALID) }, done_reason: "stop" },
+      { captured },
+    ).interpret({ utterance: "Remind me tonight to review the contract" });
+
+    type Intents = { properties: { intents: { items: { properties: Record<string, unknown> } } } };
+    const sent = Object.keys((captured.body?.["format"] as Intents).properties.intents.items.properties);
+    const shared = Object.keys(EXTRACTION_INPUT_SCHEMA.properties.intents.items.properties);
+
+    // Reordered, never pruned: a field missing here is one Qwen can never emit.
+    expect([...sent].sort()).toEqual([...shared].sort());
+    const at = (field: string) => sent.indexOf(field);
+    expect(at("reminderBody")).toBeLessThan(at("time"));
+    expect(at("eventTitle")).toBeLessThan(at("time"));
+    expect(at("time")).toBeLessThan(at("condition"));
+    // And WHO stays right after sourceText. Moved behind the optional body
+    // fields, Qwen dropped owner and recipient from "what does Zoya owe me?"
+    // and the inspection listed everyone's commitments as hers.
+    expect(sent.slice(0, 5)).toEqual(["kind", "inferenceLevel", "sourceText", "owner", "recipient"]);
+  });
+
+  it("DEFINES every intent kind, not just names it", async () => {
+    // The shared prompt lists the kinds by name. An 8B model cannot infer
+    // "completion_update" from the word: on the full eval it filed "X gave me
+    // Y" as a NEW commitment 9 times and declined 13 reminders as "execution".
+    // Derived from INTENT_KINDS, so adding a kind without defining it for Qwen
+    // fails here instead of silently never being extracted.
+    const captured: Captured = {};
+    await provider(
+      { message: { content: JSON.stringify(VALID) }, done_reason: "stop" },
+      { captured },
+    ).interpret({ utterance: "Arun handles the backend" });
+
+    const messages = captured.body?.["messages"] as { role: string; content: string }[];
+    const system = messages.find((message) => message.role === "system")?.content ?? "";
+    for (const kind of INTENT_KINDS) {
+      expect(system, `no definition for "${kind}"`).toMatch(new RegExp(`^- ${kind}:`, "m"));
+    }
   });
 
   it("turns Qwen3's thinking OFF on both stages", async () => {
@@ -253,6 +301,8 @@ describe("respond never throws", () => {
       [{ message: { content: "   " }, done_reason: "stop" }, "empty_text"],
       [{ message: { content: "y".repeat(2_000) }, done_reason: "stop" }, "too_long"],
       [{ message: { content: "cut" }, done_reason: "length" }, "max_tokens"],
+      // Live: a create-only turn answered "…is marked complete".
+      [{ message: { content: "The poster is marked complete." }, done_reason: "stop" }, "ungrounded"],
     ];
 
     for (const [response, expected] of cases) {

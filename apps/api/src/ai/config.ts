@@ -176,8 +176,17 @@ export function loadAIConfig(env: AIEnv): AIConfig {
   };
 }
 
-/** Build one provider instance. Never throws — an unusable one reports unconfigured. */
-function buildProvider(name: AIProviderName, config: AIConfig): AIProvider {
+/**
+ * Build one provider instance. Never throws — an unusable one reports unconfigured.
+ *
+ * EXPORTED so the eval harness builds providers exactly as the app does. It
+ * used to construct them itself and dropped the timeouts: Qwen got the
+ * adapter's 20s default instead of AI_REQUEST_TIMEOUT_MS, so a local model
+ * that answers in 18-60s would have scored as mostly "timeout" — the eval
+ * calling a working provider broken. One declaration of how a provider is
+ * configured, not two.
+ */
+export function buildProvider(name: AIProviderName, config: AIConfig): AIProvider {
   switch (name) {
     case "claude":
       return new ClaudeProvider({
