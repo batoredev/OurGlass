@@ -7,7 +7,16 @@
  */
 import type { ReactElement } from "react";
 
-const S = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor" } as const;
+// aria-hidden on every icon: each one sits beside a visible label or inside a
+// button that carries an aria-label, so reading the drawing too would only add
+// noise ("image, image, Chat") to a screen reader.
+const S = {
+  viewBox: "0 0 24 24",
+  fill: "none",
+  stroke: "currentColor",
+  "aria-hidden": true,
+  focusable: "false",
+} as const;
 
 export const ICONS: Record<string, ReactElement> = {
   chat: (

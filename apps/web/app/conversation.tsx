@@ -222,7 +222,17 @@ export function Conversation() {
         </div>
       </header>
 
-      <div className="conversation" id="conversation" ref={streamRef}>
+      {/* A live LOG, so a screen reader hears "Thinking…" and then the reply.
+          Off until history has loaded, or the whole past conversation would be
+          read out as if it had just arrived. */}
+      <div
+        className="conversation"
+        id="conversation"
+        ref={streamRef}
+        role="log"
+        aria-label="Conversation"
+        aria-live={loaded ? "polite" : "off"}
+      >
         {empty && (
           <div className="greeting">
             <div>
@@ -297,7 +307,13 @@ export function Conversation() {
         )}
       </div>
 
-      {notice && <div className="composer-hint">{notice}</div>}
+      {/* Announced: "Too many messages", "That turn was undone", a blocked
+          microphone — each is something a user who cannot see it needs. */}
+      {notice && (
+        <div className="composer-hint" role="status">
+          {notice}
+        </div>
+      )}
 
       <div className="composer-wrap">
         <form

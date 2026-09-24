@@ -26,7 +26,9 @@ const MOBILE = [
   { href: "/today", icon: "today", label: "Today" },
   { href: "/commitments", icon: "commitments", label: "Owed" },
   { href: "/memory", icon: "memories", label: "Memory" },
-  { href: "/settings", icon: "more", label: "More" },
+  // "Settings", not "More": the tab goes straight to settings, and a label
+  // promising a menu that is not there misleads everyone, sighted or not.
+  { href: "/settings", icon: "more", label: "Settings" },
 ] as const;
 
 function isActive(pathname: string, href: string): boolean {
@@ -42,9 +44,19 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="app-shell">
+      {/* First in tab order, hidden until focused: lets a keyboard user skip
+          seven navigation links on every page. Targets <main>, which is
+          focusable (tabIndex -1) for exactly this. */}
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
       <aside className="sidebar" aria-label="Primary navigation">
-        <Link className="wordmark" href="/" aria-label="OurGlass home">
-          <span className="mark">O</span>
+        {/* The visible word IS the name (WCAG 2.5.3): a voice-control user says
+            what they see. The "O" is the logo mark, decoration only. */}
+        <Link className="wordmark" href="/">
+          <span className="mark" aria-hidden="true">
+            O
+          </span>
           <span>OURGLASS</span>
         </Link>
         <nav className="primary-nav">

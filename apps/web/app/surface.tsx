@@ -30,7 +30,10 @@ export function PageHeader({
 export function EmptyState({ title, body }: { title: string; body: string }) {
   return (
     <div className="empty-state">
-      <h3>{title}</h3>
+      {/* h2, not h3: it always sits directly under the page's h1, and a
+          skipped level breaks heading navigation for screen-reader users
+          (WCAG 1.3.1). Styled as before in prototype.css. */}
+      <h2>{title}</h2>
       <p>{body}</p>
     </div>
   );
