@@ -27,22 +27,27 @@ The three unbuilt phases are the ones `DEMO-GUIDE.md` §4 tells you not to promi
 
 ## Gate 0 — model provider capacity (owner action, blocks almost everything)
 
-Nothing below that touches a model can proceed until one provider has capacity. As of
-2026-09-21 neither does:
+**Partly cleared on 2026-09-22: Ollama + `qwen3:8b` is installed and working**, so the app runs,
+answers and writes with no key and no quota — three full eval runs and a 9/9 end-to-end pass.
+That unblocked everything that needs *a* model. It did not clear the gate for quality: on Qwen,
+34 of 99 utterances extract fully correctly, and roughly half would drive a write the labels do
+not endorse (`AI_EVALS.md`). The paid providers remain unavailable:
 
 - **Anthropic** — `400 … credit balance is too low`
 - **Gemini** free tier — `429 … exceeded your current quota`, plus `503 high demand` on all
   three flash models for stretches of the day
 
+So: local Qwen is enough to develop and demo against, and not enough to trust with real data.
 Pick one:
 
 | Option | Cost | Effect |
 |---|---|---|
 | **Add Anthropic credit** *(recommended)* | Small — a demo is cents | Turns drop from 5–15s to about 1s, quality is the tier the prompts were written for, and B1/B4 unblock immediately |
 | Paid Gemini tier | Small | Removes the daily cap; 503s are Google-side and remain |
-| Install Ollama + `qwen3:8b` | Free, multi-GB, slow on CPU | The only quota-free option. Also clears stage 4's "unverified live" caveat |
+| ~~Install Ollama + `qwen3:8b`~~ | Free, multi-GB, slow | ✅ **done** — 30s median per turn, quota-free, and the only provider whose quality is measured |
 
-Until then every turn answers *"I couldn't process that just now — nothing was saved."*
+With no provider at all, every turn answers *"I couldn't process that just now — nothing was
+saved."* — and writes nothing, which is the intended failure.
 
 ---
 
@@ -77,12 +82,12 @@ deserves to run after ingestion has exercised the untrusted-input boundary.
 correct. Everything green today is evidence about the code. Cheap, fast, and it may change
 what the phases below have to handle.
 
-| Step | Command | Cost | Blocked on |
+| Step | Command | Cost | State |
 |---|---|---|---|
-| **B1** | `pnpm test:live` | ~99 Sonnet calls | Anthropic credit |
-| **B2** | *(done 2026-09-18/19)* | — | Found two real defects |
-| **B3** | `pnpm eval:ai` with `OLLAMA_BASE_URL` set | free, slow | Ollama install |
-| **B4** | `pnpm eval:ai` across every configured provider | ~97 calls per provider | B1 or B3 |
+| **B1** | `pnpm test:live` | ~99 Sonnet calls | ❌ blocked on Anthropic credit |
+| **B2** | *(done 2026-09-18/19)* | — | ✅ found two real defects |
+| **B3** | `pnpm eval:ai` with `OLLAMA_BASE_URL` set | free, slow | ✅ **done 2026-09-22** — three full 99-fixture runs on qwen3:8b, results and caveats in `AI_EVALS.md`. Found three adapter defects and six app bugs, five of them wrong writes |
+| **B4** | `pnpm eval:ai` across every configured provider | ~97 calls per provider | ❌ needs B1 — one provider measured is not a comparison |
 
 **Do not run B4 on a free-tier Gemini key the day of a demo** — 97 calls exhausts the daily
 quota the demo needs. That is not hypothetical; it happened on 2026-09-21.
@@ -93,7 +98,10 @@ model invents a field or fails to ask when the label says it should becomes a pr
 pinned fixture — never a threshold change.
 
 **Definition of done:** a results table committed into `AI_EVALS.md`, and the README's standing
-caveat ("model quality is barely measured") rewritten to say what was measured.
+caveat ("model quality is barely measured") rewritten to say what was measured. ✅ done for the
+local provider on 2026-09-22. What it showed is worth carrying into B1: correcting the intent
+kind more than doubled full matches and left `wrongMutationRisk` almost unchanged, so B1 must
+report that number rather than a pass rate.
 
 ---
 
@@ -173,7 +181,15 @@ at once.
 
 ---
 
-### Stage 15 — Phase 8, voice
+### Stage 15 — Phase 8, voice ✅ done 2026-09-24
+
+Dictation into the composer, browser `SpeechRecognition`, as recommended below. The button is
+rendered only where the API exists; a transcript is appended to what was typed and never sent by
+itself; sending stops the microphone. Voice replies, wake words and continuous listening stayed
+out. Logic unit-tested; **speech through a real microphone has not been tried** — that needs a
+person in a browser. Details in `PHASES.md`.
+
+The original note, kept because it explains the shape:
 
 The spec calls this "eventually" (§1), and it is the lowest-value remaining item. Keep it
 small.
@@ -223,9 +239,9 @@ That document lists six tasks. Verified state on 2026-09-21:
 | 1 | Pin `pg` ≥ 8.16.3 | ✅ `^8.16.3` in both packages |
 | 2 | Move the routes to `apps/web/app/api/**` | ✅ thirteen route handlers |
 | 3 | Retire Fastify | ✅ not a dependency anywhere |
-| 4 | `wrangler.toml` + the Cloudflare adapter | ⚠ **half** — `apps/web/wrangler.toml` exists and is security-reviewed (cron triggers, observability on, the demo flag deliberately absent). **`@opennextjs/cloudflare` is not installed**, so `.open-next/worker.js` — which `main` points at — is never produced. The Worker cannot build |
-| 5 | `scheduled()` calling `pollOnce` | ⚠ `apps/web/worker/scheduled.ts` is written and calls `pollOnce` unchanged. Never executed, because of task 4 |
-| 6 | CI deploy step on push to `main` | ❌ No deploy workflow exists — `ci.yml`, `codeql.yml`, `evals.yml` only |
+| 4 | `wrangler.toml` + the Cloudflare adapter | ✅ **2026-09-24** — `@opennextjs/cloudflare` 1.20.6 installed, `open-next.config.ts` added, `build:worker` exits 0 and `wrangler deploy --dry-run` bundles at 2.03 MiB gzipped (free-plan limit 3 MiB). Two upstream build failures (sharp's native binaries, `pg`'s `cloudflare:sockets`) are handled by one pinned patch, recorded with its deletion condition in `pnpm-workspace.yaml` |
+| 5 | `scheduled()` calling `pollOnce` | ✅ wired through the custom entry `worker/index.ts`, because the generated handler exports only `fetch` — a cron trigger firing into it would have left reminders silently dead. Verified by finding the poller's own log line in the bundled output |
+| 6 | CI deploy step on push to `main` | ✅ `.github/workflows/deploy.yml` — staging on push, production on manual dispatch, post-deploy smoke check, and a **skip** (not a failure) until the Cloudflare secrets exist. Its first run skipped exactly as designed |
 
 The same shape this project keeps finding: the config and the handler exist, and nothing can
 produce the artifact they reference. **Nothing here is verified until a real request is served
@@ -246,19 +262,20 @@ deploy (`production.md`); no secret in any committed file.
 
 ### P2 — hardening before anyone else can reach it
 
-Each of these is absent today, and each was verified absent rather than assumed:
+Each of these was verified absent rather than assumed. Five are now built (2026-09-24):
 
-| Missing | Why it matters in production | Size |
+| Item | Why it matters in production | State |
 |---|---|---|
-| **Rate limiting on `/api/turn`** | Every request spends model tokens. One leaked access token is unbounded spend, and there is no cap of any kind today | Small — but decide the limit with the cost budget (Track D) |
-| **Security headers / CSP** | `next.config.ts` sets none. A Worker is a public URL: CSP, `frame-ancestors`, HSTS, `X-Content-Type-Options`, `Referrer-Policy` | Small |
-| **Error boundaries** | No `error.tsx`, `global-error.tsx` or `not-found.tsx`. A server error shows Next's default page, which leaks framework detail and tells the user nothing | Small |
-| **Alerting** | `[observability] enabled = true` gives Cloudflare logs; nothing aggregates or alerts on them. The per-attempt `ai_request` lines are excellent and nobody is watching them | Medium |
-| **Uptime check** | `/api/health` exists and nothing polls it | Small |
-| **Runbook** | `production.md` requires a rollback and recovery story. None is written | Small |
-| **Backups** | Confirm Supabase PITR is on. `db:reset` is the only recovery path today and it is destructive | Owner action |
-| **Accessibility pass** | Never audited. The UI *is* the product surface: keyboard navigation, focus order, contrast, the composer's ARIA | Medium — `accessibility-engineer`, read-only |
-| **Staging** | `wrangler.toml` defines one environment. Deploying straight to production with real data in it has no safety net | Small |
+| **Rate limiting on `/api/turn`** | Every request spends model tokens. One leaked access token was unbounded spend | ✅ `_rate-limit.ts` — 20/minute, 500/day, metered from `messages` so it holds across isolates, checked before any model call. Verified live (429 + `Retry-After`). **The numbers are placeholders** until the Track D cost budget exists |
+| **Security headers / CSP** | A Worker is a public URL | ✅ `lib/security-headers.ts` on every route; browser console clean and React hydrated. `script-src` still allows inline — a nonce CSP needs a proxy, and that is the remaining piece |
+| **Error boundaries** | A server error showed Next's default page | ✅ `error.tsx`, `global-error.tsx`, `not-found.tsx`; the 404 verified live. The raw message is never shown, only a digest |
+| **Uptime check** | `/api/health` existed and nothing polled it | ✅ `.github/workflows/uptime.yml`, every 15 minutes, once `STAGING_URL` / `PRODUCTION_URL` are set. Best-effort: it notifies, it does not page |
+| **Runbook** | `production.md` requires a rollback and recovery story | ✅ `docs/RUNBOOK.md` — deploy, smoke check, rollback (commands verified against Cloudflare's docs), recovery, and the incidents this system actually has |
+| **Staging** | One environment meant deploying straight to production | ✅ `[env.staging]`, plus staging-only secrets and a separate database, documented in `YOUR-ACTIONS.md` §7 |
+| **Alerting** | Cloudflare logs exist; nothing aggregates or alerts on them. The per-attempt `ai_request` lines are excellent and nobody is watching them | ❌ Medium. Wants a destination (Logpush, Sentry, a webhook) — an owner choice, and pointless before the app is deployed |
+| **Accessibility pass** | The UI *is* the product surface: keyboard navigation, focus order, contrast, the composer's ARIA | ❌ Medium — `accessibility-engineer`, read-only. The new dictation button carries `aria-pressed` and a state-dependent label, but nothing has been audited |
+| **Backups** | `db:reset` is the only recovery path today and it is destructive | ❌ Owner action: confirm Supabase PITR is on. The runbook depends on it |
+| **Nonce-based CSP** | Inline scripts are still allowed, because Next's hydration needs a nonce, which needs a proxy | ❌ Small, and recorded in `lib/security-headers.ts` rather than left implied |
 
 **Team (Mission 6, 3 teammates):** `devops-sre` (owns `wrangler.toml`, workflows, the runbook),
 `backend-lead` (rate limiting, headers, error boundaries), `security-cso` (read-only — public
@@ -337,11 +354,13 @@ a feature plus its tests, CI green, docs updated. Ranges, not promises — and t
 is the more likely one, because **every phase of this build so far has surfaced two to four
 defects nobody planned for.** Stage 12d was itself entirely unplanned.
 
-| Target | Sessions | What it buys |
+Revised 2026-09-24, after Track B (local), Track P1, most of Track P2 and Stage 15 landed:
+
+| Target | Sessions left | What it buys |
 |---|---|---|
-| **Deployed and usable internally** — Track B + Track P | **3–4** | What exists today, live on Cloudflare, hardened, monitored, with a rollback story. No new features |
-| **Spec-complete** — the above plus Phases 6, 7, 8 | **+6–8** → 9–12 total | Ingestion (2–3), integrations (3–4, one per surface), voice (0.5–1) |
-| **Multi-tenant SaaS** — the above plus Track C | **+6–9** → 15–21 total | Tenancy and RLS (1–2), identity (1–2), billing (1–2), rollback (1), load (1), independent review (1) |
+| **Deployed and usable internally** — Track B + Track P | **~1**, plus owner actions | The build, the pipeline, the hardening and the runbook are done; what remains is a real deploy (needs the Cloudflare account), alerting, the accessibility pass, and B1 once there is Anthropic credit |
+| **Spec-complete** — the above plus Phases 6, 7 | **+5–7** → 6–8 total | Ingestion (2–3), integrations (3–4, one per surface). Voice is done |
+| **Multi-tenant SaaS** — the above plus Track C | **+6–9** → 12–17 total | Tenancy and RLS (1–2), identity (1–2), billing (1–2), rollback (1), load (1), independent review (1) |
 
 **Every number assumes** a model provider with capacity (Gate 0), Track D decisions arriving
 when the work needs them rather than after, and that the owner actions in
