@@ -1130,6 +1130,47 @@ suite("runTurn (integration)", () => {
     expect(await withTransaction(pool, (tx) => entityRecords.listRecords(tx, "gym_session"))).toHaveLength(1);
   });
 
+  it("ASKS for a required field the user did not give, instead of failing validation", async () => {
+    // Live: "add Dune to my books" mapped to the owner's reading tracker,
+    // whose pages_read is required, and the reply was "pages read is required."
+    const { responder: definition } = recordingResponder();
+    await runTurn(
+      { utterance: "Track my reading with a book title and pages read.", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "action",
+            sourceText: "Track my reading with a book title and pages read",
+            entityTypeDefinition: {
+              typeKey: "reading",
+              displayName: "Reading",
+              fields: [
+                { fieldKey: "book_title", fieldKind: "text", label: "Book title", required: true },
+                { fieldKey: "pages_read", fieldKind: "number", label: "Pages read", required: true },
+              ],
+            },
+          }),
+        ]),
+        definition,
+      ),
+    );
+    const { responder, calls } = recordingResponder();
+
+    const result = await runTurn(
+      { utterance: "Add Dune to my reading.", userId },
+      deps(
+        fakeExtractor([
+          intent({ kind: "action", entityRecord: { typeKey: "reading", values: { book_title: "Dune" } } }),
+        ]),
+        responder,
+      ),
+    );
+
+    expect(result.committed).toEqual([]);
+    expect(calls[0]?.questions).toEqual(["What should I put for pages read in Reading?"]);
+    expect(await withTransaction(pool, (tx) => entityRecords.listRecords(tx, "reading"))).toHaveLength(0);
+  });
+
   it("ASKS rather than re-defining a type whose fields all exist", async () => {
     await defineGymWithNote();
     const { responder, calls } = recordingResponder();

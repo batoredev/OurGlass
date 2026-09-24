@@ -324,6 +324,8 @@ describe("respond never throws", () => {
       [{ message: { content: "cut" }, done_reason: "length" }, "max_tokens"],
       // Live: a create-only turn answered "…is marked complete".
       [{ message: { content: "The poster is marked complete." }, done_reason: "stop" }, "ungrounded"],
+      // Live: an internal heading read out as the reply.
+      [{ message: { content: "Cannot do. I can't send email." }, done_reason: "stop" }, "echoed_heading"],
     ];
 
     for (const [response, expected] of cases) {

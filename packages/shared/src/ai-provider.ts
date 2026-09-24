@@ -99,7 +99,9 @@ export type RespondFallbackReason =
   | "empty_text"
   | "too_long"
   /** Claimed a state change no fact mentions — see `ungroundedClaim`. */
-  | "ungrounded";
+  | "ungrounded"
+  /** Read an internal heading out as prose ("Cannot do. …") — see `echoesHeading`. */
+  | "echoed_heading";
 
 /**
  * One AI request, as it is logged (§21).

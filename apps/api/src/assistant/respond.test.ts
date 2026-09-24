@@ -15,8 +15,10 @@ import {
   TemplateResponder,
   formatDuration,
   renderFacts,
+  echoesHeading,
   templateReply,
   ungroundedClaim,
+  unfitReply,
 } from "./respond.js";
 
 function input(over: Partial<RespondInput> = {}): RespondInput {
@@ -160,6 +162,30 @@ describe("renderFacts", () => {
     expect(ungroundedClaim("Got it — the Hult poster marked complete.", input({ committed: [completedLate] }))).toBeNull();
     // And an ordinary reply claims nothing.
     expect(ungroundedClaim("Noted — Zoya owes you the brochure draft by Wed 6 PM.", input({ committed: [created] }))).toBeNull();
+  });
+
+  it("rejects a reply that reads an internal heading out as prose", () => {
+    // Both seen live on qwen3:8b.
+    expect(echoesHeading("Cannot do. I don't have anything about Zoya yet.")).toBe(true);
+    expect(echoesHeading("the brochure draft, due Wed 6:00 PM. Nothing was recorded. Nothing needs asking.")).toBe(true);
+    expect(echoesHeading("Done just now (state these as done): reminder set.")).toBe(true);
+    // Ordinary replies pass — including ones that merely start with "Done".
+    expect(echoesHeading("Done — reminder set for Wed 5:00 PM.")).toBe(false);
+    expect(echoesHeading("I can't send email yet.")).toBe(false);
+  });
+
+  it("gives every provider one gate, reporting which rule a reply broke", () => {
+    const created: CommittedFact = {
+      kind: "commitment_created",
+      ownerName: "Zoya",
+      recipientName: "you",
+      objectText: "the brochure draft",
+      expectedAtLocal: null,
+    };
+    const facts = input({ committed: [created] });
+    expect(unfitReply("Zoya's brochure is marked complete.", facts)).toBe("ungrounded");
+    expect(unfitReply("Cannot do. Noted.", facts)).toBe("echoed_heading");
+    expect(unfitReply("Noted — Zoya owes you the brochure draft.", facts)).toBeNull();
   });
 
   it("never heads fresh writes with words that mean 'nothing new happened'", () => {

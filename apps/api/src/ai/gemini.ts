@@ -34,7 +34,7 @@ import {
   RESPOND_SYSTEM_PROMPT,
   renderFacts,
   templateReply,
-  ungroundedClaim,
+  unfitReply,
   type RespondFallbackReason,
   type RespondResult,
   type RespondTrace,
@@ -365,7 +365,8 @@ export class GeminiProvider implements AIProvider {
     const text = response.text?.trim() ?? "";
     if (text.length === 0) return fallback("empty_text", common);
     if (text.length > MAX_REPLY_CHARS) return fallback("too_long", common);
-    if (ungroundedClaim(text, input)) return fallback("ungrounded", common);
+    const unfit = unfitReply(text, input);
+    if (unfit) return fallback(unfit, common);
 
     return {
       reply: text,

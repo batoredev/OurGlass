@@ -146,6 +146,42 @@ const STATE_CLAIMS: readonly (readonly [claim: RegExp, evidence: string])[] = [
   [/\bforg[eo]t/i, "forg"],
 ];
 
+/**
+ * Whether a reply read one of renderFacts's HEADINGS out as prose.
+ *
+ * The headings are instructions to the model, not words for the user — the
+ * prompt says never to copy them, and a small model does anyway. Live on
+ * qwen3:8b: "Cannot do. I don't have anything about Zoya yet." and "…due Fri.
+ * Nothing was recorded. Nothing needs asking." The second is also false after
+ * a write. Matched at the START for the headings a sentence might otherwise
+ * begin with, anywhere for the phrases no natural reply contains.
+ */
+const HEADING_ECHOES: readonly RegExp[] = [
+  /^\s*cannot do\b/i,
+  /^\s*done just now\b/i,
+  /^\s*still need to ask\b/i,
+  /\bnothing was recorded\b/i,
+  /\bnothing needs asking\b/i,
+  /\(state these as done\)/i,
+  /\(say so plainly\)/i,
+  /\bwrite the reply\b/i,
+];
+
+export function echoesHeading(reply: string): boolean {
+  return HEADING_ECHOES.some((pattern) => pattern.test(reply));
+}
+
+/**
+ * Why a model's reply cannot be shown, or null if it can. ONE gate for every
+ * provider, so a check added here protects Claude, Gemini and Qwen at once;
+ * each responder falls back to the template, which is always correct.
+ */
+export function unfitReply(reply: string, input: RespondInput): RespondFallbackReason | null {
+  if (ungroundedClaim(reply, input)) return "ungrounded";
+  if (echoesHeading(reply)) return "echoed_heading";
+  return null;
+}
+
 export function ungroundedClaim(reply: string, input: RespondInput): string | null {
   const shown = renderFacts(input).toLowerCase();
   for (const [claim, evidence] of STATE_CLAIMS) {
@@ -173,7 +209,7 @@ export function templateReply(input: RespondInput): string {
 }
 
 /** "rating", "rating and format", "rating, format and genre" — lowercased, as prose. */
-function joinLabels(labels: readonly string[]): string {
+export function joinLabels(labels: readonly string[]): string {
   const words = labels.map((label) => label.toLowerCase());
   if (words.length <= 1) return words[0] ?? "a field";
   return `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
@@ -388,7 +424,8 @@ export class HaikuResponder implements Responder {
 
     if (text.length === 0) return fallback("empty_text", common);
     if (text.length > MAX_REPLY_CHARS) return fallback("too_long", common);
-    if (ungroundedClaim(text, input)) return fallback("ungrounded", common);
+    const unfit = unfitReply(text, input);
+    if (unfit) return fallback(unfit, common);
 
     return {
       reply: text,

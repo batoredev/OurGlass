@@ -41,6 +41,8 @@ import type { AIProvider } from "./provider.js";
  *                concise; a second call for prose is not worth it.
  *   ungrounded - the model claimed a state change no fact mentions. The
  *                template states exactly the facts; that IS the fix.
+ *   echoed_heading - the model read an internal heading out as prose. Same
+ *                reasoning: the template is already the right reply.
  *   max_tokens - OUR cap, identical at the next provider.
  */
 const RESPOND_FALLBACK_REASONS = new Set(["sdk_error", "timeout", "empty_text"]);

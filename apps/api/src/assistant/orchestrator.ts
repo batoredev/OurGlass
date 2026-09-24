@@ -52,7 +52,7 @@ import {
   renderProactiveLine,
   selectProactiveLine,
 } from "./proactive.js";
-import { YOU, templateReply, type RespondTrace } from "./respond.js";
+import { YOU, joinLabels, templateReply, type RespondTrace } from "./respond.js";
 import {
   resolveTime,
   timeDirectionForIntent,
@@ -1833,6 +1833,23 @@ async function planCreateEntityRecord(intent: ExtractedIntent, ctx: PlanContext)
       facts: [],
       questions: [],
       declined: [`I'm not tracking ${record.typeKey} yet — tell me what to track about it first.`],
+    };
+  }
+
+  // A REQUIRED FIELD THE USER DID NOT GIVE is a question, not a validator
+  // error read out as the reply. Live: "add Dune to my books" was (correctly)
+  // mapped to the owner's reading tracker, whose pages_read is required, and
+  // the answer was "pages read is required."
+  const missing = type.fields.filter(
+    (field) => field.required && String(payload[field.field_key] ?? "").trim() === "",
+  );
+  if (missing.length > 0) {
+    return {
+      calls: [],
+      facts: [],
+      questions: [
+        `What should I put for ${joinLabels(missing.map((field) => field.label))} in ${type.display_name}?`,
+      ],
     };
   }
 
