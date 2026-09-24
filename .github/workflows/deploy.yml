@@ -99,11 +99,6 @@ jobs:
             echo "::notice title=Smoke check skipped::Set the STAGING_URL (and PRODUCTION_URL) repository variables to smoke-check deploys."
             exit 0
           fi
-          for attempt in 1 2 3 4 5; do
-            body=$(curl -fsS --max-time 10 "$URL/api/health" || true)
-            case "$body" in *'"db":true'*) echo "healthy: $body"; exit 0;; esac
-            echo "attempt $attempt: $body"
-            sleep 6
-          done
-          echo "::error title=Smoke check failed::$URL/api/health did not report a database connection. See docs/RUNBOOK.md to roll back."
-          exit 1
+          # tools/health_check.py, not a loop written here: the same probe is run
+          # by the uptime workflow, and one behaviour belongs in one place.
+          python tools/health_check.py --url "$URL" --label "deploy target"
