@@ -267,8 +267,16 @@ and add the completion date/commit as each phase lands.
   Permission model first (§35). Then Gmail, Calendar, Drive (§34). External actions always
   confirm.
 
-- [ ] **Phase 8 — Voice**
-  Deferred, per spec §1 ("eventually").
+- [x] **Phase 8 — Voice** *(dictation only, 2026-09-24)*
+  Speech INTO the composer, using the browser's own SpeechRecognition: no backend, no audio
+  leaving the machine's browser, no cost. The microphone button renders only where the API
+  exists (Chrome, Edge, Safari — not Firefox), because a dead button is worse than none. A
+  transcript is appended to whatever is typed and never sent on its own, so a misheard word is
+  corrected before the turn. Voice replies, wake words and continuous listening stay out: none
+  is in the spec, each is easy to add and hard to remove.
+  **Verified:** `dictation.ts`'s logic is unit-tested (feature detection, transcript assembly,
+  error wording); the page renders with the button correctly absent from server HTML.
+  **Not verified:** actual speech through a real microphone — that needs a person in a browser.
 
 ## Blocked / needs owner action
 
