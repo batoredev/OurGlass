@@ -7,16 +7,21 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint .",
-    "test": "vitest run"
+    "lint": "eslint . --ignore-pattern \"**/.open-next/**\"",
+    "test": "vitest run",
+    "preview": "node scripts/build-worker.mjs && opennextjs-cloudflare preview",
+    "deploy:staging": "node scripts/build-worker.mjs && opennextjs-cloudflare deploy -- --env staging",
+    "deploy": "node scripts/build-worker.mjs && opennextjs-cloudflare deploy",
+    "build:worker": "node scripts/build-worker.mjs"
   },
   "dependencies": {
+    "@opennextjs/cloudflare": "1.20.6",
+    "@ourglass/api": "workspace:*",
+    "@ourglass/db": "workspace:*",
     "@ourglass/shared": "workspace:*",
     "next": "16.3.4",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "@ourglass/api": "workspace:*",
-    "@ourglass/db": "workspace:*"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
@@ -25,6 +30,7 @@
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.4",
     "typescript": "6.0.3",
-    "vitest": "4.1.11"
+    "vitest": "4.1.11",
+    "wrangler": "4.136.1"
   }
 }

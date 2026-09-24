@@ -1,0 +1,11 @@
+--- a/dist/cli/build/bundle-server.js
++++ b/dist/cli/build/bundle-server.js
+@@ -100,7 +100,7 @@
+             // Apply updater updates, must be the last plugin
+             updater.plugin,
+         ],
+-        external: ["./middleware/handler.mjs"],
++        external: ["./middleware/handler.mjs", "sharp", "cloudflare:sockets"],
+         alias: {
+             // When @vercel/og is not used, alias the edge entry to a throwing shim so the
+             // dynamic `import("next/dist/compiled/@vercel/og/index.edge.js")` call site

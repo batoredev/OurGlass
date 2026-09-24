@@ -45,6 +45,12 @@ loadRootEnv();
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   transpilePackages: ["@ourglass/shared"],
+  // NO IMAGE OPTIMIZER. This app renders no `next/image` — the only asset is an
+  // inline SVG icon — and the optimizer drags in `sharp`, whose native
+  // `.node` binaries cannot be bundled into a Worker (the Cloudflare build
+  // failed on exactly that). Cloudflare Images or a custom loader is the route
+  // if a real image ever appears; see opennext.js.org/cloudflare/howtos/image.
+  images: { unoptimized: true },
   // Every route, pages and /api alike. See lib/security-headers.ts for what
   // the CSP does and — stated there on purpose — does not do.
   async headers() {

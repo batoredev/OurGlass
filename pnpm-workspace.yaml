@@ -1,3 +1,22 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# ONE PINNED DEPENDENCY PATCH, with an expiry condition.
+#
+# @opennextjs/cloudflare 1.20.6 hardcodes the esbuild externals for the server
+# bundle and includes neither `sharp` nor `cloudflare:sockets`, so the Worker
+# build fails twice on any Next 16.3.x app: on sharp's native `.node` binaries
+# (Next requires sharp even with `images.unoptimized`, and sharp has no Workers
+# build at all) and on `pg`'s workerd entry importing `cloudflare:sockets`,
+# which esbuild then looks for as a directory. Upstream issue, opened
+# 2026-09-19, no fix released:
+# https://github.com/opennextjs/opennextjs-cloudflare/issues/1394
+#
+# The patch adds both to that one array. Neither is executed at runtime by this
+# app: image optimization is off, and `cloudflare:sockets` is a Workers
+# built-in. DELETE this patch — and the patches/ file — the moment the adapter
+# ships the fix, and re-run `pnpm --filter @ourglass/web run build:worker` to
+# confirm the build still passes without it.
+patchedDependencies:
+  "@opennextjs/cloudflare@1.20.6": patches/@opennextjs+cloudflare@1.20.6.patch

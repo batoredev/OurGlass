@@ -15,14 +15,20 @@
 #
 
 name = "ourglass"
-main = ".open-next/worker.js"
+# NOT `.open-next/worker.js` — that generated handler exports only `fetch`, so
+# the cron trigger below would fire into a Worker with no `scheduled` and
+# reminders would never run. `worker/index.ts` re-exports it and adds ours.
+main = "worker/index.ts"
 
 # `nodejs_compat` is required for `pg` on compatibility dates before
 # 2026-08-04; on or after it, Workers enable nodejs_compat and
 # nodejs_compat_v2 by default. Declared explicitly so the behaviour does not
 # depend on which side of that date the project happens to sit.
 compatibility_date = "2026-09-14"
-compatibility_flags = ["nodejs_compat"]
+# `global_fetch_strictly_public` is required by @opennextjs/cloudflare: it makes
+# the Worker's own `fetch` go out through the public internet rather than
+# looping back inside the zone. Named in the adapter's setup docs.
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
 [assets]
 directory = ".open-next/assets"

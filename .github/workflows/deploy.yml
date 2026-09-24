@@ -1,0 +1,109 @@
+name: Deploy
+
+# Track P1 task 6 of docs/REMAINING-EXECUTION-PLAN.md.
+#
+# PUSHES TO main DEPLOY STAGING. PRODUCTION IS MANUAL, on purpose: the runbook's
+# order is deploy staging -> smoke check -> deploy production, and a smoke check
+# is a human reading a reply from the assistant. Automating the production step
+# would be automating away the gate.
+#
+# MIGRATIONS ARE NOT RUN HERE. `packages/db/migrations/**` is forward-only and
+# applied by an operator against the target database's DIRECT connection
+# (docs/RUNBOOK.md). A workflow holding a database URL that can ALTER TABLE is a
+# blast radius this project does not need for a one-command step.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which Worker to deploy
+        type: choice
+        default: staging
+        options: [staging, production]
+
+permissions: {}
+
+concurrency:
+  # NEVER cancel a deploy in flight: a half-uploaded Worker is worse than a
+  # queued one. (CI cancels superseded runs; this must not.)
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: build + deploy to Cloudflare
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # SKIP, NOT FAIL, when the owner has not added the credentials yet
+      # (docs/YOUR-ACTIONS.md §6-8). A red main branch for a missing account
+      # setting would train everyone to ignore red. Secrets go through `env`
+      # rather than into the script text.
+      - id: creds
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$CLOUDFLARE_API_TOKEN" ] && [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Deploy skipped::Set the CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID repository secrets to enable deploys."
+          fi
+
+      # The same gates CI runs. A deploy that ships code failing its own tests
+      # would make the pipeline a liability rather than a safety net.
+      - if: steps.creds.outputs.ready == 'true'
+        run: pnpm typecheck
+      - if: steps.creds.outputs.ready == 'true'
+        run: pnpm lint
+      - if: steps.creds.outputs.ready == 'true'
+        run: pnpm test
+
+      - name: Deploy staging
+        if: steps.creds.outputs.ready == 'true' && (github.event_name == 'push' || inputs.environment == 'staging')
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm run deploy:staging
+
+      - name: Deploy production
+        if: steps.creds.outputs.ready == 'true' && github.event_name == 'workflow_dispatch' && inputs.environment == 'production'
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm run deploy
+
+      # Optional, and honest when absent: with the deployed URL in the
+      # STAGING_URL / PRODUCTION_URL repository variables, the workflow proves
+      # the thing it just deployed answers. /api/health needs no token.
+      - name: Smoke check
+        if: steps.creds.outputs.ready == 'true'
+        env:
+          URL: ${{ (github.event_name == 'workflow_dispatch' && inputs.environment == 'production') && vars.PRODUCTION_URL || vars.STAGING_URL }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "::notice title=Smoke check skipped::Set the STAGING_URL (and PRODUCTION_URL) repository variables to smoke-check deploys."
+            exit 0
+          fi
+          for attempt in 1 2 3 4 5; do
+            body=$(curl -fsS --max-time 10 "$URL/api/health" || true)
+            case "$body" in *'"db":true'*) echo "healthy: $body"; exit 0;; esac
+            echo "attempt $attempt: $body"
+            sleep 6
+          done
+          echo "::error title=Smoke check failed::$URL/api/health did not report a database connection. See docs/RUNBOOK.md to roll back."
+          exit 1

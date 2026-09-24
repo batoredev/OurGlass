@@ -11,7 +11,7 @@
   "scripts": {
     "build:libs": "pnpm --filter @ourglass/shared --filter @ourglass/db --filter @ourglass/api run build",
     "typecheck": "pnpm run build:libs && pnpm -r --if-present run typecheck",
-    "lint": "eslint . && pnpm -r --if-present run lint",
+    "lint": "eslint . --ignore-pattern \"**/.open-next/**\" && pnpm -r --if-present run lint",
     "test": "pnpm run build:libs && pnpm -r --if-present run test",
     "build": "pnpm -r --if-present run build",
     "dev": "pnpm run build:libs && pnpm --parallel --filter @ourglass/web --filter @ourglass/api run dev",
