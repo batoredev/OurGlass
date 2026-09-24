@@ -71,6 +71,11 @@ Verified against Cloudflare's docs (2026-09-22). What a rollback does **not** do
 
 ## Incidents
 
+**Alerts.** With `ALERT_WEBHOOK_URL` set, the chat channel gets one message (at most one per kind
+per 15 minutes) for the two outages below that nobody would otherwise notice: *the reminder timer
+failed* and *every AI model failed for a message*. An alert names what failed and when, never
+what the user said.
+
 **Every reply says "I couldn't process that just now — nothing was saved."**
 No model provider answered. Nothing was written. `npx wrangler tail --search ai_request` shows one
 JSON line per attempt with `provider`, `errorCategory` and `fallbackReason`. Typical causes: an

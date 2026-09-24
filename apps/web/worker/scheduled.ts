@@ -31,11 +31,14 @@ import { buildToolRegistry } from "@ourglass/api/tools";
 import { pollOnce, systemClock } from "@ourglass/api/reminders/poller";
 import { createPool, withTransaction } from "@ourglass/db";
 import type { DatabaseTransaction } from "@ourglass/shared";
+import { cronFailedMessage, sendAlert } from "../lib/alert";
 
 export interface Env {
   DATABASE_URL: string;
   /** Optional (`wrangler secret put VOYAGE_API_KEY`). Enables the memory-embedding backfill. */
   VOYAGE_API_KEY?: string;
+  /** Optional (`wrangler secret put ALERT_WEBHOOK_URL`). A Slack or Discord webhook. */
+  ALERT_WEBHOOK_URL?: string;
 }
 
 /**
@@ -77,6 +80,8 @@ export async function runScheduled(env: Env): Promise<void> {
     );
   } catch (error: unknown) {
     console.error("[cron] poll failed:", error);
+    // Reminders silently stopping is the outage this app would otherwise hide.
+    await sendAlert("cron_failed", cronFailedMessage(error, new Date()), { webhookUrl: env.ALERT_WEBHOOK_URL });
   } finally {
     // A Worker isolate may be evicted at any time; releasing the pool keeps
     // Supabase's connection count honest rather than relying on eviction.

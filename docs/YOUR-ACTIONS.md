@@ -165,6 +165,12 @@ with CI green.
 
 ## Part 6 — Optional
 
+- [ ] **19b. Alert webhook** (decided: a chat webhook) — so outages reach you instead of waiting to be noticed.
+  1. Slack: create an app → **Incoming Webhooks** → add to a channel → copy the URL. Discord: channel
+     settings → **Integrations → Webhooks → New Webhook** → copy the URL.
+  2. Locally: `ALERT_WEBHOOK_URL=<url>` in `.env`. Deployed, in `apps/web`:
+     `npx wrangler secret put ALERT_WEBHOOK_URL` (and again with `--env staging` if you use staging).
+  - You get one message when reminders stop firing or every AI model fails — never the user's words.
 - [ ] **20. Voyage API key** (<https://dash.voyageai.com>) → `VOYAGE_API_KEY=` in `.env`. Lets
       memory search find paraphrases, not only exact words.
 - [ ] **21. Reconnect the Claude Code connectors.** The GitHub one fails to connect

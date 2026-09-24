@@ -36,6 +36,8 @@ import { buildToolRegistry } from "@ourglass/api/tools";
 import { authorize } from "../_auth";
 import { rejectCrossSite } from "../_http";
 import { rejectOverLimit, turnLimits } from "../_rate-limit";
+import { allModelsFailedMessage, sendAlert } from "../../../lib/alert";
+import type { AIRequestLog } from "@ourglass/shared";
 import { messages, users } from "@ourglass/db";
 import { db, read } from "../_lib";
 
@@ -111,6 +113,9 @@ export async function POST(request: Request) {
   // one story in the log rather than three unrelated lines.
   const requestId = crypto.randomUUID();
 
+  // This turn's attempts, kept so an alert can say "every model failed" from
+  // the router's own records rather than a second guess at them.
+  const attempts: AIRequestLog[] = [];
   let router;
   try {
     router = buildAIRouter(process.env, {
@@ -118,6 +123,7 @@ export async function POST(request: Request) {
       // utterance — Workers Logs is a different retention story from
       // `messages`, where the body already lives with its own provenance.
       onLog: (record) => {
+        attempts.push(record);
         console.log(JSON.stringify({ event: "ai_request", ...record }));
       },
     });
@@ -145,6 +151,10 @@ export async function POST(request: Request) {
           : undefined,
       },
     );
+    // Every model failing is an outage nobody would otherwise notice — each
+    // reply just says "try again". Operational facts only; never the words.
+    const outage = allModelsFailedMessage(attempts, new Date());
+    if (outage) await sendAlert("ai_all_failed", outage, { webhookUrl: process.env["ALERT_WEBHOOK_URL"] });
     return NextResponse.json(result);
   } catch (error: unknown) {
     if (error instanceof UnknownUserError) {
