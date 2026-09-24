@@ -1,216 +1,179 @@
-# What you need to do
+# Your checklist
 
-**Everything here needs a human.** These are the items I cannot do myself — they need a
-credential, an account, money, a permission I do not hold, or a pair of eyes.
+Everything here needs a person: an account, money, a credential, admin rights, or a pair of
+eyes. Tick items off by editing this file. Rewritten 2026-09-24; the previous version was out
+of date (it still listed Supabase setup, which is done, and an old dev-server port).
 
-**Stack:** code on **GitHub**, database on **Supabase**, hosting on **Cloudflare**.
+**Who does what:** 👤 you · 🔑 whoever owns the `batoredev` GitHub account (you have write
+access, not admin) · 💰 costs money · 🤖 hand back to me
 
-Ordered by what unblocks the most. Each says *why* it is yours rather than mine.
+**Already done — don't redo:** Supabase project with pgvector, all 12 migrations applied, a
+working local `.env`, Ollama with `qwen3:8b` so the app runs with no key, everything on GitHub
+with CI green.
 
----
-
-## 🔴 Blocking — nothing runs without these
-
-### 1. Rotate the Anthropic API key
-
-**A live key was pasted into `.env.example` three times.** That file is tracked, and this repo
-is public.
-
-Verified each time: **it was never committed** (`git log -S` finds nothing across all refs;
-`HEAD:.env.example` has the line blank), and I reverted it each time. So there is no evidence of
-exposure — but a key that has sat in a tracked file three times should be treated as burned.
-
-- Rotate at <https://console.anthropic.com/settings/keys>
-- Put the new one in **`.env`** (gitignored), never `.env.example`
-- `.env.example` stays blank — it is the committed template
-
-### 2. Create the Supabase project
-
-This **removes the Docker requirement**. There is no Docker on this machine, which was
-previously the hard blocker to running anything locally.
-
-1. Create a project at <https://supabase.com/dashboard>
-2. **Enable pgvector**: Database → Extensions → search `vector` → enable
-3. Copy the **direct connection** URI: Project Settings → Database → Connection string
-
-> ⚠️ **Use the DIRECT connection (port 5432, `db.[REF].supabase.co`), not the transaction
-> pooler.** Verified from Supabase's docs: the 6543 pooler *"does not support prepared
-> statements"*. This codebase runs `SET LOCAL` inside transactions and holds a long-lived `pg`
-> pool, and migrations require direct access outright. The 6543 option is the tempting wrong
-> choice because "serverless" describes Cloudflare — and it would fail *intermittently*, which
-> is the worst failure shape. Details in `docs/DEPLOYMENT-DESIGN.md` §2.
-
-Then create `.env` in the repo root:
-
-```
-DATABASE_URL=postgresql://postgres:[YOUR-PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
-ANTHROPIC_API_KEY=<your rotated key>
-ENABLE_DEMO_ENDPOINT=true
-```
-
-### 3. Run the migrations
-
-```bash
-pnpm db:migrate
-```
-
-Ten migrations, `001`–`010`, all verified against real Postgres 17 + pgvector in CI. **They have
-never run against Supabase**, which is the one environment difference that matters. If it fails,
-the error names the migration.
+**Fastest route to a live URL:** items 1, 2, 4, 8, 9, 10, 11, 12. Item 3 can run in parallel.
 
 ---
 
-## 🟠 Needed to see the product actually work
+## Part 1 — Security (today, about 15 minutes)
 
-### 4. Start it and talk to it
+- [ ] **1. Revoke the Ollama API key you pasted into the chat** 👤
+  1. Sign in at <https://ollama.com> and open your account settings → Keys.
+  2. Delete the key you pasted.
+  - **Done when:** it no longer appears in the list.
 
-```bash
-pnpm dev     # api on :3001, web on :3000
-```
+- [ ] **2. Rotate the Anthropic API key** 👤
+  It reached a tracked file three times. It was never committed, but treat it as leaked.
+  1. Open <https://console.anthropic.com/settings/keys>.
+  2. Create a new key and copy it.
+  3. Delete the old key.
+  4. In the repo root, open `.env` and set `ANTHROPIC_API_KEY=<the new key>`.
+  5. Never put a key in `.env.example` (it is committed and the repo is public) or in a chat.
+  - **Done when:** the old key shows as deleted and `.env` holds the new one.
 
-```bash
-curl -s localhost:3001/turn -H 'content-type: application/json' \
-  -d '{"utterance":"Barkha needs to give me the article by 6. Remind me at 5 to ask her."}'
-```
+- [ ] **3. Protect the repository** 🔑 *(send these steps to the `batoredev` owner)*
+  1. GitHub → the `OurGlass` repo → **Settings → Branches** → add a rule for `main` that
+     requires these status checks to pass: `typecheck / lint / test / build` and
+     `integration (Postgres + pgvector)`.
+  2. **Settings → Code security** → turn on **secret scanning** and **push protection**.
+  3. Same page → turn on **Dependabot alerts**.
+  - **Done when:** a pull request into `main` shows both checks as required.
 
-Then open <http://localhost:3000> and click through Today / Commitments / People / Memory /
-Activity.
+## Part 2 — Give the app a real model (about 10 minutes)
 
-**Why this is yours:** every judgement in spec §5, §30 and §31 — tone, conciseness, whether a
-reply sounds like a person — is **unfalsifiable by a test suite**. Someone has to read the
-replies and say whether they are any good.
+- [ ] **4. Add Anthropic credit** 👤💰
+  Local Qwen gets 34 of 99 test sentences fully right. Claude is the model the app was built
+  for, and it has never been measured.
+  1. <https://console.anthropic.com> → **Settings → Billing** → add credit. A small amount is
+     enough to start.
+  2. In `.env`, change `AI_PROVIDER_ORDER=qwen` to `AI_PROVIDER_ORDER=claude,gemini,qwen`.
+  3. Stop and restart `pnpm dev`.
+  4. Send any message.
+  - **Done when:** replies arrive in a few seconds rather than about 30, and none says
+    "I couldn't process that".
 
-### 5. Approve the live eval run *(costs money)*
+- [ ] **5. Approve the paid measurement** 👤 → 🤖
+  Tell me "run the Claude eval". It is about 99 Claude calls; the project rules require your
+  go-ahead before spending. I record the results in `docs/AI_EVALS.md`.
 
-```bash
-pnpm --filter @ourglass/evals test:live
-```
+## Part 3 — Try it yourself (about 30 minutes)
 
-**69 paid Sonnet calls.** `.claude/rules/wat.md` requires me to ask before spending on a metered
-endpoint, so I have not run it.
+- [ ] **6. Use the app locally** 👤
+  Tests cannot judge whether a reply sounds right. Only a person can.
+  1. In a terminal at the repo root: `pnpm dev`
+  2. Open <http://localhost:3000>. No sign-in is needed locally.
+  3. Send these one at a time:
+     - `Barkha needs to give me the article by 6. Remind me at 5 to ask her.`
+     - `What does Barkha owe me?`
+     - `Track my reading with a book title and pages read.`
+     - `Barkha sent me the article.`
+  4. After each, check the reply is short, correct, and says who owes what to whom.
+  5. Press **Undo** on one turn and check it disappears from **Commitments**.
+  6. Open **Today, Commitments, People, Memories** and **Settings**.
+  - **Done when:** you have told me anything that reads wrong or looks broken.
 
-**This is the single largest unmeasured thing in the project** — there is no recorded model
-output in the repo at all, so every extraction claim is about the harness, not the model. It
-matters more now: I just added six fields to the extraction contract and changed the system
-prompt, so the surface this measures **grew**.
+- [ ] **7. Try dictation** 👤
+  1. Open <http://localhost:3000> in **Chrome or Edge**. Firefox shows no microphone; that is
+     expected, because it has no speech API.
+  2. Click the **microphone** next to Send and allow microphone access.
+  3. Say: "Remind me tomorrow at nine to call the printer."
+  4. The words should appear in the message box **without sending**. Then press Send.
+  - **Done when:** the text appears correctly. Nobody has tried this with a real microphone yet.
+
+## Part 4 — Put it on the internet (about an hour)
+
+- [ ] **8. Create a Cloudflare account and log in** 👤
+  1. Sign up at <https://dash.cloudflare.com>. The free plan is enough; the app fits its limit.
+  2. In a terminal: `cd apps/web`, then `npx wrangler login`, and approve in the browser.
+  3. Check: `npx wrangler whoami` shows your account.
+
+- [ ] **9. Create the production database** 👤
+  Your current Supabase project holds test and demo data, so use a clean one for production.
+  1. Supabase dashboard → **New project** (e.g. `ourglass-prod`). Save the database password.
+  2. **Database → Extensions** → search `vector` → enable it.
+  3. **Project Settings → Database → Connection string** → copy the **direct** connection
+     (port **5432**, host `db.<ref>.supabase.co`). Not the 6543 pooler — it breaks this app
+     intermittently.
+  4. From the repo root, in PowerShell:
+     ```powershell
+     $env:DATABASE_URL="postgresql://postgres:PASSWORD@db.REF.supabase.co:5432/postgres"; pnpm db:migrate; Remove-Item Env:DATABASE_URL
+     ```
+  - **Done when:** the output ends `applied 12 migration(s)`.
+
+- [ ] **10. Turn on backups** 👤💰
+  1. In the production project: **Database → Backups**.
+  2. Turn on **point-in-time recovery** if your plan offers it (it may need a paid plan).
+  - **Done when:** you know how far back you could restore. Without backups, a bad write or
+    migration cannot be recovered.
+
+- [ ] **11. Set the production secrets** 👤
+  Run these in `apps/web`. Each one asks you to paste a value. If it offers to create the
+  Worker, answer yes.
+  1. Generate the sign-in token (your password to the live app) and save it in a password
+     manager:
+     ```
+     node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+     ```
+  2. `npx wrangler secret put OURGLASS_ACCESS_TOKEN` → paste the token.
+  3. `npx wrangler secret put DATABASE_URL` → paste the production connection string.
+  4. `npx wrangler secret put ANTHROPIC_API_KEY` → paste the key.
+  5. Optional: `GEMINI_API_KEY` as a backup model, `VOYAGE_API_KEY` for memory search.
+  - The live app cannot reach the Ollama on your laptop, so it **needs item 4**.
+
+- [ ] **12. Deploy and check** 👤
+  1. From the repo root: `pnpm --filter @ourglass/web run deploy`
+  2. Note the address printed at the end: `https://ourglass.<your-subdomain>.workers.dev`
+  3. Open `<address>/api/health`. It must show `"db":true`.
+  4. Open `<address>/login`, paste the token from item 11, and sign in.
+  5. Send one message and check the reply.
+  6. In `apps/web`, run `npx wrangler tail`. Within two minutes a `scheduled` event should
+     appear — that is the reminder timer running.
+  - **If anything fails:** `docs/RUNBOOK.md` → *Roll back*.
+
+- [ ] **13. Staging** 👤 *(optional, but do it before item 14)*
+  Automatic deploys go to staging first, so set it up before turning them on.
+  1. Create another Supabase project (e.g. `ourglass-staging`) and repeat item 9 for it.
+  2. Repeat item 11 with `--env staging` on every command, and a **different** access token.
+  3. `pnpm --filter @ourglass/web run deploy:staging`
+  4. Check `https://ourglass-staging.<your-subdomain>.workers.dev/api/health`.
+
+- [ ] **14. Turn on automatic deploys** 🔑
+  For a repository owned by a personal account, only the owner can add Actions secrets.
+  1. Cloudflare → **My Profile → API Tokens → Create Token** → the **Edit Cloudflare Workers**
+     template → copy the token.
+  2. Cloudflare → **Workers & Pages** → copy the **Account ID** shown on the right.
+  3. GitHub repo → **Settings → Secrets and variables → Actions** → **New repository secret**:
+     `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+  4. **Variables** tab → add `PRODUCTION_URL` (and `STAGING_URL` if you did item 13). These
+     switch on the post-deploy check and the 15-minute uptime check.
+  - **Done when:** the next push's **Deploy** run shows steps running instead of skipped.
+    Pushes deploy staging; production stays a manual run of the Deploy workflow.
+
+## Part 5 — Decisions only you can make (reply to me)
+
+- [ ] **15. Cost budget per message** → I set the real spam limits. Today's 20 per minute and
+      500 per day are placeholders.
+- [ ] **16. Where uploaded files live** — Supabase Storage or Cloudflare R2. Unblocks Phase 6:
+      sending the assistant screenshots and PDFs.
+- [ ] **17. A Google Cloud project** for Gmail, Calendar and Drive (Phase 7). Start early:
+      Google's consent-screen review takes days to weeks. Also decide: may the assistant **send**
+      email, or only **draft** it?
+- [ ] **18. Will there be a second customer?** Only a yes makes the multi-customer work
+      (6–9 sessions) worth doing.
+- [ ] **19. Terms of service and a privacy policy** before anyone outside your team uses it.
+      The app stores commitments and facts about real people.
+
+## Part 6 — Optional
+
+- [ ] **20. Voyage API key** (<https://dash.voyageai.com>) → `VOYAGE_API_KEY=` in `.env`. Lets
+      memory search find paraphrases, not only exact words.
+- [ ] **21. Reconnect the Claude Code connectors.** The GitHub one fails to connect
+      ("Authorization header is badly formatted"); Supabase and Vercel need authorising via
+      `/mcp`. Nothing depends on them.
 
 ---
 
-## 🟡 Cloudflare — needed to deploy
+## What I'm doing meanwhile — no action from you
 
-### 6. Cloudflare account + Wrangler login
-
-```bash
-npx wrangler login
-```
-
-### 7. Set the production secrets
-
-**Never in `wrangler.toml`** — that file is committed.
-
-```bash
-npx wrangler secret put OURGLASS_ACCESS_TOKEN   # REQUIRED: without it every route 404s
-npx wrangler secret put DATABASE_URL
-npx wrangler secret put ANTHROPIC_API_KEY
-npx wrangler secret put VOYAGE_API_KEY      # optional, see §9
-```
-
-The access token must be at least 32 characters; a shorter one makes the app refuse to serve
-rather than serve weakly. Generate one with:
-
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
-```
-
-**Staging has its own Worker and therefore its own secrets.** Repeat each line with
-`--env staging`, and point that `DATABASE_URL` at a **separate** database — a staging Worker on
-the production database is production with fewer safeguards.
-
-### 8. GitHub Actions deploy secrets
-
-For CI to deploy on push to `main`, add as **repository secrets**:
-
-- `CLOUDFLARE_API_TOKEN` — create at <https://dash.cloudflare.com/profile/api-tokens>, "Edit
-  Cloudflare Workers" template
-- `CLOUDFLARE_ACCOUNT_ID`
-
-Until both exist the `Deploy` workflow **skips with a notice** instead of failing, so `main` stays
-green while this is outstanding. A push to `main` then deploys staging; production is a manual
-run of that workflow.
-
-Optionally add the deployed URLs as repository **variables** — `STAGING_URL` and
-`PRODUCTION_URL` (e.g. `https://ourglass-staging.<your-subdomain>.workers.dev`). With them the
-workflow smoke-checks `/api/health` after each deploy and fails loudly if the database is
-unreachable; without them it says it skipped.
-
-> **`ANTHROPIC_API_KEY` must never go in a workflow a fork PR can trigger.** The live eval lane
-> is `workflow_dispatch`-only for exactly this reason.
-
----
-
-## 🟢 Optional — enables built-but-idle features
-
-### 9. A Voyage API key, for semantic memory
-
-Phase 4's embedding layer is built, indexed, and integration-tested — and **has never been
-called with a real key**. Without one the app runs fine: memories store with a NULL embedding and
-stay fully visible to structured queries. They are only invisible to *semantic* search.
-
-Get one at <https://dash.voyageai.com>, then `VOYAGE_API_KEY=...` in `.env`.
-
-**Unverified until you do:** the `input_type` asymmetry (document vs query), the 1024-dimension
-match, and recall quality. All three fail **silently** — a wrong `input_type` returns 1024
-perfectly valid floats and simply worse recall.
-
-### 10. Authorise the Supabase MCP connector *(optional)*
-
-It is configured in this session but **not authorised**, so I cannot query your project
-directly. Authorise via your claude.ai connector settings, or `claude mcp` / `/mcp` in an
-interactive session. Nothing depends on it — it would only save you pasting output.
-
----
-
-## 🔵 Owner permissions — I hold WRITE, not ADMIN
-
-Verified: `gh api repos/batoredev/OurGlass --jq .permissions` →
-`{"admin":false,"maintain":false,"pull":true,"push":true,"triage":true}`
-
-Whoever owns `batoredev` needs to:
-
-- **Turn on branch protection** for `main` (require CI before merge)
-- **Confirm secret scanning + push protection** — I cannot even *read* their state without
-  admin, so their status is assumed, not verified. Given a live key reached a tracked file three
-  times, push protection is worth confirming specifically.
-- **Confirm Dependabot alerts** are on
-
----
-
-## Per phase — what is yours, including the finished ones
-
-| Phase | Status | Your action |
-|---|---|---|
-| **0 — Foundation** | done | Branch protection, secret scanning, Dependabot *(needs ADMIN)*. Later: Cloudflare + GitHub deploy secrets (§6–8) |
-| **1 — State + tools** | done | **Nothing.** `add_entity_field` is unbuilt, but that is my work |
-| **2 — Interpret + Resolve** | done | **Run `test:live`** (§5). Still zero recorded model output |
-| **3 — Loop + reminders** | done | **Run the demo and read the replies** (§4) — the only way to judge tone |
-| **4 — Understanding over time** | done | **Voyage key** (§9), if you want semantic recall |
-| **5 — Dynamic entities + UI** | done | **Open the UI in a browser.** Nine routes build and unit-test; nobody has looked at them, so every visual judgement is unverified |
-| **6 — Ingestion** | not started | Nothing yet |
-| **7 — Integrations** | not started | Google OAuth credentials, when we reach it |
-| **8 — Voice** | deferred | — |
-
----
-
-## What is mine, not yours
-
-So the split is unambiguous — these need no decision from you:
-
-- **The Cloudflare port**: Fastify → Next.js Route Handlers, poller → Cron Trigger, pin `pg`
-  (`docs/DEPLOYMENT-DESIGN.md`)
-- Wiring the seven built-but-unreachable tools into the planner *(in progress)*
-- Phase 4's demo: `create_event` plus two call sites for §24/§26
-- `add_entity_field` (Phase 1), duplicate detection (Phase 2), conditional-rule creation (Phase 3)
-- The conversation view (Phase 5)
-- Phases 6–8
-
-Full technical detail: `docs/EXECUTION-PLAN.md`'s outstanding-work section.
+The accessibility audit, a stricter content security policy, and alerting once the app is
+deployed. Progress is tracked in `docs/REMAINING-EXECUTION-PLAN.md`.

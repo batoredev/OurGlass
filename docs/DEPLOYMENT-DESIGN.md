@@ -180,7 +180,7 @@ framework-touching files plus configuration.
 
 **Still not done, and it is the part that matters:** nothing has been deployed. A real request
 served by a real Worker needs the owner's Cloudflare account, `wrangler secret put` for each
-secret, and the CI secrets — `docs/YOUR-ACTIONS.md` §6–8. Everything above is "the artifact
+secret, and the CI secrets — `docs/YOUR-ACTIONS.md` items 8–14. Everything above is "the artifact
 builds and contains what it should", which this project has learned is not the same thing.
 
 **Two build failures worth knowing about before touching the adapter.** Both are upstream

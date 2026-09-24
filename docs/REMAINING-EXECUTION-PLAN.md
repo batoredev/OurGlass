@@ -248,7 +248,7 @@ produce the artifact they reference. **Nothing here is verified until a real req
 by a real Worker.**
 
 Work: install the adapter, add `preview`/`deploy` scripts, build, deploy, put the secrets in
-with `wrangler secret put` (`docs/YOUR-ACTIONS.md` §6–8 lists what the owner must do first),
+with `wrangler secret put` (`docs/YOUR-ACTIONS.md` items 8–14 list what the owner must do first),
 verify a real request and a real cron tick, then add the CI deploy step.
 
 **Expect surprises here.** Two are already flagged in the design: `pg` must use Supabase's
@@ -271,7 +271,7 @@ Each of these was verified absent rather than assumed. Five are now built (2026-
 | **Error boundaries** | A server error showed Next's default page | ✅ `error.tsx`, `global-error.tsx`, `not-found.tsx`; the 404 verified live. The raw message is never shown, only a digest |
 | **Uptime check** | `/api/health` existed and nothing polled it | ✅ `.github/workflows/uptime.yml`, every 15 minutes, once `STAGING_URL` / `PRODUCTION_URL` are set. Best-effort: it notifies, it does not page |
 | **Runbook** | `production.md` requires a rollback and recovery story | ✅ `docs/RUNBOOK.md` — deploy, smoke check, rollback (commands verified against Cloudflare's docs), recovery, and the incidents this system actually has |
-| **Staging** | One environment meant deploying straight to production | ✅ `[env.staging]`, plus staging-only secrets and a separate database, documented in `YOUR-ACTIONS.md` §7 |
+| **Staging** | One environment meant deploying straight to production | ✅ `[env.staging]`, plus staging-only secrets and a separate database, documented in `YOUR-ACTIONS.md` item 13 |
 | **Alerting** | Cloudflare logs exist; nothing aggregates or alerts on them. The per-attempt `ai_request` lines are excellent and nobody is watching them | ❌ Medium. Wants a destination (Logpush, Sentry, a webhook) — an owner choice, and pointless before the app is deployed |
 | **Accessibility pass** | The UI *is* the product surface: keyboard navigation, focus order, contrast, the composer's ARIA | ❌ Medium — `accessibility-engineer`, read-only. The new dictation button carries `aria-pressed` and a state-dependent label, but nothing has been audited |
 | **Backups** | `db:reset` is the only recovery path today and it is destructive | ❌ Owner action: confirm Supabase PITR is on. The runbook depends on it |

@@ -47,7 +47,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       # SKIP, NOT FAIL, when the owner has not added the credentials yet
-      # (docs/YOUR-ACTIONS.md §6-8). A red main branch for a missing account
+      # (docs/YOUR-ACTIONS.md items 8-14). A red main branch for a missing account
       # setting would train everyone to ignore red. Secrets go through `env`
       # rather than into the script text.
       - id: creds

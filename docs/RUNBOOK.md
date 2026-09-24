@@ -28,7 +28,7 @@ uploading anything: `npx wrangler deploy --dry-run --outdir=.open-next/dry-run`.
 A deploy never changes the database. If the release includes a new file in
 `packages/db/migrations/`, apply it **before** deploying the code that needs it, from the repo
 root with `DATABASE_URL` pointing at the target database's **direct** connection (port 5432 —
-never Supabase's 6543 transaction pooler, see `docs/YOUR-ACTIONS.md` §2):
+never Supabase's 6543 transaction pooler, see `docs/YOUR-ACTIONS.md` item 9):
 
 ```sh
 pnpm db:migrate        # forward-only; applies only files not yet in pgmigrations
