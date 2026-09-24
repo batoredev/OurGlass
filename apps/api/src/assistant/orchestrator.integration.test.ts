@@ -1215,7 +1215,10 @@ suite("runTurn (integration)", () => {
 
     // Appended deterministically, never through the model — the fake
     // responder returns "ok", so anything beyond it came from the gate.
-    expect(result.reply).toContain("the article");
+    // "Barkha's article", not "the article": objectText is stored as the user's
+    // noun phrase WITH its article, and the possessive form drops it rather
+    // than rendering "Barkha's the article" (proactive.ts, ownedThing).
+    expect(result.reply).toContain("Barkha's article");
     expect(result.reply).toContain("overdue");
   });
 
