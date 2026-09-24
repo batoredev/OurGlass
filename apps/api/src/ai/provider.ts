@@ -27,6 +27,22 @@ export interface InterpretInput {
   readonly utterance: string;
   /** Correlates every log line and trace for one turn (§21). */
   readonly requestId?: string;
+  /**
+   * What the app already knows that the sentence cannot say — today, the
+   * trackers that exist (assistant/tracked-context.ts). Already rendered,
+   * built only from validated snake_case keys, so it can carry no
+   * instructions. Absent for evals and for a first turn with nothing tracked.
+   */
+  readonly context?: string;
+}
+
+/**
+ * The text a model reads for Interpret: the user's words, then any app
+ * context, clearly marked as NOT the user's words so it is never quoted back
+ * as `sourceText`. One function, so all three providers send the same thing.
+ */
+export function interpretMessage(input: { readonly utterance: string; readonly context?: string }): string {
+  return input.context ? `${input.utterance}\n\n${input.context}` : input.utterance;
 }
 
 export interface AIProvider {

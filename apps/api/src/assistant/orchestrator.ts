@@ -66,6 +66,7 @@ import { gateIntentCalls, loadGrants, type GateDecision } from "../permissions/g
 import { PENDING_ACTION_TTL_SECONDS } from "../permissions/policy.js";
 import { singularTypeKey, toSnakeKey } from "./snake-key.js";
 import { isQuestion, namedFieldCount } from "./write-guards.js";
+import { renderTrackedTypes } from "./tracked-context.js";
 
 export interface TurnRequest {
   readonly utterance: string;
@@ -194,9 +195,17 @@ export async function runTurn(req: TurnRequest, deps: OrchestratorDeps): Promise
   );
 
   // ---- Interpret ----------------------------------------------------------
+  //
+  // The trackers that exist go with the sentence, so a model can EXTEND one
+  // ("also track the sunlight for my plants") instead of inventing a second —
+  // which live qwen3:8b did, because a sentence alone cannot say what exists.
+  // Keys only; see tracked-context.ts for why that makes it safe to send.
+  const trackedContext = renderTrackedTypes(
+    await deps.db.withTransaction((tx) => entityRecords.listTypes(tx)),
+  );
   let interpretation: ExtractionResult;
   try {
-    interpretation = await deps.extractor.extract(req.utterance);
+    interpretation = await deps.extractor.extract(req.utterance, trackedContext);
   } catch (error: unknown) {
     if (error instanceof ExtractionError) {
       // TEMPLATE, never a Haiku call (§3.4). The model just failed; calling

@@ -1090,6 +1090,24 @@ suite("runTurn (integration)", () => {
     ]);
   });
 
+  it("tells the model which trackers already exist, by key", async () => {
+    // Without it, "also track the sunlight for my plants" made qwen3:8b invent
+    // a second tracker: a sentence alone cannot say what exists.
+    await defineGymWithNote();
+    const seen: (string | undefined)[] = [];
+    const { responder } = recordingResponder();
+    const capturing: Extractor = {
+      extract: async (utterance, context) => {
+        seen.push(context);
+        return fakeExtractor([intent({ kind: "question", sourceText: utterance })]).extract(utterance);
+      },
+    };
+
+    await runTurn({ utterance: "What's new?", userId }, deps(capturing, responder));
+
+    expect(seen[0]).toContain("- gym_session: note");
+  });
+
   it("finds a tracker whatever plural the model uses — no duplicate, no lost record", async () => {
     // Live qwen3:8b keyed one tracker `plants` then `plant`, and a duplicate
     // was created. Defined here as gym_session; the model logs as gym_sessions.

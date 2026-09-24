@@ -41,7 +41,7 @@ import {
 } from "../assistant/respond.js";
 import { ProviderError, classifyProviderError } from "./errors.js";
 import { toGeminiSchema } from "./gemini-schema.js";
-import type { AIProvider, InterpretInput } from "./provider.js";
+import { interpretMessage, type AIProvider, type InterpretInput } from "./provider.js";
 
 /**
  * The slice of `@google/genai` this provider uses.
@@ -204,7 +204,7 @@ export class GeminiProvider implements AIProvider {
       const client = await this.clientOrThrow();
       const response = await client.models.generateContent({
         model: this.interpretModel,
-        contents: input.utterance,
+        contents: interpretMessage(input),
         config: {
           systemInstruction: EXTRACTION_SYSTEM_PROMPT,
           // Schema-constrained JSON rather than a tool call. Gemini supports

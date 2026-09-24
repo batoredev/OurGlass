@@ -162,7 +162,7 @@ export class AIModelRouter {
   }
 
   async interpret(
-    input: { readonly utterance: string; readonly requestId?: string },
+    input: { readonly utterance: string; readonly requestId?: string; readonly context?: string },
     context: { readonly turnId?: string | null } = {},
   ): Promise<RoutedInterpretation> {
     const chain = this.chainFor("interpret");
@@ -175,7 +175,11 @@ export class AIModelRouter {
         try {
           const result = await this.withTimeout(
             provider.name,
-            provider.interpret({ utterance: input.utterance, requestId }),
+            provider.interpret({
+              utterance: input.utterance,
+              requestId,
+              ...(input.context ? { context: input.context } : {}),
+            }),
           );
           this.log({
             requestId,
@@ -351,12 +355,14 @@ export class RoutedExtractor implements Extractor {
     private readonly requestId?: string,
   ) {}
 
-  async extract(utterance: string): Promise<ExtractionResult> {
+  async extract(utterance: string, context?: string): Promise<ExtractionResult> {
     let routed: RoutedInterpretation;
     try {
-      routed = await this.router.interpret(
-        this.requestId === undefined ? { utterance } : { utterance, requestId: this.requestId },
-      );
+      routed = await this.router.interpret({
+        utterance,
+        ...(this.requestId === undefined ? {} : { requestId: this.requestId }),
+        ...(context ? { context } : {}),
+      });
     } catch (error: unknown) {
       throw toExtractionError(utterance, error);
     }

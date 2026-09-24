@@ -167,6 +167,27 @@ describe("the request Ollama actually receives", () => {
     }
   });
 
+  it("sends app context AFTER the user's words, and nothing extra without it", async () => {
+    // The trackers that exist (tracked-context.ts). The user's sentence comes
+    // first and unchanged, so sourceText spans still quote the user.
+    const withContext: Captured = {};
+    await provider({ message: { content: JSON.stringify(VALID) }, done_reason: "stop" }, { captured: withContext }).interpret({
+      utterance: "Also track the sunlight for my plants",
+      context: "[Context from the app, not the user's words.]\n- plants: name",
+    });
+    const user = (captured: Captured) =>
+      (captured.body?.["messages"] as { role: string; content: string }[]).find((m) => m.role === "user")?.content;
+    expect(user(withContext)).toBe(
+      "Also track the sunlight for my plants\n\n[Context from the app, not the user's words.]\n- plants: name",
+    );
+
+    const without: Captured = {};
+    await provider({ message: { content: JSON.stringify(VALID) }, done_reason: "stop" }, { captured: without }).interpret({
+      utterance: "Also track the sunlight for my plants",
+    });
+    expect(user(without)).toBe("Also track the sunlight for my plants");
+  });
+
   it("turns Qwen3's thinking OFF on both stages", async () => {
     // Measured on a real Ollama: with `think` omitted, the Interpret request
     // spent all 1,200 output tokens reasoning, wrote nothing, and took 114s

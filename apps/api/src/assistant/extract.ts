@@ -7,6 +7,7 @@
  * timestamps. Resolve and the Phase 1 validator remain the authority for mutations.
  */
 import Anthropic from "@anthropic-ai/sdk";
+import { interpretMessage } from "../ai/provider.js";
 import type { Model, Tool } from "@anthropic-ai/sdk/resources/messages";
 import {
   EXTRACTION_INPUT_SCHEMA,
@@ -18,7 +19,11 @@ import {
 } from "@ourglass/shared";
 
 export interface Extractor {
-  extract(utterance: string): Promise<ExtractionResult>;
+  /**
+   * `context` is app knowledge the sentence cannot carry — the trackers that
+   * exist (tracked-context.ts). Optional: evals and fakes pass none.
+   */
+  extract(utterance: string, context?: string): Promise<ExtractionResult>;
 }
 
 /**
@@ -90,14 +95,14 @@ export class AnthropicExtractor implements Extractor {
     this.model = options.model ?? EXTRACTION_MODEL;
   }
 
-  async extract(utterance: string): Promise<ExtractionResult> {
+  async extract(utterance: string, context?: string): Promise<ExtractionResult> {
     if (utterance.trim().length === 0) throw new Error("Cannot extract an empty utterance");
     const started = performance.now();
     const response = await this.client.messages.create({
       model: this.model,
       max_tokens: 1_200,
       system: EXTRACTION_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: utterance }],
+      messages: [{ role: "user", content: interpretMessage({ utterance, ...(context ? { context } : {}) }) }],
       tools: [EXTRACTION_TOOL],
       tool_choice: { type: "tool", name: EXTRACTION_TOOL_NAME, disable_parallel_tool_use: true },
     });

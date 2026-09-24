@@ -39,7 +39,7 @@ import {
   type RespondTrace,
 } from "../assistant/respond.js";
 import { ProviderError, classifyProviderError } from "./errors.js";
-import type { AIProvider, InterpretInput } from "./provider.js";
+import { interpretMessage, type AIProvider, type InterpretInput } from "./provider.js";
 
 /** Ollama's `/api/chat` response, as documented. Only the fields we read. */
 export interface OllamaChatResponse {
@@ -297,7 +297,7 @@ export class QwenProvider implements AIProvider {
           model: this.model,
           messages: [
             { role: "system", content: QWEN_EXTRACTION_PROMPT },
-            { role: "user", content: input.utterance },
+            { role: "user", content: interpretMessage(input) },
           ],
           stream: false,
           ...NO_THINKING,

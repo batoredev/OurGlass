@@ -105,7 +105,7 @@ export class ClaudeProvider implements AIProvider {
 
   async interpret(input: InterpretInput): Promise<ExtractionResult> {
     try {
-      return await this.extractorOrThrow().extract(input.utterance);
+      return await this.extractorOrThrow().extract(input.utterance, input.context);
     } catch (error: unknown) {
       const classified = classifyProviderError(this.name, error);
       this.lastFailureAt = new Date().toISOString();
