@@ -1,5 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { toSnakeKey } from "./snake-key.js";
+import { singularTypeKey, toSnakeKey } from "./snake-key.js";
+
+describe("singularTypeKey", () => {
+  it("makes the plural and singular names of one tracker the same key", () => {
+    // Live qwen3:8b keyed the same sentence `plants` and then `plant`, and a
+    // duplicate tracker was created. The owner's real tracker is gym_sessions.
+    expect(singularTypeKey("plants")).toBe(singularTypeKey("plant"));
+    expect(singularTypeKey("gym_sessions")).toBe("gym_session");
+    expect(singularTypeKey("gymSession")).toBe("gym_session");
+    expect(singularTypeKey("diaries")).toBe("diary");
+  });
+
+  it("leaves words that are not plurals alone, so different trackers never collide", () => {
+    expect(singularTypeKey("glass")).toBe("glass");
+    expect(singularTypeKey("status")).toBe("status");
+    expect(singularTypeKey("analysis")).toBe("analysis");
+    expect(singularTypeKey("gas")).toBe("gas");
+    expect(singularTypeKey("book")).not.toBe(singularTypeKey("booking"));
+  });
+});
 
 describe("toSnakeKey", () => {
   it("converts what a local model actually wrote", () => {

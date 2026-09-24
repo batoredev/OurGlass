@@ -172,6 +172,13 @@ export function templateReply(input: RespondInput): string {
   return parts.join(" ").trim() || "Done.";
 }
 
+/** "rating", "rating and format", "rating, format and genre" — lowercased, as prose. */
+function joinLabels(labels: readonly string[]): string {
+  const words = labels.map((label) => label.toLowerCase());
+  if (words.length <= 1) return words[0] ?? "a field";
+  return `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
+}
+
 function describeFact(fact: CommittedFact): string {
   // Exhaustive switch on the discriminant. If packages/shared adds a fifth
   // CommittedFact variant, `assertNever` makes `tsc` fail here rather than
@@ -208,6 +215,8 @@ function describeFact(fact: CommittedFact): string {
       return `Rule set — I'll check on ${fact.evaluateAtLocal}: ${fact.actionBody}.`;
     case "entity_type_defined":
       return `Tracking ${fact.displayName} now, with ${fact.fieldCount} field${fact.fieldCount === 1 ? "" : "s"}.`;
+    case "entity_fields_added":
+      return `Added ${joinLabels(fact.labels)} to ${fact.displayName}.`;
     case "entity_record_created":
       return `Logged to ${fact.displayName}.`;
     case "event_scheduled":

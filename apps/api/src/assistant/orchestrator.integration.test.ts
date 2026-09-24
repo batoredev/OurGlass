@@ -970,6 +970,7 @@ suite("runTurn (integration)", () => {
         fakeExtractor([
           intent({
             kind: "action",
+            sourceText: "Track my gym sessions with a date and a note",
             entityTypeDefinition: {
               typeKey: "gym_session",
               displayName: "Gym Sessions",
@@ -1006,6 +1007,7 @@ suite("runTurn (integration)", () => {
           fakeExtractor([
             intent({
               kind: "action",
+              sourceText: "Track my reading with a book title",
               entityTypeDefinition: {
                 typeKey: "reading",
                 displayName: "Reading",
@@ -1031,6 +1033,177 @@ suite("runTurn (integration)", () => {
     expect(type?.fields.map((field) => field.field_key)).toEqual(["book_title"]);
   });
 
+  /** "Track my gym sessions with a note." — the type the next tests grow. */
+  async function defineGymWithNote() {
+    const { responder } = recordingResponder();
+    const result = await runTurn(
+      { utterance: "Track my gym sessions with a note.", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "action",
+            sourceText: "Track my gym sessions with a note",
+            entityTypeDefinition: {
+              typeKey: "gym_session",
+              displayName: "Gym Sessions",
+              fields: [{ fieldKey: "note", fieldKind: "text", label: "Note", required: false }],
+            },
+          }),
+        ]),
+        responder,
+      ),
+    );
+    expect(result.committed).toEqual(["define_entity_type"]);
+  }
+
+  it("GROWS an existing type instead of failing with 'already exists'", async () => {
+    // §36's other half. Before add_entity_field, this sentence could only
+    // re-define gym_session and fail — a tracker could never grow.
+    await defineGymWithNote();
+    const { responder, calls } = recordingResponder();
+
+    const result = await runTurn(
+      { utterance: "Also track which gym I went to.", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "action",
+            sourceText: "Also track which gym I went to",
+            entityTypeDefinition: {
+              typeKey: "gym_session",
+              displayName: "Gym Sessions",
+              // The model said required; the planner must not pass that on.
+              fields: [{ fieldKey: "gym", fieldKind: "text", label: "Gym", required: true }],
+            },
+          }),
+        ]),
+        responder,
+      ),
+    );
+
+    expect(result.committed).toEqual(["add_entity_field"]);
+    const type = await withTransaction(pool, (tx) => entityRecords.getTypeByKey(tx, "gym_session"));
+    expect(type?.fields.map((field) => field.field_key)).toEqual(["note", "gym"]);
+    expect(type?.fields.find((field) => field.field_key === "gym")?.required).toBe(false);
+    expect(calls[0]?.committed).toEqual([
+      { kind: "entity_fields_added", displayName: "Gym Sessions", labels: ["Gym"] },
+    ]);
+  });
+
+  it("finds a tracker whatever plural the model uses — no duplicate, no lost record", async () => {
+    // Live qwen3:8b keyed one tracker `plants` then `plant`, and a duplicate
+    // was created. Defined here as gym_session; the model logs as gym_sessions.
+    await defineGymWithNote();
+    const { responder } = recordingResponder();
+
+    const result = await runTurn(
+      { utterance: "Log a gym session with a note about legs.", userId },
+      deps(
+        fakeExtractor([
+          intent({ kind: "action", entityRecord: { typeKey: "gym_sessions", values: { note: "legs" } } }),
+        ]),
+        responder,
+      ),
+    );
+
+    expect(result.committed).toEqual(["create_entity_record"]);
+    const types = await withTransaction(pool, (tx) => entityRecords.listTypes(tx));
+    expect(types.map((type) => type.type_key)).toEqual(["gym_session"]);
+    expect(await withTransaction(pool, (tx) => entityRecords.listRecords(tx, "gym_session"))).toHaveLength(1);
+  });
+
+  it("ASKS rather than re-defining a type whose fields all exist", async () => {
+    await defineGymWithNote();
+    const { responder, calls } = recordingResponder();
+
+    const result = await runTurn(
+      { utterance: "Track my gym sessions with a note.", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "action",
+            sourceText: "Track my gym sessions with a note",
+            entityTypeDefinition: {
+              typeKey: "gym_session",
+              displayName: "Gym Sessions",
+              fields: [{ fieldKey: "note", fieldKind: "text", label: "Note", required: false }],
+            },
+          }),
+        ]),
+        responder,
+      ),
+    );
+
+    // Not a validator error in the reply, and not a redundant write.
+    expect(result.committed).toEqual([]);
+    expect(calls[0]?.questions.join(" ")).toMatch(/already tracking/i);
+  });
+
+  it("ASKS rather than inventing a schema nobody named", async () => {
+    // Live qwen3:8b for this sentence: a new "book" tracker with title and
+    // status fields and made-up status options. None of it was said.
+    const { responder, calls } = recordingResponder();
+
+    const result = await runTurn(
+      { utterance: "Add Dune to my books, finished.", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "action",
+            sourceText: "Add Dune to my books, finished",
+            entityTypeDefinition: {
+              typeKey: "book",
+              displayName: "Books",
+              fields: [
+                { fieldKey: "title", fieldKind: "text", label: "Title", required: true },
+                {
+                  fieldKey: "status",
+                  fieldKind: "enum",
+                  label: "Status",
+                  required: true,
+                  enumOptions: ["finished", "in progress", "not started"],
+                },
+              ],
+            },
+          }),
+        ]),
+        responder,
+      ),
+    );
+
+    expect(result.committed).toEqual([]);
+    expect(await withTransaction(pool, (tx) => entityRecords.getTypeByKey(tx, "book"))).toBeNull();
+    expect(calls[0]?.questions.length).toBeGreaterThan(0);
+  });
+
+  it("a QUESTION never writes, even when the model files it as a status update", async () => {
+    // qwen3:8b filed "What's blocked right now?" as information + newStatus.
+    // With a named person the status path finds no match and would fall
+    // through to CREATING a commitment from a question.
+    await seedBarkha();
+    const { responder } = recordingResponder();
+
+    const result = await runTurn(
+      { utterance: "Is Barkha blocked on the schema?", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "information",
+            sourceText: "Is Barkha blocked on the schema?",
+            owner: mention("Barkha"),
+            objectText: "the schema",
+            newStatus: "blocked",
+          }),
+        ]),
+        responder,
+      ),
+    );
+
+    expect(result.committed).toEqual([]);
+    expect(result.turnId).toBeNull();
+    expect(await withTransaction(pool, (tx) => commitments.listCurrent(tx))).toHaveLength(0);
+  });
+
   it("ASKS for enum options rather than inventing them", async () => {
     const { responder, calls } = recordingResponder();
     const result = await runTurn(
@@ -1039,6 +1212,7 @@ suite("runTurn (integration)", () => {
         fakeExtractor([
           intent({
             kind: "action",
+            sourceText: "Track my gym sessions with a status",
             entityTypeDefinition: {
               typeKey: "gym_session",
               displayName: "Gym Sessions",
@@ -1064,6 +1238,7 @@ suite("runTurn (integration)", () => {
         fakeExtractor([
           intent({
             kind: "action",
+            sourceText: "Track my gym sessions with a note",
             entityTypeDefinition: {
               typeKey: "gym_session",
               displayName: "Gym Sessions",

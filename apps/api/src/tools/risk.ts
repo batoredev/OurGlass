@@ -76,6 +76,9 @@ export const RISK_BY_TOOL: Readonly<Record<string, RiskLevel>> = {
   forget_memory: "IMPORTANT_STATE_CHANGE",
   correct_relationship: "IMPORTANT_STATE_CHANGE",
   define_entity_type: "IMPORTANT_STATE_CHANGE",
+  // Same reasoning as defining a type: reversible, but it changes a UI that
+  // renders the registry with no code, on every surface showing that type.
+  add_entity_field: "IMPORTANT_STATE_CHANGE",
 
   // The §35 control plane. Classified like any tool, but never gated by the
   // permission policy: they ARE the user's explicit decision, reached only

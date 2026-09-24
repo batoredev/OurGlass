@@ -13,6 +13,32 @@
  * digit-led result still reaches the tool, whose validation rejects it — one
  * authority for what a legal key is.
  */
+/**
+ * A type key with its last word made singular: "gym_sessions" and
+ * "gym_session" -> "gym_session"; "diaries" -> "diary".
+ *
+ * WHY: a model names the same tracker differently turn to turn. Live, qwen3:8b
+ * keyed "track my plants…" as `plants` once and `plant` the next time, the
+ * exact-key lookup missed, and the same sentence created a SECOND tracker. The
+ * owner's own tracker is `gym_sessions`; a model logging "a gym session" says
+ * `gym_session`. Comparing on this form makes both the same type.
+ *
+ * Deliberately crude — English plurals on the last word only. A miss costs a
+ * question or a duplicate the user can undo; it never merges two different
+ * trackers, because only keys that differ by a plural ending ever collide.
+ */
+export function singularTypeKey(key: string): string {
+  const snake = toSnakeKey(key);
+  const parts = snake.split("_");
+  const last = parts.pop() ?? "";
+  const singular = /[^aeiou]ies$/.test(last)
+    ? `${last.slice(0, -3)}y`
+    : /(ss|us|is)$/.test(last) || last.length <= 3
+      ? last
+      : last.replace(/s$/, "");
+  return [...parts, singular].join("_");
+}
+
 export function toSnakeKey(raw: string): string {
   return raw
     .trim()

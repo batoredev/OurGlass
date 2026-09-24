@@ -111,6 +111,14 @@ export interface EntityTypeDefinedFact {
   readonly fieldCount: number;
 }
 
+/** §36 — a tracked kind gained fields ("add a rating to my reading"). */
+export interface EntityFieldsAddedFact {
+  readonly kind: "entity_fields_added";
+  readonly displayName: string;
+  /** The new fields' labels, as the user will see them in the table header. */
+  readonly labels: readonly string[];
+}
+
 /** §36 — one instance of a tracked kind. */
 export interface EntityRecordCreatedFact {
   readonly kind: "entity_record_created";
@@ -134,6 +142,7 @@ export type CommittedFact =
   | MemoryForgottenFact
   | WorkflowCreatedFact
   | EntityTypeDefinedFact
+  | EntityFieldsAddedFact
   | EntityRecordCreatedFact
   | EventScheduledFact;
 

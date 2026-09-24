@@ -36,7 +36,7 @@ function isFieldKind(value: unknown): value is FieldKind {
   return typeof value === "string" && (SUPPORTED_FIELD_KINDS as readonly string[]).includes(value);
 }
 
-const MAX_FIELDS_PER_TYPE = 32;
+export const MAX_FIELDS_PER_TYPE = 32;
 const MAX_TYPES = 64;
 
 // The nine core tables (§1 "In scope") plus the registry's own tables —
@@ -58,7 +58,7 @@ const RESERVED_TYPE_KEYS = new Set([
   "entity_records",
 ]);
 
-const TYPE_KEY_RE = /^[a-z][a-z0-9_]*$/;
+export const TYPE_KEY_RE = /^[a-z][a-z0-9_]*$/;
 
 export interface RawFieldDef {
   readonly field_key?: unknown;
@@ -92,6 +92,72 @@ export interface DefineEntityTypeOutput {
   readonly id: string;
   readonly typeKey: string;
   readonly fieldCount: number;
+}
+
+/**
+ * One field definition, validated — shared by `define_entity_type` and
+ * `add_entity_field`, so "what a legal field is" is declared exactly once.
+ * Returns the FIRST problem with the field, as the define loop always has.
+ */
+export function validateFieldDef(rawField: unknown, prefix: string): Result<FieldDefInput, ToolError> {
+  const f = (rawField ?? {}) as RawFieldDef;
+
+  if (typeof f.field_key !== "string" || !TYPE_KEY_RE.test(f.field_key)) {
+    return err({
+      field: `${prefix}.field_key`,
+      code: "invalid_field_key",
+      message: `${prefix}.field_key must be snake_case`,
+    });
+  }
+
+  // THE ENFORCEMENT POINT (§2.8): reject an unknown field_kind here, at
+  // validation time, with a clean ToolError naming the six supported
+  // kinds — not stored-then-fails-at-Phase-5-render-time.
+  if (!isFieldKind(f.field_kind)) {
+    return err({
+      field: `${prefix}.field_kind`,
+      code: "unsupported_field_kind",
+      message: `unsupported field kind '${String(f.field_kind)}'; supported: ${SUPPORTED_FIELD_KINDS.join(", ")}`,
+    });
+  }
+
+  if (typeof f.label !== "string" || f.label.trim().length === 0) {
+    return err({
+      field: `${prefix}.label`,
+      code: "missing_label",
+      message: `${prefix}.label is required and must be a non-empty string`,
+    });
+  }
+
+  let enumOptions: { value: string; label: string }[] | null = null;
+  if (f.field_kind === "enum") {
+    if (
+      !Array.isArray(f.enum_options) ||
+      f.enum_options.length === 0 ||
+      !f.enum_options.every(
+        (o): o is { value: string; label: string } =>
+          typeof o === "object" &&
+          o !== null &&
+          typeof (o as { value?: unknown }).value === "string" &&
+          typeof (o as { label?: unknown }).label === "string",
+      )
+    ) {
+      return err({
+        field: `${prefix}.enum_options`,
+        code: "missing_enum_options",
+        message: `${prefix}.enum_options is required for field_kind 'enum' and must be [{value,label}]`,
+      });
+    }
+    enumOptions = f.enum_options;
+  }
+
+  return ok({
+    fieldKey: f.field_key,
+    fieldKind: f.field_kind,
+    label: f.label,
+    required: f.required === true,
+    enumOptions,
+  });
 }
 
 async function validate(
@@ -145,79 +211,21 @@ async function validate(
   const seenKeys = new Set<string>();
 
   for (const [i, rawField] of (input.fields as unknown[]).entries()) {
-    const f = (rawField ?? {}) as RawFieldDef;
-    const prefix = `fields[${i}]`;
-
-    if (typeof f.field_key !== "string" || !TYPE_KEY_RE.test(f.field_key)) {
-      errors.push({
-        field: `${prefix}.field_key`,
-        code: "invalid_field_key",
-        message: `${prefix}.field_key must be snake_case`,
-      });
+    const checked = validateFieldDef(rawField, `fields[${i}]`);
+    if (!checked.ok) {
+      errors.push(checked.errors);
       continue;
     }
-
-    if (seenKeys.has(f.field_key)) {
+    if (seenKeys.has(checked.value.fieldKey)) {
       errors.push({
-        field: `${prefix}.field_key`,
+        field: `fields[${i}].field_key`,
         code: "duplicate_field_key",
-        message: `field_key "${f.field_key}" is used more than once`,
+        message: `field_key "${checked.value.fieldKey}" is used more than once`,
       });
       continue;
     }
-    seenKeys.add(f.field_key);
-
-    // THE ENFORCEMENT POINT (§2.8): reject an unknown field_kind here, at
-    // validation time, with a clean ToolError naming the six supported
-    // kinds — not stored-then-fails-at-Phase-5-render-time.
-    if (!isFieldKind(f.field_kind)) {
-      errors.push({
-        field: `${prefix}.field_kind`,
-        code: "unsupported_field_kind",
-        message: `unsupported field kind '${String(f.field_kind)}'; supported: ${SUPPORTED_FIELD_KINDS.join(", ")}`,
-      });
-      continue;
-    }
-
-    if (typeof f.label !== "string" || f.label.trim().length === 0) {
-      errors.push({
-        field: `${prefix}.label`,
-        code: "missing_label",
-        message: `${prefix}.label is required and must be a non-empty string`,
-      });
-      continue;
-    }
-
-    let enumOptions: { value: string; label: string }[] | null = null;
-    if (f.field_kind === "enum") {
-      if (
-        !Array.isArray(f.enum_options) ||
-        f.enum_options.length === 0 ||
-        !f.enum_options.every(
-          (o): o is { value: string; label: string } =>
-            typeof o === "object" &&
-            o !== null &&
-            typeof (o as { value?: unknown }).value === "string" &&
-            typeof (o as { label?: unknown }).label === "string",
-        )
-      ) {
-        errors.push({
-          field: `${prefix}.enum_options`,
-          code: "missing_enum_options",
-          message: `${prefix}.enum_options is required for field_kind 'enum' and must be [{value,label}]`,
-        });
-        continue;
-      }
-      enumOptions = f.enum_options;
-    }
-
-    fields.push({
-      fieldKey: f.field_key,
-      fieldKind: f.field_kind,
-      label: f.label,
-      required: f.required === true,
-      enumOptions,
-    });
+    seenKeys.add(checked.value.fieldKey);
+    fields.push(checked.value);
   }
 
   if (errors.length > 0) return err(errors);

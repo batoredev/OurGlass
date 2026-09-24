@@ -63,7 +63,8 @@ import { MAX_DISPLAY_NAME_LENGTH } from "../tools/create-person.js";
 import type { QueryEmbedder } from "../embeddings/backfill.js";
 import { gateIntentCalls, loadGrants, type GateDecision } from "../permissions/gate.js";
 import { PENDING_ACTION_TTL_SECONDS } from "../permissions/policy.js";
-import { toSnakeKey } from "./snake-key.js";
+import { singularTypeKey, toSnakeKey } from "./snake-key.js";
+import { isQuestion, namedFieldCount } from "./write-guards.js";
 
 export interface TurnRequest {
   readonly utterance: string;
@@ -802,6 +803,17 @@ async function planOneIntent(
     }
 
     case "information": {
+      // A QUESTION NEVER WRITES. qwen3:8b filed "What's blocked right now?"
+      // as information with newStatus "blocked"; with a named person, the
+      // status path finds no match and falls through to CREATING a
+      // commitment from a question. Answer it as the read it is instead.
+      if (isQuestion(intent.sourceText)) {
+        const plan = await planInspection(intent, ctx);
+        questions.push(...plan.questions);
+        declined.push(...(plan.declined ?? []));
+        answers.push(...(plan.answers ?? []));
+        break;
+      }
       if (hasAdvisoryOwnerGap) {
         // An ownerless statement of fact ("the Hult meeting is cancelled").
         // Not a commitment, so nothing to write — and per the note above,
@@ -835,7 +847,7 @@ async function planOneIntent(
       const plan = intent.condition
         ? await planWorkflow(intent, ctx)
         : intent.entityTypeDefinition
-          ? planDefineEntityType(intent)
+          ? await planDefineEntityType(intent, ctx)
           : intent.entityRecord
             ? await planCreateEntityRecord(intent, ctx)
             : intent.eventTitle
@@ -1592,13 +1604,26 @@ async function planWorkflow(intent: ExtractedIntent, ctx: PlanContext): Promise<
  * check and the field cap, and duplicating any of that would give two answers
  * to one question.
  */
-function planDefineEntityType(intent: ExtractedIntent): IntentPlan {
+async function planDefineEntityType(intent: ExtractedIntent, ctx: PlanContext): Promise<IntentPlan> {
   const definition = intent.entityTypeDefinition;
   if (!definition || definition.fields.length === 0) {
     return {
       calls: [],
       facts: [],
       questions: ["What should I track about those?"],
+    };
+  }
+
+  // A SCHEMA NOBODY SAID. Asked to "add Dune to my books", qwen3:8b defined a
+  // tracker with title and status fields, and invented the status options.
+  // Every future record is validated against a schema, so inventing one is the
+  // meaningful mistake §27 says to ask about. Asks only when NO proposed field
+  // was named — a paraphrased field is not a reason to interrogate the user.
+  if (namedFieldCount(definition.fields, intent.sourceText) === 0) {
+    return {
+      calls: [],
+      facts: [],
+      questions: [`What should I track about ${definition.displayName}?`],
     };
   }
 
@@ -1619,6 +1644,50 @@ function planDefineEntityType(intent: ExtractedIntent): IntentPlan {
     };
   }
 
+  const toToolField = (field: (typeof definition.fields)[number], required: boolean) => ({
+    field_key: toSnakeKey(field.fieldKey),
+    field_kind: field.fieldKind,
+    label: field.label,
+    required,
+    // The tool wants [{value,label}]; the contract carries bare strings
+    // because the user says "planned or done", not a pair. Omitted entirely
+    // for non-enum kinds, which reject the key.
+    ...(field.fieldKind === "enum"
+      ? { enum_options: (field.enumOptions ?? []).map((option) => ({ value: option, label: option })) }
+      : {}),
+  });
+
+  // AN EXISTING TYPE GROWS rather than failing with "already exists" — the
+  // add_entity_field half of §36 ("also track which gym I went to").
+  const existing = await findTrackedType(ctx, definition.typeKey);
+  if (existing) {
+    const known = new Set(existing.fields.map((field) => field.field_key));
+    const added = definition.fields.filter((field) => !known.has(toSnakeKey(field.fieldKey)));
+    if (added.length === 0) {
+      // Every field already exists, so this is not a definition at all — most
+      // likely one item the user meant to LOG. Asking beats both a redundant
+      // write and a validator error in the reply.
+      return {
+        calls: [],
+        facts: [],
+        questions: [`I'm already tracking ${existing.display_name}. Did you want to log one?`],
+      };
+    }
+    return {
+      questions: [],
+      // One call per field, all in this turn's transaction and one undo.
+      // Always OPTIONAL: a required field would invalidate every existing
+      // record (migration 006), and add_entity_field refuses one anyway.
+      calls: added.map((field) => ({
+        name: "add_entity_field",
+        input: { type_key: existing.type_key, field: toToolField(field, false) },
+      })),
+      facts: [
+        { kind: "entity_fields_added", displayName: existing.display_name, labels: added.map((field) => field.label) },
+      ],
+    };
+  }
+
   return {
     questions: [],
     calls: [
@@ -1627,23 +1696,7 @@ function planDefineEntityType(intent: ExtractedIntent): IntentPlan {
         input: {
           type_key: toSnakeKey(definition.typeKey),
           display_name: definition.displayName,
-          fields: definition.fields.map((field) => ({
-            field_key: toSnakeKey(field.fieldKey),
-            field_kind: field.fieldKind,
-            label: field.label,
-            required: field.required,
-            // The tool wants [{value,label}]; the contract carries bare
-            // strings because the user says "planned or done", not a pair.
-            // Omitted entirely for non-enum kinds, which reject the key.
-            ...(field.fieldKind === "enum"
-              ? {
-                  enum_options: (field.enumOptions ?? []).map((option) => ({
-                    value: option,
-                    label: option,
-                  })),
-                }
-              : {}),
-          })),
+          fields: definition.fields.map((field) => toToolField(field, field.required)),
         },
       },
     ],
@@ -1736,18 +1789,34 @@ async function planEvent(intent: ExtractedIntent, ctx: PlanContext): Promise<Int
  * tool family's actual risk. Asking is also wrong here — the honest answer is
  * "I am not tracking that", which the user can act on.
  */
+/**
+ * The tracked type a model's key refers to: the exact key first, then the same
+ * key up to a plural ending — but only when exactly one type matches that way.
+ *
+ * Live, qwen3:8b keyed one sentence `plants` and then `plant`, the exact
+ * lookup missed, and a duplicate tracker was created; and the owner's own
+ * tracker is `gym_sessions` while "log a gym session" comes back as
+ * `gym_session`. Two matches is ambiguous, and returns null rather than guess.
+ */
+async function findTrackedType(ctx: PlanContext, modelKey: string) {
+  const exact = await entityRecords.getTypeByKey(ctx.tx, toSnakeKey(modelKey));
+  if (exact) return exact;
+  const wanted = singularTypeKey(modelKey);
+  const loose = (await entityRecords.listTypes(ctx.tx)).filter((type) => singularTypeKey(type.type_key) === wanted);
+  return loose.length === 1 ? loose[0]! : null;
+}
+
 async function planCreateEntityRecord(intent: ExtractedIntent, ctx: PlanContext): Promise<IntentPlan> {
   const record = intent.entityRecord;
   if (!record) return { calls: [], facts: [], questions: [] };
 
   // Same normalisation as definition, or a type defined from `readingLog`
   // (stored as reading_log) could never be found again by the same model.
-  const typeKey = toSnakeKey(record.typeKey);
   const payload = Object.fromEntries(
     Object.entries(record.values).map(([key, value]) => [toSnakeKey(key), value]),
   );
 
-  const type = await entityRecords.getTypeByKey(ctx.tx, typeKey);
+  const type = await findTrackedType(ctx, record.typeKey);
   if (!type) {
     return {
       calls: [],
@@ -1762,7 +1831,8 @@ async function planCreateEntityRecord(intent: ExtractedIntent, ctx: PlanContext)
     calls: [
       {
         name: "create_entity_record",
-        input: { type_key: typeKey, payload },
+        // The type's OWN key, not the model's spelling of it.
+        input: { type_key: type.type_key, payload },
       },
     ],
     facts: [{ kind: "entity_record_created", displayName: type.display_name }],

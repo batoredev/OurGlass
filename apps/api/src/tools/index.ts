@@ -8,6 +8,7 @@ import { ToolRegistry } from "./registry.js";
 import { createCommitmentTool } from "./create-commitment.js";
 import { createReminderTool } from "./create-reminder.js";
 import { defineEntityTypeTool } from "./define-entity-type.js";
+import { addEntityFieldTool } from "./add-entity-field.js";
 import { completeCommitmentTool } from "./complete-commitment.js";
 import { updateCommitmentTool } from "./update-commitment.js";
 import { fireReminderTool } from "./fire-reminder.js";
@@ -66,6 +67,10 @@ export function buildToolRegistry(): ToolRegistry {
   // Phase 5 (F12). The FIRST tool whose validate() reads its own schema at
   // call time — which is why ToolDefinition.validate is a function.
   registry.register(createEntityRecordTool);
+  // A tracker that could be defined but never grown: "add a rating to my
+  // reading" failed with "already exists". Its undo removes the one field, not
+  // the type — see add-entity-field.ts for why it must not share that handler.
+  registry.register(addEntityFieldTool);
   // The events table had a repository, a findOverlapping query and a Today
   // surface, and nothing that could write to it. Section 24 conflict detection
   // was querying a table that could only ever be empty.
