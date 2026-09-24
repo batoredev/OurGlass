@@ -169,14 +169,25 @@ framework-touching files plus configuration.
 
 ## 6. Order of work
 
-| # | Task | Blocks |
-|---|---|---|
-| 1 | Pin `pg` ≥ 8.16.3 in both packages | deploy |
-| 2 | Move the 11 routes to `apps/web/app/api/**` Route Handlers | 3 |
-| 3 | Retire Fastify from `apps/api`; keep the tool/assistant source | 4 |
-| 4 | `wrangler.toml` + the Cloudflare Next.js adapter | 5 |
-| 5 | `scheduled()` cron handler calling `pollOnce` | — |
-| 6 | CI deploy step on push to `main` | — |
+| # | Task | Blocks | State (2026-09-24) |
+|---|---|---|---|
+| 1 | Pin `pg` ≥ 8.16.3 in both packages | deploy | ✅ |
+| 2 | Move the 11 routes to `apps/web/app/api/**` Route Handlers | 3 | ✅ thirteen route handlers |
+| 3 | Retire Fastify from `apps/api`; keep the tool/assistant source | 4 | ✅ not a dependency anywhere |
+| 4 | `wrangler.toml` + the Cloudflare Next.js adapter | 5 | ✅ `@opennextjs/cloudflare` 1.20.6; `build:worker` exits 0 and `wrangler deploy --dry-run` bundles at 2.03 MiB gzipped |
+| 5 | `scheduled()` cron handler calling `pollOnce` | — | ✅ wired through `worker/index.ts`, and the poller's log line is present in the bundled output |
+| 6 | CI deploy step on push to `main` | — | ✅ `.github/workflows/deploy.yml` — staging on push, production on manual dispatch; **skips** until the Cloudflare secrets exist |
+
+**Still not done, and it is the part that matters:** nothing has been deployed. A real request
+served by a real Worker needs the owner's Cloudflare account, `wrangler secret put` for each
+secret, and the CI secrets — `docs/YOUR-ACTIONS.md` §6–8. Everything above is "the artifact
+builds and contains what it should", which this project has learned is not the same thing.
+
+**Two build failures worth knowing about before touching the adapter.** Both are upstream
+([opennextjs-cloudflare#1394](https://github.com/opennextjs/opennextjs-cloudflare/issues/1394)),
+both fixed by the pinned patch recorded in `pnpm-workspace.yaml`: esbuild cannot bundle `sharp`'s
+native `.node` binaries, and `pg`'s workerd entry imports `cloudflare:sockets`, which esbuild
+resolves as a directory. Delete the patch when the adapter ships a fix, and re-run the build.
 
 ### Definition of done
 

@@ -122,6 +122,15 @@ For CI to deploy on push to `main`, add as **repository secrets**:
   Cloudflare Workers" template
 - `CLOUDFLARE_ACCOUNT_ID`
 
+Until both exist the `Deploy` workflow **skips with a notice** instead of failing, so `main` stays
+green while this is outstanding. A push to `main` then deploys staging; production is a manual
+run of that workflow.
+
+Optionally add the deployed URLs as repository **variables** — `STAGING_URL` and
+`PRODUCTION_URL` (e.g. `https://ourglass-staging.<your-subdomain>.workers.dev`). With them the
+workflow smoke-checks `/api/health` after each deploy and fails loudly if the database is
+unreachable; without them it says it skipped.
+
 > **`ANTHROPIC_API_KEY` must never go in a workflow a fork PR can trigger.** The live eval lane
 > is `workflow_dispatch`-only for exactly this reason.
 

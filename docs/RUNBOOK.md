@@ -15,10 +15,15 @@ no state.
 Always staging first. `wrangler.toml` defines both environments.
 
 ```sh
-npx wrangler deploy --env staging     # the ourglass-staging Worker
+pnpm --filter @ourglass/web run deploy:staging   # builds, then deploys ourglass-staging
 # smoke check it (below), then:
-npx wrangler deploy                   # production
+pnpm --filter @ourglass/web run deploy           # production
 ```
+
+Each script runs the Cloudflare build first (`scripts/build-worker.mjs`), so a deploy cannot ship
+a stale bundle. Pushing to `main` deploys **staging** automatically; production is the manual
+`Deploy` workflow dispatch, or the command above. To see what would be uploaded without
+uploading anything: `npx wrangler deploy --dry-run --outdir=.open-next/dry-run`.
 
 A deploy never changes the database. If the release includes a new file in
 `packages/db/migrations/`, apply it **before** deploying the code that needs it, from the repo
