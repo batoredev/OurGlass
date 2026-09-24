@@ -186,3 +186,17 @@ describe("multi-intent matching", () => {
     ).toBe(true);
   });
 });
+
+describe("first-person mentions", () => {
+  it("treats 'I' and 'me' as the same party, as the resolver does", () => {
+    // qwen3:8b wrote owner "I" where the label says "me"; the app resolves both
+    // to the user, so the write is identical and the fixture must pass.
+    expect(intentMatches({ ...barkhaOwesMe, recipient: person("I") }, barkhaOwesMe)).toBe(true);
+    expect(intentMatches({ ...barkhaOwesMe, recipient: person("myself") }, barkhaOwesMe)).toBe(true);
+  });
+
+  it("still fails a real party swap — first person is not a wildcard", () => {
+    expect(intentMatches({ ...barkhaOwesMe, recipient: person("Arun") }, barkhaOwesMe)).toBe(false);
+    expect(intentMatches({ ...barkhaOwesMe, owner: person("I") }, barkhaOwesMe)).toBe(false);
+  });
+});

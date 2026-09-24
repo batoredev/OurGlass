@@ -172,8 +172,38 @@ dispatch on a clean runner.
 
 ## Results
 
-None recorded. No paid lane has been run.
+**Claude and Gemini have still never been measured here** — Anthropic is out of credit and the
+Gemini free tier is exhausted (`REMAINING-EXECUTION-PLAN.md`, Gate 0). Every row below is the
+local provider, which is free to run and the *weakest* of the three. Do not read these numbers
+as the product's quality; read them as the floor.
 
-| Date | Commit | Lane | Providers & models | Result |
-|---|---|---|---|---|
-| — | — | — | — | — |
+`eval:ai`, all 99 fixtures, qwen3:8b via Ollama 0.34.2 on an RTX 3050 Laptop (4 GB):
+
+| Date | Commit | What changed | Answered | Match | Intent | WrongMut | Invented |
+|---|---|---|---|---|---|---|---|
+| 2026-09-22 | `2358235` | first full run | 99 | 16 | 56 | 55 | 0 |
+| 2026-09-22 | `a63d62e` | field order + intent-kind guide | 99 | **36** | **80** | 52 | 4 |
+| 2026-09-22 | `7b02bc6`+ | guide refined for four wrong writes | 98 | 34 | 81 | 54 | **2** |
+
+All three re-scored with the **same** (current) matcher, so the rows are comparable; scoring at
+run time would have flattered the last row, which introduced first-person equivalence. Missed
+clarifications: 11 in every run. Latency on the last run: median 30s, p90 46s.
+
+**What the numbers say.**
+
+- The two defects fixed on 2026-09-22 — a field order the grammar could not recover from, and
+  seven intent kinds the shared prompt never defines — **more than doubled** full matches and
+  took intent-kind accuracy from 56 to 81. Both are described in `apps/api/src/ai/qwen.ts`.
+- **WrongMut barely moved (55 → 54), and that is the number that matters.** Getting the kind
+  right is not getting the write right: owner, recipient and object text still disagree with the
+  label often enough that roughly half of all fixtures would drive a write the label does not
+  endorse. On this model, a third of utterances extract *fully* correctly.
+- Therefore: **Qwen is the offline/privacy option and the way to run the app with no key — not
+  the tier these prompts were written for.** Claude remains the default for real data.
+- The one unanswered fixture is not a model failure: the laptop slept mid-request and the
+  120-second abort fired on wake. Reports are written after every fixture for exactly this
+  reason.
+- Two wrong writes survive on this model, both recorded rather than tuned away: "what's blocked
+  right now?" sets a status instead of asking a question (the planner's match threshold usually
+  stops the write), and "add X to my books" defines a new type instead of logging a record
+  (reversible with undo).

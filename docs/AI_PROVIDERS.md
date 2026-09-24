@@ -14,7 +14,7 @@ rules: [AI_FALLBACK.md](AI_FALLBACK.md).
 |---|---|---|---|---|
 | **Claude** (primary) | `@anthropic-ai/sdk` 0.124.0 | `claude-sonnet-5` | `claude-haiku-4-5-20251001` | **Model ids: yes** — `pnpm check:models` passed on 2026-09-17. **Extraction quality: no** — `pnpm test:live` has never run. |
 | **Gemini** (second) | `@google/genai` 2.22.0 | `gemini-3.5-flash` | `gemini-3.5-flash` | **Both stages: yes** — a real extraction AND a real reply on 2026-09-18. **Quality: not measured** (`pnpm eval:ai` has not run). |
-| **Qwen** (local) | `fetch` → Ollama `/api/chat` | `qwen3:8b` | same model | **Yes** — 2026-09-22, Ollama 0.34.2 on an RTX 3050 Laptop (4 GB). Two defects found on first contact and fixed (thinking, schema). ~34s Interpret, ~3s Respond. 6/10 on a 10-case labelled subset — below Claude/Gemini |
+| **Qwen** (local) | `fetch` → Ollama `/api/chat` | `qwen3:8b` | same model | **Yes, and the only provider whose quality is measured** — 2026-09-22, Ollama 0.34.2 on an RTX 3050 Laptop (4 GB). Three defects found on first contact and fixed (thinking, schema, field order). Interpret median 30s, p90 46s; Respond ~3s. All 99 fixtures: 34 full matches, 81 intent kinds right, ~54 carrying wrong-write risk — see [`AI_EVALS.md`](AI_EVALS.md). Well below what these prompts are written for; use it offline or without a key, not for real data |
 
 Every provider's adapter is unit-tested with an injected fake client: request shape,
 normalisation into the shared `Extraction`, failure mapping, and the never-throws Respond
@@ -151,7 +151,7 @@ Ollama's documented CLI and HTTP API.
 6. **Allow for CPU speed.** A local 8B model can need well over 20 seconds to extract. Raise
    `AI_REQUEST_TIMEOUT_MS` (up to 120000) if Interpret times out; Qwen's own abort follows it.
 
-**Two defects found the first time this adapter met a real Ollama (2026-09-22), both fixed:**
+**Three defects found the first time this adapter met a real Ollama (2026-09-22), all fixed:**
 
 1. **Thinking consumed the whole budget.** Ollama leaves Qwen3's thinking on unless `think` is
    sent. On the real Interpret request it spent all 1,200 tokens reasoning, wrote nothing, and
@@ -161,6 +161,14 @@ Ollama's documented CLI and HTTP API.
    never reads it — unlike Claude (tool definition) and Gemini (response schema). Across twenty
    labelled utterances `owner` and `recipient` were filled **zero** times. The adapter now
    appends the schema to the system prompt; both are filled every time.
+3. **The field order decided the answer.** Ollama compiles `format` into a grammar that emits
+   properties in schema order and cannot go back, and the shared schema lists `time` before
+   `reminderBody`. So by the time the model had written that an utterance was a reminder, the
+   `time` slot was behind it: the phrase went into `condition` instead — which the planner checks
+   first — and **every timed reminder became a conditional rule or a calendar event**. Not a
+   missed field: a wrong write. Two prompt rewrites, one with a verbatim JSON example, changed
+   none of the six affected fixtures; reordering the schema for Qwen fixed all six. Claude and
+   Gemini keep the shared order, which they read rather than decode. See `QWEN_FIELD_ORDER`.
 
 **Model choice on a 4 GB GPU, measured on the same ten labelled cases:** `qwen3:4b` 4/10,
 ~18s; `qwen3:8b` 6/10, ~34s. The 4B confuses intent kinds (a commitment read as an action);

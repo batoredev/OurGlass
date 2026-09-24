@@ -152,9 +152,12 @@ external integrations, voice — are not started.
 
 **Standing caveats, kept here because a green CI badge does not cover them:**
 
-- Model *quality* is barely measured. `pnpm eval:ai` and `pnpm test:live` exercise the
-  hand-labelled fixtures against a real model and have been run rarely; everything else green
-  is evidence about the code, not the model.
+- Model *quality* is measured for **one** provider, and it is the weakest one. All 99 fixtures
+  have been run against local `qwen3:8b` (three times, results in
+  [`docs/AI_EVALS.md`](docs/AI_EVALS.md)); Claude and Gemini never have, for want of credit and
+  quota. On Qwen, 34 of 99 utterances extract fully correctly and about half would drive a write
+  the label does not endorse — so treat the local provider as the no-key, offline option, not as
+  the quality this product claims. Everything else green is evidence about the code.
 - Single-user by construction. There is no tenant boundary, no login beyond one shared
   access token, and entity resolution searches all people. Do not put a second organisation's
   data in it.

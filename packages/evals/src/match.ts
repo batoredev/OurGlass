@@ -49,6 +49,7 @@ import type {
   ExtractedIntent,
   TimeReference,
 } from "@ourglass/shared";
+import { isFirstPersonMention } from "@ourglass/api/assistant";
 
 /**
  * The optional fields a fixture may assert must be ABSENT.
@@ -104,6 +105,11 @@ export function normalizeText(value: string): string {
 function entityMatches(actual: EntityMention | undefined, expected: EntityMention | undefined): boolean {
   if (expected === undefined) return true;
   if (actual === undefined) return false;
+  // "I" and "me" are the same party to the app — the resolver short-circuits
+  // every first-person mention to the user (resolve.ts). Scoring them as
+  // different failed fixtures whose writes would have been identical; the
+  // matcher judges what the app would DO, so it uses the app's own test.
+  if (isFirstPersonMention(actual.name) && isFirstPersonMention(expected.name)) return true;
   return normalizeText(actual.name) === normalizeText(expected.name);
 }
 
