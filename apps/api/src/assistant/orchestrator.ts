@@ -41,6 +41,7 @@ import { ExtractionError, type Extractor } from "./extract.js";
 import {
   decideCompletion,
   detectDuplicate,
+  isFirstPersonMention,
   resolvePersonMention,
   type EntityResolution,
 } from "./resolve.js";
@@ -1870,6 +1871,20 @@ async function planInspection(intent: ExtractedIntent, ctx: PlanContext): Promis
   const owner = await resolveParty(intent.owner, ctx);
   const recipient = await resolveParty(intent.recipient, ctx);
   const about = await resolveParty(intent.relatedEntity, ctx);
+
+  // SOMEONE NAMED BUT UNKNOWN is its own answer. Without this, an owner that
+  // failed to resolve looked exactly like no owner at all, and "Is Zoya blocked
+  // on the brochure?" — about a person never mentioned — was answered with
+  // the whole "what am I waiting on" list, as if it were about everyone.
+  for (const [mention, party] of [
+    [intent.owner, owner],
+    [intent.recipient, recipient],
+    [intent.relatedEntity, about],
+  ] as const) {
+    if (mention && !party.id && !isFirstPersonMention(mention.name)) {
+      return { ...empty, declined: [`I don't have anything about ${mention.name} yet.`] };
+    }
+  }
 
   const query = ((): InspectionQuery | null => {
     // "What do you know about Arun?" — a named subject with no direction.

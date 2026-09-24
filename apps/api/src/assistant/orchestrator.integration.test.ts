@@ -1176,6 +1176,37 @@ suite("runTurn (integration)", () => {
     expect(calls[0]?.questions.length).toBeGreaterThan(0);
   });
 
+  it("a question about someone UNKNOWN says so, instead of listing everyone's commitments", async () => {
+    // Live: "Is Zoya blocked on the brochure?" (Zoya never mentioned) was
+    // answered with the whole waiting-on list — an unresolved owner looked
+    // exactly like no owner at all.
+    const barkha = await seedBarkha();
+    await withTransaction(pool, (tx) =>
+      commitments.createCommitment(tx, {
+        ownerId: barkha.id,
+        recipientId: null,
+        objectText: "the article",
+        expectedAt: null,
+        status: "pending",
+        projectId: null,
+      }),
+    );
+    const { responder, calls } = recordingResponder();
+
+    const result = await runTurn(
+      { utterance: "What does Zoya owe me?", userId },
+      deps(
+        fakeExtractor([
+          intent({ kind: "inspection", sourceText: "What does Zoya owe me?", owner: mention("Zoya"), recipient: mention("me") }),
+        ]),
+        responder,
+      ),
+    );
+
+    expect(result.reply).not.toContain("article");
+    expect(calls[0]?.declined.join(" ")).toMatch(/Zoya/);
+  });
+
   it("a QUESTION never writes, even when the model files it as a status update", async () => {
     // qwen3:8b filed "What's blocked right now?" as information + newStatus.
     // With a named person the status path finds no match and would fall
