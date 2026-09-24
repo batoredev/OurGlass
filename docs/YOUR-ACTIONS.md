@@ -151,13 +151,13 @@ with CI green.
 
 ## Part 5 — Decisions only you can make (reply to me)
 
-- [ ] **15. Cost budget per message** → I set the real spam limits. Today's 20 per minute and
-      500 per day are placeholders.
-- [ ] **16. Where uploaded files live** — Supabase Storage or Cloudflare R2. Unblocks Phase 6:
-      sending the assistant screenshots and PDFs.
+- [x] **15. Cost budget per message** → **10 per minute, 200 per day** (answered 2026-09-24,
+      now the defaults).
+- [x] **16. Where uploaded files live** → **Supabase Storage** (answered 2026-09-24). Phase 6
+      builds on it.
 - [ ] **17. A Google Cloud project** for Gmail, Calendar and Drive (Phase 7). Start early:
-      Google's consent-screen review takes days to weeks. Also decide: may the assistant **send**
-      email, or only **draft** it?
+      Google's consent-screen review takes days to weeks. Email power is decided: **send, after
+      confirming each one** (2026-09-24). The Google Cloud project itself is still yours to create.
 - [ ] **18. Will there be a second customer?** Only a yes makes the multi-customer work
       (6–9 sessions) worth doing.
 - [ ] **19. Terms of service and a privacy policy** before anyone outside your team uses it.

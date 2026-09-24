@@ -20,8 +20,14 @@ describe("the /api/turn spend cap", () => {
     expect(await rejectOverLimit(count, DEFAULT_TURN_LIMITS, NOW)).toBeNull();
   });
 
+  it("defaults to the owner's budget — 10 a minute, 200 a day", () => {
+    // Pinned on purpose: a change to the spend cap should be a decision someone
+    // makes and writes down (docs/DECISIONS.md), not a side effect of a refactor.
+    expect(DEFAULT_TURN_LIMITS).toEqual({ perMinute: 10, perDay: 200 });
+  });
+
   it("refuses with 429 and Retry-After once the minute window is full", async () => {
-    const { count } = counter(20, 20);
+    const { count } = counter(DEFAULT_TURN_LIMITS.perMinute, DEFAULT_TURN_LIMITS.perMinute);
     const response = await rejectOverLimit(count, DEFAULT_TURN_LIMITS, NOW);
     expect(response?.status).toBe(429);
     expect(response?.headers.get("Retry-After")).toBe("60");
@@ -31,7 +37,7 @@ describe("the /api/turn spend cap", () => {
 
   it("refuses once the DAY is full even when the last minute was quiet", async () => {
     // The runaway-script case: slow and steady still hits a ceiling.
-    const { count } = counter(0, 500);
+    const { count } = counter(0, DEFAULT_TURN_LIMITS.perDay);
     const response = await rejectOverLimit(count, DEFAULT_TURN_LIMITS, NOW);
     expect(response?.status).toBe(429);
     expect(response?.headers.get("Retry-After")).toBe("3600");

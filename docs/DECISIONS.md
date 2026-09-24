@@ -18,6 +18,10 @@ schema, the tool layer, or CI config.
 | UI priority | Last; bare inspection surfaces for testing only | User's explicit priority |
 | Execution unit | Agent teams always, never subagents | User's explicit standing instruction |
 | Knowledge graph | `/graphify --update` after every feature | User's explicit standing instruction |
+| Uploaded-file storage (Phase 6) | **Supabase Storage** — decided 2026-09-24 | Owner's choice: same project and bill as the database, access rules beside the data. The `documents` table stores an object key, never the bytes (`bytea` was already ruled out for large PDFs) |
+| Alert destination | **Chat webhook** (Slack or Discord) — decided 2026-09-24 | Owner's choice: no new account; alerts arrive where the team already chats. Both payload formats are supported |
+| Spend cap on `/api/turn` | **10 turns per minute, 200 per day** — decided 2026-09-24 | Owner's cost budget, replacing the 20/500 placeholders. `TURN_LIMIT_PER_MINUTE` / `TURN_LIMIT_PER_DAY` still override |
+| Email power (Phase 7) | **Send, after confirming each one** — decided 2026-09-24 | Owner's choice over draft-only. Every send goes through the existing `pending_actions` hold-and-confirm path, never a standing grant: sending cannot be undone, so confirmation is per message by construction |
 
 ## Research findings that changed the design
 

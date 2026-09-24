@@ -15,11 +15,11 @@
  * ceiling that is fine — it bounds spend to the limit plus the concurrency,
  * not to infinity.
  *
- * ⚠ THE DEFAULTS ARE A PLACEHOLDER FOR AN OWNER DECISION. The cost budget per
- * message is Track D, still unstated. 20/minute is well above any human
- * typing; 500/day bounds a runaway script to a known daily worst case. Set
- * TURN_LIMIT_PER_MINUTE / TURN_LIMIT_PER_DAY to the real budget; 0 disables
- * one window (local evals, say) — deliberately explicit, never the default.
+ * THE DEFAULTS ARE THE OWNER'S BUDGET: 10 per minute, 200 per day, decided
+ * 2026-09-24 (docs/DECISIONS.md). A minute of ten is still faster than anyone
+ * types; the day of two hundred is the worst-case bill a leaked token can run
+ * up. TURN_LIMIT_PER_MINUTE / TURN_LIMIT_PER_DAY override; 0 disables one
+ * window (local evals, say) — deliberately explicit, never the default.
  */
 
 export interface TurnLimits {
@@ -27,7 +27,7 @@ export interface TurnLimits {
   readonly perDay: number;
 }
 
-export const DEFAULT_TURN_LIMITS: TurnLimits = { perMinute: 20, perDay: 500 };
+export const DEFAULT_TURN_LIMITS: TurnLimits = { perMinute: 10, perDay: 200 };
 
 const MINUTE_MS = 60_000;
 const DAY_MS = 24 * 60 * MINUTE_MS;

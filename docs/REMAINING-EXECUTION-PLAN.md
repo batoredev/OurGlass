@@ -266,7 +266,7 @@ Each of these was verified absent rather than assumed. Five are now built (2026-
 
 | Item | Why it matters in production | State |
 |---|---|---|
-| **Rate limiting on `/api/turn`** | Every request spends model tokens. One leaked access token was unbounded spend | ✅ `_rate-limit.ts` — 20/minute, 500/day, metered from `messages` so it holds across isolates, checked before any model call. Verified live (429 + `Retry-After`). **The numbers are placeholders** until the Track D cost budget exists |
+| **Rate limiting on `/api/turn`** | Every request spends model tokens. One leaked access token was unbounded spend | ✅ `_rate-limit.ts` — **10/minute, 200/day, the owner's budget (2026-09-24)**, metered from `messages` so it holds across isolates, checked before any model call. Verified live (429 + `Retry-After`) |
 | **Security headers / CSP** | A Worker is a public URL | ✅ `lib/security-headers.ts` on every route; browser console clean and React hydrated. `script-src` still allows inline — a nonce CSP needs a proxy, and that is the remaining piece |
 | **Error boundaries** | A server error showed Next's default page | ✅ `error.tsx`, `global-error.tsx`, `not-found.tsx`; the 404 verified live. The raw message is never shown, only a digest |
 | **Uptime check** | `/api/health` existed and nothing polled it | ✅ `.github/workflows/uptime.yml`, every 15 minutes, once `STAGING_URL` / `PRODUCTION_URL` are set. Best-effort: it notifies, it does not page |
