@@ -109,10 +109,22 @@ npx wrangler login
 **Never in `wrangler.toml`** — that file is committed.
 
 ```bash
+npx wrangler secret put OURGLASS_ACCESS_TOKEN   # REQUIRED: without it every route 404s
 npx wrangler secret put DATABASE_URL
 npx wrangler secret put ANTHROPIC_API_KEY
 npx wrangler secret put VOYAGE_API_KEY      # optional, see §9
 ```
+
+The access token must be at least 32 characters; a shorter one makes the app refuse to serve
+rather than serve weakly. Generate one with:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
+```
+
+**Staging has its own Worker and therefore its own secrets.** Repeat each line with
+`--env staging`, and point that `DATABASE_URL` at a **separate** database — a staging Worker on
+the production database is production with fewer safeguards.
 
 ### 8. GitHub Actions deploy secrets
 
