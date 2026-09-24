@@ -1,0 +1,63 @@
+name: Uptime
+
+# Track P2 of docs/REMAINING-EXECUTION-PLAN.md: `/api/health` existed and
+# nothing ever called it.
+#
+# ⚠ WHAT THIS IS NOT. GitHub's scheduled runs are best-effort and can be delayed
+# by many minutes under load, and a failure here notifies whoever watches
+# Actions — it does not page anyone. It is a cheap "is it still up" signal that
+# lives next to the code, not a monitoring product. If this app ever needs real
+# alerting, that is the Track P2 "Alerting" row, and it belongs outside GitHub.
+#
+# ⚠ GitHub disables scheduled workflows in a public repository after 60 days
+# with no commits. A silent uptime check is worse than none, so the job prints
+# the URL it checked on every run: a run history that stops is the signal.
+on:
+  schedule:
+    # Every 15 minutes, UTC. Finer than this buys nothing: a Worker either
+    # answers or it does not, and the cron poller that matters has its own log.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: uptime
+  cancel-in-progress: true
+
+jobs:
+  health:
+    name: /api/health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check each configured environment
+        env:
+          STAGING_URL: ${{ vars.STAGING_URL }}
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+        run: |
+          checked=0
+          failed=0
+          for name in PRODUCTION STAGING; do
+            eval "url=\${${name}_URL}"
+            [ -z "$url" ] && continue
+            checked=$((checked + 1))
+            echo "checking $name: $url/api/health"
+            # Two attempts: one cold Worker start should not read as an outage.
+            for attempt in 1 2; do
+              body=$(curl -fsS --max-time 15 "$url/api/health" || true)
+              case "$body" in
+                *'"db":true'*) echo "  $name healthy: $body"; body=OK; break;;
+              esac
+              echo "  $name attempt $attempt: ${body:-no response}"
+              sleep 10
+            done
+            if [ "$body" != "OK" ]; then
+              failed=$((failed + 1))
+              echo "::error title=$name is unhealthy::$url/api/health did not report a database connection. docs/RUNBOOK.md has the recovery steps."
+            fi
+          done
+          if [ "$checked" -eq 0 ]; then
+            echo "::notice title=Nothing to check::Set the STAGING_URL / PRODUCTION_URL repository variables once the app is deployed."
+          fi
+          exit $([ "$failed" -eq 0 ] && echo 0 || echo 1)

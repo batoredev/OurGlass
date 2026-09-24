@@ -14,6 +14,7 @@
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Icon } from "./icons";
+import { useDictation } from "./use-dictation";
 
 interface StoredMessage {
   readonly id: string;
@@ -87,6 +88,13 @@ export function Conversation() {
   const [loaded, setLoaded] = useState(false);
   const streamRef = useRef<HTMLDivElement | null>(null);
 
+  // Speech fills the composer; it never sends (Stage 15's scope). The
+  // transcript is APPENDED, so dictating after typing keeps both.
+  const dictation = useDictation({
+    onTranscript: (append) => setDraft(append),
+    onError: setNotice,
+  });
+
   // THE READER'S CLOCK, NOT THE SERVER'S. See `useReaderNow` below.
   const now = useReaderNow();
 
@@ -137,6 +145,9 @@ export function Conversation() {
 
     setDraft("");
     setNotice(null);
+    // A turn is on its way; anything said now belongs to the NEXT one, and a
+    // microphone left open after sending is its own kind of surprise.
+    dictation.stop();
     setBusy(true);
     const stamp = `local-${Date.now()}`;
     setEntries((current) => [...current, { key: stamp, role: "user", body: utterance }]);
@@ -172,7 +183,7 @@ export function Conversation() {
     } finally {
       setBusy(false);
     }
-  }, [draft, busy]);
+  }, [draft, busy, dictation]);
 
   const undo = useCallback(async (turnId: string) => {
     setNotice(null);
@@ -299,7 +310,7 @@ export function Conversation() {
           <textarea
             id="composer-input"
             rows={1}
-            placeholder="Tell me anything..."
+            placeholder={dictation.listening ? "Listening…" : "Tell me anything..."}
             aria-label="Message OurGlass"
             value={draft}
             disabled={busy}
@@ -313,6 +324,21 @@ export function Conversation() {
               }
             }}
           />
+          {/* Rendered only where the browser has SpeechRecognition — Firefox
+              gets no button rather than a dead one. Speech goes INTO the box;
+              it never sends, so a misheard word is corrected before the turn. */}
+          {dictation.supported && (
+            <button
+              type="button"
+              className="composer-tool"
+              aria-label={dictation.listening ? "Stop dictating" : "Dictate a message"}
+              aria-pressed={dictation.listening}
+              disabled={busy}
+              onClick={dictation.toggle}
+            >
+              <Icon name="mic" />
+            </button>
+          )}
           <button
             type="submit"
             className="composer-tool composer-send"
