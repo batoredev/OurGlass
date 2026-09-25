@@ -89,7 +89,7 @@ The Respond stage is degrading; the writes are fine. `fallbackReason` in the sam
 claimed something the facts did not say and was correctly replaced by the template.
 
 **A 429 "Too many messages right now".**
-The spend cap (`apps/web/app/api/_rate-limit.ts`) — 20 turns a minute, 500 a day by default. If
+The spend cap (`apps/web/app/api/_rate-limit.ts`) — 10 turns a minute, 200 a day by default. If
 it is legitimate use, raise `TURN_LIMIT_PER_MINUTE` / `TURN_LIMIT_PER_DAY` in `wrangler.toml`
 `[vars]` and redeploy. If it is not, treat it as a leaked token (below).
 
