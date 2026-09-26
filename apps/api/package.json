@@ -11,8 +11,8 @@
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.124.0",
-    "@google/genai": "2.22.0",
+    "@anthropic-ai/sdk": "0.128.0",
+    "@google/genai": "2.24.0",
     "@ourglass/db": "workspace:*",
     "@ourglass/shared": "workspace:*",
     "chrono-node": "2.10.1",
