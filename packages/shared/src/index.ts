@@ -26,3 +26,4 @@ export * from "./extraction-schema.js";
 export * from "./respond-contract.js";
 export * from "./ai-provider.js";
 export * from "./risk.js";
+export * from "./document-contract.js";

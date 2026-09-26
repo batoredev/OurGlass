@@ -30,6 +30,7 @@ export * as relationships from "./repositories/relationships.js";
 export * as events from "./repositories/events.js";
 export * as entityRecords from "./repositories/entity-records.js";
 export * as permissions from "./repositories/permissions.js";
+export * as documents from "./repositories/documents.js";
 
 export type { Person, CreatePersonInput } from "./repositories/people.js";
 export type { Organization } from "./repositories/organizations.js";
@@ -103,5 +104,15 @@ export type {
   EnumOption,
 } from "./repositories/entity-records.js";
 export type { OverdueCommitment } from "./repositories/commitments.js";
+export type {
+  Document,
+  DocumentKind,
+  DocumentLink,
+  DocumentLinkTargetKind,
+  DocumentLinkInference,
+  DocumentListItem,
+  CreateDocumentInput,
+  CreateDocumentLinkInput,
+} from "./repositories/documents.js";
 
 export { truncateAll, TRUNCATABLE_TABLES } from "./testing/truncate.js";

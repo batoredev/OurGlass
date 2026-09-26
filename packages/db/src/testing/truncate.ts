@@ -50,6 +50,10 @@ export const TRUNCATABLE_TABLES = [
   // Phase 4 (migration 010). References `messages` for §16 provenance, so it
   // is listed before it, matching the dependents-first convention above.
   "memories",
+  // Phase 6 (migration 013). documents references `messages`; its links
+  // reference documents — dependents first, as above.
+  "document_links",
+  "documents",
   "reminders",
   "events",
   "messages",

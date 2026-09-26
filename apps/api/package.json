@@ -16,7 +16,9 @@
     "@ourglass/db": "workspace:*",
     "@ourglass/shared": "workspace:*",
     "chrono-node": "2.10.1",
-    "pg": "^8.16.3"
+    "fflate": "0.8.3",
+    "pg": "^8.16.3",
+    "unpdf": "1.8.1"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
@@ -49,6 +51,10 @@
     "./permissions": {
       "types": "./dist/permissions/index.d.ts",
       "default": "./dist/permissions/index.js"
+    },
+    "./ingest": {
+      "types": "./dist/ingest/index.d.ts",
+      "default": "./dist/ingest/index.js"
     }
   }
 }

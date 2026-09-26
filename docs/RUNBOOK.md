@@ -93,6 +93,20 @@ The spend cap (`apps/web/app/api/_rate-limit.ts`) — 10 turns a minute, 200 a d
 it is legitimate use, raise `TURN_LIMIT_PER_MINUTE` / `TURN_LIMIT_PER_DAY` in `wrangler.toml`
 `[vars]` and redeploy. If it is not, treat it as a leaked token (below).
 
+**An upload answers "File uploads aren't set up yet".**
+`SUPABASE_URL` or `SUPABASE_SECRET_KEY` is missing (or the URL is not https). Set both
+(`YOUR-ACTIONS.md` item 19c). Nothing else depends on storage, so the rest of the app is fine.
+
+**An upload says "I couldn't store that file just now".**
+Supabase Storage refused or did not answer; nothing was saved. `wrangler tail` shows
+`[ingest] storage failed:` with the reason — a rejected key names `SUPABASE_SECRET_KEY`.
+
+**A file is saved but "couldn't be read".** The reply says which of: no model configured, no
+image-capable model (Qwen reads text only), the models failed, a scan with no text,
+password-protected, damaged, or too large. The file is safe in storage either way; the reason
+is `documents.read_failure`. For a PDF that fails only in production, check the Worker's CPU
+limit — the free plan's 10 ms is not enough to parse one (Workers Paid is).
+
 **The access token leaked.**
 `npx wrangler secret put OURGLASS_ACCESS_TOKEN` with a new value of at least 32 characters. This
 signs every browser out at once. Generate one with

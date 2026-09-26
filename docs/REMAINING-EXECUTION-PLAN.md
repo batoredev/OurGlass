@@ -15,8 +15,8 @@ stops. Phase definitions come from [`PHASES.md`](PHASES.md), the product require
 
 | | |
 |---|---|
-| **Built and CI-verified** | Stages 1–12 plus 12d: schema and tool layer, extraction and resolution, the four-stage turn loop, reminders and conditional rules, memory and inspection, the dynamic entity registry, the UI, multi-provider AI with a measured fallback chain, the §35 permission model with its control plane, and the demo-readiness pass |
-| **Not started** | Stage 13 (Phase 6, ingestion) — there is no `documents` table. Stage 14 (Phase 7, integrations) — no integration code exists. Stage 15 (Phase 8, voice) — no audio code |
+| **Built and CI-verified** | Stages 1–12 plus 12d: schema and tool layer, extraction and resolution, the four-stage turn loop, reminders and conditional rules, memory and inspection, the dynamic entity registry, the UI, multi-provider AI with a measured fallback chain, the §35 permission model with its control plane, and the demo-readiness pass. **Stage 15** (Phase 8, voice: dictation, 2026-09-24). **Stage 13** (Phase 6, file uploads, 2026-09-26) — see its section |
+| **Not started** | Stage 14 (Phase 7, integrations) — no integration code exists; blocked on your Google Cloud project (YOUR-ACTIONS item 17) |
 | **Partial** | Stage 16 (full recheck) — the demo path was verified live on 2026-09-21; the model-quality half has never run |
 | **Outside the original plan** | Track C, multi-tenant SaaS readiness. None of it exists, and none of it is needed until there is a second customer |
 
@@ -144,6 +144,29 @@ image ingested end to end; cost per ingest recorded; `pnpm eval:ai` unaffected; 
 including integration.
 
 **Size:** the biggest remaining item. Plan two missions — pipeline, then UI and association.
+
+**State (2026-09-26): BUILT.** Design and results: [`PHASE-6-DESIGN.md`](PHASE-6-DESIGN.md).
+The four unknowns, settled: (1) Supabase Storage, owner decision; (2) `unpdf` 1.8.1 and
+`fflate` 0.8.3, both MIT, versions and Workers support checked at the source, plus our own
+bounded Word/Excel reader; (3) a third model stage, **Read**, on every provider — Claude and
+Gemini read images, Qwen reads text; (4) capped at 40,000 characters, ≈ $0.04 per document and
+≈ $0.015 per image on Claude, recorded per upload.
+
+Against the gates:
+- **Injection — green and mutation-verified.** A hostile Word file, read by a reader that
+  behaves like a compromised model, writes only its document row and links. Two deliberate
+  breaks each turned the suite red: file content driving a write (caught twice — by
+  behaviour and by the call-site guard) and the tool trusting the model's reading (smuggled
+  keys reached the row). Live on qwen3:8b, the model DESCRIBED the injected text instead of
+  obeying it.
+- **Real files end to end — PDF, DOCX, XLSX yes; image stored but not read.** 19/19 through
+  the real routes (local database, local storage stand-in, Qwen). No vision model has read an
+  image live: that is a paid Claude/Gemini call, awaiting your go-ahead.
+- **Cost per ingest — recorded** on every `documents` row (`trace`: model, tokens, latency).
+- **`pnpm eval:ai` — unaffected by construction:** Interpret's code path is unchanged.
+- **CI including integration** — see the commit. Integration tests now also run locally,
+  on an in-process Postgres (PGlite): 105/107, the two exceptions being a known PGlite
+  divergence in double-undo constraint handling that real Postgres passes.
 
 ---
 

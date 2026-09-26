@@ -44,6 +44,9 @@ describe("truncateAll", () => {
         "action_log",
         "commitment_notes",
         "commitments",
+        // Phase 6, migration 013.
+        "document_links",
+        "documents",
         "entity_records",
         "entity_type_fields",
         "entity_types",

@@ -40,6 +40,17 @@ export function contentSecurityPolicy(dev: boolean): string {
   ].join("; ");
 }
 
+/**
+ * The policy for a SERVED UPLOAD (GET /api/documents/:id/file, Phase 6).
+ *
+ * Opened in a tab, an uploaded file gets no origin (`sandbox`), no scripts
+ * and nothing to load but itself. It must be applied as a LATER header rule
+ * in next.config.ts than the global one: a route handler's own CSP header is
+ * overridden by the config's, which the Phase 6 end-to-end test caught — the
+ * route set this policy and the browser never received it.
+ */
+export const UPLOADED_FILE_CSP = "sandbox; default-src 'none'; img-src 'self'";
+
 export function securityHeaders(dev: boolean): readonly Header[] {
   return [
     { key: "Content-Security-Policy", value: contentSecurityPolicy(dev) },

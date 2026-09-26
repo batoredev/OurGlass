@@ -17,11 +17,43 @@
  */
 import type {
   AIProviderName,
+  AIStage,
+  DocumentReading,
   ExtractionResult,
+  ImageMediaType,
   ProviderHealth,
   RespondInput,
 } from "@ourglass/shared";
 import type { RespondResult } from "../assistant/respond.js";
+
+/**
+ * What the Read stage is given: extracted text, or one image. NEVER the
+ * filename — it is as attacker-controlled as the content, and a model that
+ * does not need it should not see it (docs/PHASE-6-DESIGN.md §4).
+ */
+export type ReadInput =
+  | { readonly kind: "text"; readonly text: string; readonly requestId?: string }
+  | {
+      readonly kind: "image";
+      readonly mediaType: ImageMediaType;
+      /** Base64, no data: prefix. */
+      readonly base64: string;
+      readonly requestId?: string;
+    };
+
+export interface ReadTrace {
+  readonly model: string;
+  readonly latencyMs: number;
+  readonly stopReason: string | null;
+  readonly inputTokens: number | null;
+  readonly outputTokens: number | null;
+}
+
+export interface ReadResult {
+  /** Already through `parseReading` — the provider returns nothing else. */
+  readonly reading: DocumentReading;
+  readonly trace: ReadTrace;
+}
 
 export interface InterpretInput {
   readonly utterance: string;
@@ -49,7 +81,7 @@ export interface AIProvider {
   readonly name: AIProviderName;
 
   /** Which model this provider would use for a stage, for logs and evals. */
-  modelFor(stage: "interpret" | "respond"): string;
+  modelFor(stage: AIStage): string;
 
   /**
    * THROWS on failure, always as a `ProviderError`. The router needs a
@@ -66,6 +98,20 @@ export interface AIProvider {
    * trying.
    */
   respond(input: RespondInput): Promise<RespondResult>;
+
+  /**
+   * The Read stage (Phase 6): describe one uploaded file. OPTIONAL — a
+   * CAPABILITY, like `readsImages`: a provider without it is skipped for
+   * reading rather than failed. All three real providers implement it
+   * (provider-capabilities.test.ts), so absence is a test double's choice.
+   *
+   * THROWS a `ProviderError` on failure, as interpret does. The result has
+   * already passed `parseReading`, so it can describe but never direct.
+   */
+  read?(input: ReadInput): Promise<ReadResult>;
+
+  /** Whether `read` accepts an image. Qwen's text model does not. */
+  readonly readsImages?: boolean;
 
   /** Cheap and non-networked (§28). Never spends a model call. */
   health(): ProviderHealth;

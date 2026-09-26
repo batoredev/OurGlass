@@ -10,7 +10,7 @@
  * requests: a pool per request would open a connection per call and exhaust
  * Supabase's limit under any real load. Module scope IS the isolate lifetime.
  */
-import { createPool, withTransaction } from "@ourglass/db";
+import { createPool, users, withTransaction } from "@ourglass/db";
 import type { DatabaseTransaction } from "@ourglass/shared";
 
 type Pool = ReturnType<typeof createPool>;
@@ -33,6 +33,24 @@ export const db = {
 
 export function read<T>(fn: (tx: DatabaseTransaction) => Promise<T>): Promise<T> {
   return db.withTransaction(fn);
+}
+
+let cachedUserId: string | null = null;
+
+/**
+ * The bootstrap user, resolved once per isolate and cached.
+ *
+ * Moved here from turn/route.ts when the upload route (Phase 6) needed the
+ * same id — one declaration, not two. A missing user row is a DEPLOYMENT
+ * fault, not a conversational one: ensureUser creates it rather than a
+ * caller defaulting a timezone and replying hours wrong.
+ */
+export async function bootstrapUserId(): Promise<string> {
+  if (!cachedUserId) {
+    const account = await db.withTransaction((tx) => users.ensureUser(tx, { displayName: "You" }));
+    cachedUserId = account.user.id;
+  }
+  return cachedUserId;
 }
 
 // Access control lives in `_auth.ts` (`authorize`), not here: it must be

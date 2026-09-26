@@ -38,8 +38,8 @@ import { rejectCrossSite } from "../_http";
 import { rejectOverLimit, turnLimits } from "../_rate-limit";
 import { allModelsFailedMessage, sendAlert } from "../../../lib/alert";
 import type { AIRequestLog } from "@ourglass/shared";
-import { messages, users } from "@ourglass/db";
-import { db, read } from "../_lib";
+import { messages } from "@ourglass/db";
+import { bootstrapUserId, db, read } from "../_lib";
 
 // Node runtime, not Edge. `pg` needs `nodejs_compat`, which the Cloudflare
 // adapter supplies for the Node runtime; the Edge runtime has no TCP sockets.
@@ -55,23 +55,9 @@ export const dynamic = "force-dynamic";
  * pg's default max of 10, for twenty connections where ten was intended. Two
  * declarations of one fact, which is this project's most-repeated defect.
  */
-let bootstrapUserId: string | null = null;
-
-/**
- * The bootstrap user, resolved once and cached.
- *
- * `runTurn` needs a user id for the timezone and the first-person
- * short-circuit (§3.2.1). A missing user row is a DEPLOYMENT fault, not a
- * conversational one, so it must fail loudly rather than defaulting a
- * timezone and producing replies that are silently hours wrong.
- */
-async function getUserId(): Promise<string> {
-  if (!bootstrapUserId) {
-    const account = await db.withTransaction((tx) => users.ensureUser(tx, { displayName: "You" }));
-    bootstrapUserId = account.user.id;
-  }
-  return bootstrapUserId;
-}
+// `runTurn` needs a user id for the timezone and the first-person
+// short-circuit (§3.2.1) — `bootstrapUserId` in _lib, shared with the upload
+// route so the two cannot disagree about who "you" are.
 
 export async function POST(request: Request) {
   // This spends model tokens on whatever it is sent and writes to the
@@ -138,7 +124,7 @@ export async function POST(request: Request) {
 
   try {
     const result = await runTurn(
-      { utterance: body.utterance, userId: await getUserId() },
+      { utterance: body.utterance, userId: await bootstrapUserId() },
       {
         db,
         registry: buildToolRegistry(),

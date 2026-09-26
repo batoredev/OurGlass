@@ -259,9 +259,16 @@ and add the completion date/commit as each phase lands.
 > **How these three get built** — sequencing, the decisions each one needs settled first, and
 > the verification gates: [`REMAINING-EXECUTION-PLAN.md`](REMAINING-EXECUTION-PLAN.md).
 
-- [ ] **Phase 6 — Ingestion** *(Mission 4 team)*
-  Images and documents (§32, §33). Extract and associate with people/projects/commitments.
-  Interpret first, act only when appropriate. Ingested content is untrusted input.
+- [x] **Phase 6 — Ingestion** *(built 2026-09-26; design and results in `PHASE-6-DESIGN.md`)*
+  Images and documents (§32, §33). PDF, Word, Excel, text and images, attached in the chat
+  (📎) and listed on the Files page. Bytes in Supabase Storage; text extracted locally; one
+  model call — the Read stage — describes the file and nothing else. Associated with existing
+  people, organisations and projects by exact name only; never auto-acts (§32: "interpret
+  first"). Every upload is one undoable turn.
+  **Verified:** the injection test, mutation-verified twice; 19/19 end to end through the real
+  routes on qwen3:8b; parsers in workerd; Lighthouse accessibility 100 on the new surfaces.
+  **Not verified:** a vision model reading a real image live (paid call, awaiting approval);
+  association to commitments (deliberately out of scope, design §10).
 
 - [ ] **Phase 7 — External integrations + permissions** *(Mission 4 team + integration specialist)*
   Permission model first (§35). Then Gmail, Calendar, Drive (§34). External actions always

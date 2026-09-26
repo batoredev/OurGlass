@@ -117,7 +117,8 @@ with CI green.
   2. `npx wrangler secret put OURGLASS_ACCESS_TOKEN` → paste the token.
   3. `npx wrangler secret put DATABASE_URL` → paste the production connection string.
   4. `npx wrangler secret put ANTHROPIC_API_KEY` → paste the key.
-  5. Optional: `GEMINI_API_KEY` as a backup model, `VOYAGE_API_KEY` for memory search.
+  5. Optional: `GEMINI_API_KEY` as a backup model, `VOYAGE_API_KEY` for memory search,
+     `SUPABASE_URL` + `SUPABASE_SECRET_KEY` for file uploads (item 19c).
   - The live app cannot reach the Ollama on your laptop, so it **needs item 4**.
 
 - [ ] **12. Deploy and check** 👤
@@ -171,6 +172,21 @@ with CI green.
   2. Locally: `ALERT_WEBHOOK_URL=<url>` in `.env`. Deployed, in `apps/web`:
      `npx wrangler secret put ALERT_WEBHOOK_URL` (and again with `--env staging` if you use staging).
   - You get one message when reminders stop firing or every AI model fails — never the user's words.
+- [ ] **19c. Turn on file uploads** (decided: Supabase Storage) — the 📎 button in the chat.
+  1. Supabase dashboard → **Project Settings → API Keys** → copy a **secret key**
+     (`sb_secret_…`; the legacy `service_role` key also works). The project URL is on the same
+     page: `https://<project-ref>.supabase.co`.
+  2. Locally, in `.env`: `SUPABASE_URL=https://<project-ref>.supabase.co` and
+     `SUPABASE_SECRET_KEY=sb_secret_…`. Deployed, in `apps/web`:
+     `npx wrangler secret put SUPABASE_URL` and `npx wrangler secret put SUPABASE_SECRET_KEY`.
+  3. Nothing to create: the private `documents` bucket makes itself on the first upload.
+  - ⚠ The secret key bypasses every access rule in your database. It stays on the server; the
+    app never sends it to a browser. Treat it like the database password.
+  - **Images** are read only by Claude or Gemini (item 4); your local Qwen reads text, Word,
+    Excel and PDF files. Cost: about $0.04 per long document and $0.015 per image on Claude.
+  - ⚠ **Deployed PDFs need Cloudflare Workers Paid** ($5/month): reading a PDF takes more than
+    the free plan's 10 ms of CPU per request. The app bundle is 2.61 MB of the free plan's
+    3 MB limit, so that fits either way.
 - [ ] **20. Voyage API key** (<https://dash.voyageai.com>) → `VOYAGE_API_KEY=` in `.env`. Lets
       memory search find paraphrases, not only exact words.
 - [ ] **21. Reconnect the Claude Code connectors.** The GitHub one fails to connect

@@ -99,7 +99,20 @@ describe("tool registry coverage", () => {
     revoke_permission: "control plane — must never be model-reachable",
     release_pending_action: "control plane — must never be model-reachable",
     decline_pending_action: "control plane — must never be model-reachable",
+    // Phase 6. Emitted by the ingest pipeline (src/ingest/ingest.ts), which
+    // ingest.test.ts scans the same way this file scans the orchestrator.
+    save_document: "ingest pipeline only — the planner never sees a file",
+    link_document: "ingest pipeline only — the planner never sees a file",
   };
+
+  it("never lets the conversational planner emit a document tool (PHASE-6-DESIGN §1)", () => {
+    // The inverse of the list above, stated as its own failure: a planner
+    // branch that could name a document is a path from a model's output to a
+    // file record, which is the injection route Phase 6 is built to close.
+    const emitted = toolNamesEmittedByOrchestrator();
+    expect(emitted).not.toContain("save_document");
+    expect(emitted).not.toContain("link_document");
+  });
 
   it("leaves no tool registered but unreachable, unless the reason is stated", () => {
     const registered = buildToolRegistry().list().map((tool) => tool.name);

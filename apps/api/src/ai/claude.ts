@@ -11,18 +11,33 @@
  * The models come from `@ourglass/shared` so they cannot drift, and the
  * provider layer must not become a way around the constraint.
  */
+import Anthropic from "@anthropic-ai/sdk";
 import type {
   AIProviderName,
+  AIStage,
   ExtractionResult,
   ProviderHealth,
   ProviderFailureCategory,
   RespondInput,
 } from "@ourglass/shared";
-import { EXTRACTION_MODEL, RESPOND_MODEL } from "@ourglass/shared";
+import { DOCUMENT_READING_SCHEMA, EXTRACTION_MODEL, RESPOND_MODEL, parseReading } from "@ourglass/shared";
 import { AnthropicExtractor } from "../assistant/extract.js";
 import { HaikuResponder, templateReply, type RespondResult } from "../assistant/respond.js";
 import { ProviderError, classifyProviderError } from "./errors.js";
-import type { AIProvider, InterpretInput } from "./provider.js";
+import type { AIProvider, InterpretInput, ReadInput, ReadResult } from "./provider.js";
+import { READ_IMAGE_MESSAGE, READ_SYSTEM_PROMPT, readTextMessage } from "./read-prompt.js";
+
+const READING_TOOL_NAME = "record_reading";
+/** A reading is small by construction (READING_LIMITS); this bounds a runaway one. */
+export const READ_MAX_TOKENS = 1_500;
+
+const READING_TOOL = {
+  name: READING_TOOL_NAME,
+  description: "Record the description of the file. This is the only thing to do with it.",
+  input_schema: DOCUMENT_READING_SCHEMA as unknown as Anthropic.Tool.InputSchema,
+};
+
+type MessagesClient = Pick<Anthropic, "messages">;
 
 export interface ClaudeProviderOptions {
   readonly apiKey: string;
@@ -33,16 +48,20 @@ export interface ClaudeProviderOptions {
   /** Injected in tests so no network call is made. */
   readonly extractor?: Pick<AnthropicExtractor, "extract">;
   readonly responder?: Pick<HaikuResponder, "respondWithTrace">;
+  /** Injected in tests: the Read stage's SDK client. */
+  readonly readClient?: MessagesClient;
 }
 
 export class ClaudeProvider implements AIProvider {
   readonly name: AIProviderName = "claude";
+  readonly readsImages = true;
 
   private readonly apiKey: string;
   private readonly injectedExtractor: Pick<AnthropicExtractor, "extract"> | undefined;
   private readonly injectedResponder: Pick<HaikuResponder, "respondWithTrace"> | undefined;
   private builtExtractor: Pick<AnthropicExtractor, "extract"> | undefined;
   private builtResponder: Pick<HaikuResponder, "respondWithTrace"> | undefined;
+  private readClient: MessagesClient | undefined;
   private readonly interpretModel: string;
   private readonly respondModel: string;
   private readonly respondTimeoutMs: number | undefined;
@@ -57,6 +76,7 @@ export class ClaudeProvider implements AIProvider {
     this.respondTimeoutMs = options.respondTimeoutMs;
     this.injectedExtractor = options.extractor;
     this.injectedResponder = options.responder;
+    this.readClient = options.readClient;
 
     // NOTHING IS CONSTRUCTED HERE, and the first version got this wrong.
     //
@@ -71,8 +91,71 @@ export class ClaudeProvider implements AIProvider {
     // An unconfigured provider must be SKIPPABLE, which means constructible.
   }
 
-  modelFor(stage: "interpret" | "respond"): string {
-    return stage === "interpret" ? this.interpretModel : this.respondModel;
+  modelFor(stage: AIStage): string {
+    // Read uses the Interpret model: misreading a poster's date is the
+    // failure that matters there, so it gets the stronger of the two.
+    return stage === "respond" ? this.respondModel : this.interpretModel;
+  }
+
+  /**
+   * Describe one uploaded file (PHASE-6-DESIGN §4). A forced tool call whose
+   * input schema IS the reading, then `parseReading` — the same two-step as
+   * Interpret's forced call then `isExtraction`.
+   */
+  async read(input: ReadInput): Promise<ReadResult> {
+    const started = performance.now();
+    try {
+      if (!this.readClient) {
+        if (!this.apiKey) throw new ProviderError("claude", "auth", "ANTHROPIC_API_KEY is not set");
+        this.readClient = new Anthropic({ apiKey: this.apiKey });
+      }
+      const content: Anthropic.MessageParam["content"] =
+        input.kind === "text"
+          ? readTextMessage(input.text)
+          : [
+              { type: "image", source: { type: "base64", media_type: input.mediaType, data: input.base64 } },
+              { type: "text", text: READ_IMAGE_MESSAGE },
+            ];
+      const response = await this.readClient.messages.create({
+        model: this.interpretModel,
+        max_tokens: READ_MAX_TOKENS,
+        system: READ_SYSTEM_PROMPT,
+        messages: [{ role: "user", content }],
+        tools: [READING_TOOL],
+        tool_choice: { type: "tool", name: READING_TOOL_NAME, disable_parallel_tool_use: true },
+      });
+
+      // Stop reason BEFORE payload, as in extract.ts: a truncated tool call
+      // can still parse, with half the dates missing.
+      const stopReason = response.stop_reason ?? null;
+      if (stopReason === "max_tokens") throw new ProviderError("claude", "truncated", "Reading was truncated");
+      if (stopReason === "refusal") throw new ProviderError("claude", "refused", "The model declined to read the file");
+      if (stopReason === "model_context_window_exceeded") {
+        throw new ProviderError("claude", "context_window", "The file exceeded the context window");
+      }
+      const block = response.content.find(
+        (item): item is Anthropic.ToolUseBlock => item.type === "tool_use" && item.name === READING_TOOL_NAME,
+      );
+      const reading = parseReading(block?.input);
+      if (reading === null) {
+        throw new ProviderError("claude", "schema_invalid", "The model's reading did not match the contract");
+      }
+      return {
+        reading,
+        trace: {
+          model: response.model,
+          latencyMs: performance.now() - started,
+          stopReason,
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
+        },
+      };
+    } catch (error: unknown) {
+      const classified = classifyProviderError(this.name, error);
+      this.lastFailureAt = new Date().toISOString();
+      this.lastFailureCategory = classified.category;
+      throw classified;
+    }
   }
 
   /** Built on first use, never at construction. See the constructor. */

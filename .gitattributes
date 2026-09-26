@@ -1,0 +1,6 @@
+# Test fixtures are exact bytes. A reportlab PDF is pure ASCII, so git would
+# otherwise treat it as text and rewrite its line endings on a Windows
+# checkout (core.autocrlf) — shifting every offset in its xref table and
+# handing the extractor a damaged file. Same for the text fixture's CRLFs,
+# which the extractor test depends on.
+apps/api/test-fixtures/** binary

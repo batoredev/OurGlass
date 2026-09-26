@@ -50,6 +50,8 @@ export interface AIConfig {
    * Set `AI_RESPOND_TIMEOUT_MS` to force one budget on every provider.
    */
   readonly respondTimeoutMs: number | undefined;
+  /** The Read stage's budget (Phase 6). A document is not a sentence. */
+  readonly readTimeoutMs: number;
   readonly maxRetries: number;
   readonly enableFallback: boolean;
   readonly anthropic: {
@@ -70,6 +72,8 @@ export interface AIConfig {
 }
 
 const DEFAULT_TIMEOUT_MS = 20_000;
+/** Read (Phase 6): ~10k tokens in, a structured answer out — seconds on Claude, a minute locally. */
+const DEFAULT_READ_TIMEOUT_MS = 60_000;
 const DEFAULT_MAX_RETRIES = 1;
 
 function readInt(raw: string | undefined, fallback: number, min: number, max: number): number {
@@ -148,6 +152,11 @@ export function loadAIConfig(env: AIEnv): AIConfig {
   if (respondOrder !== undefined && respondOrder.trim() !== "") {
     stageOrder.respond = parseOrder(respondOrder, order);
   }
+  // Unset, the router reads with Interpret's order (router.ts chainFor).
+  const readOrder = env["AI_READ_ORDER"];
+  if (readOrder !== undefined && readOrder.trim() !== "") {
+    stageOrder.read = parseOrder(readOrder, order);
+  }
 
   return {
     order,
@@ -157,6 +166,7 @@ export function loadAIConfig(env: AIEnv): AIConfig {
     // router's timeout is aborted by it anyway, so allowing more would be a
     // setting that silently does nothing.
     respondTimeoutMs: readOptionalInt(env["AI_RESPOND_TIMEOUT_MS"], 500, 120_000),
+    readTimeoutMs: readInt(env["AI_READ_TIMEOUT_MS"], DEFAULT_READ_TIMEOUT_MS, 5_000, 180_000),
     maxRetries: readInt(env["AI_MAX_RETRIES"], DEFAULT_MAX_RETRIES, 0, 5),
     enableFallback: readBool(env["AI_ENABLE_FALLBACK"], true),
     anthropic: {
@@ -211,6 +221,8 @@ export function buildProvider(name: AIProviderName, config: AIConfig): AIProvide
         // lengthen anything.
         interpretTimeoutMs: config.timeoutMs,
         timeoutMs: config.respondTimeoutMs,
+        // Same rule for reading: the provider must not give up first.
+        readTimeoutMs: config.readTimeoutMs,
       });
   }
 }
@@ -249,6 +261,7 @@ export function buildAIRouter(env: AIEnv, options: BuildRouterOptions = {}): AIM
     providers,
     stageOrder: config.stageOrder,
     timeoutMs: config.timeoutMs,
+    readTimeoutMs: config.readTimeoutMs,
     maxRetries: config.maxRetries,
     enableFallback: config.enableFallback,
     onLog: options.onLog,

@@ -74,7 +74,7 @@ describe("wrangler.toml does not enable the demo endpoints", () => {
     // wrangler.toml is COMMITTED and this repo is PUBLIC. Secrets belong in
     // `wrangler secret put`, which never touches the file.
     const secretish =
-      /^(DATABASE_URL|ANTHROPIC_API_KEY|GEMINI_API_KEY|VOYAGE_API_KEY|OURGLASS_ACCESS_TOKEN)\s*=/;
+      /^(DATABASE_URL|ANTHROPIC_API_KEY|GEMINI_API_KEY|VOYAGE_API_KEY|OURGLASS_ACCESS_TOKEN|SUPABASE_SECRET_KEY|ALERT_WEBHOOK_URL)\s*=/;
     expect(active.filter((line) => secretish.test(line))).toEqual([]);
   });
 });

@@ -27,7 +27,7 @@ import type {
 import { ExtractionError, type Extractor } from "../assistant/extract.js";
 import { templateReply, type RespondResult } from "../assistant/respond.js";
 import { ProviderError, classifyProviderError } from "./errors.js";
-import type { AIProvider } from "./provider.js";
+import type { AIProvider, ReadInput, ReadResult } from "./provider.js";
 
 /**
  * Respond-stage degradations worth trying another provider for.
@@ -53,6 +53,8 @@ export interface RouterOptions {
   /** Per-stage overrides (§29): Interpret and Respond need not agree. */
   readonly stageOrder?: Partial<Record<AIStage, readonly AIProviderName[]>> | undefined;
   readonly timeoutMs?: number | undefined;
+  /** The Read stage's wait (Phase 6): a 10k-token document is not a sentence. */
+  readonly readTimeoutMs?: number | undefined;
   /** Retries of the SAME provider, after the first attempt. Default 1. */
   readonly maxRetries?: number | undefined;
   readonly enableFallback?: boolean | undefined;
@@ -73,6 +75,11 @@ export interface RoutedReply extends RespondResult {
   readonly fallbackUsed: boolean;
 }
 
+export interface RoutedReading extends ReadResult {
+  readonly provider: AIProviderName;
+  readonly fallbackUsed: boolean;
+}
+
 /** Every provider failed. Carries the whole trail, not just the last one. */
 export class AllProvidersFailedError extends Error {
   readonly stage: AIStage;
@@ -88,11 +95,13 @@ export class AllProvidersFailedError extends Error {
 }
 
 const DEFAULT_TIMEOUT_MS = 20_000;
+const DEFAULT_READ_TIMEOUT_MS = 60_000;
 
 export class AIModelRouter {
   private readonly providers: readonly AIProvider[];
   private readonly stageOrder: Partial<Record<AIStage, readonly AIProviderName[]>>;
   private readonly timeoutMs: number;
+  private readonly readTimeoutMs: number;
   private readonly maxRetries: number;
   private readonly enableFallback: boolean;
   private readonly onLog: (record: AIRequestLog) => void;
@@ -103,6 +112,7 @@ export class AIModelRouter {
     this.providers = options.providers;
     this.stageOrder = options.stageOrder ?? {};
     this.timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.readTimeoutMs = options.readTimeoutMs ?? DEFAULT_READ_TIMEOUT_MS;
     this.maxRetries = options.maxRetries ?? 1;
     this.enableFallback = options.enableFallback ?? true;
     this.onLog = options.onLog ?? (() => undefined);
@@ -118,8 +128,10 @@ export class AIModelRouter {
    * failure would make the trail in AllProvidersFailedError lie about what was
    * actually attempted.
    */
-  private chainFor(stage: AIStage): readonly AIProvider[] {
-    const names = this.stageOrder[stage];
+  private chainFor(stage: AIStage, capable: (provider: AIProvider) => boolean = () => true): readonly AIProvider[] {
+    // Read falls back to Interpret's order: a deployment that routed Interpret
+    // away from a provider did so for a reason that applies to reading too.
+    const names = this.stageOrder[stage] ?? (stage === "read" ? this.stageOrder.interpret : undefined);
     const ordered =
       names === undefined
         ? this.providers
@@ -127,7 +139,9 @@ export class AIModelRouter {
             .map((name) => this.providers.find((provider) => provider.name === name))
             .filter((provider): provider is AIProvider => provider !== undefined);
 
-    const configured = ordered.filter((provider) => provider.health().configured);
+    // Capability BEFORE the no-fallback slice: with fallback off, a text-only
+    // first provider must not swallow an image that the second could read.
+    const configured = ordered.filter((provider) => provider.health().configured && capable(provider));
     return this.enableFallback ? configured : configured.slice(0, 1);
   }
 
@@ -141,14 +155,16 @@ export class AIModelRouter {
    * makes an already-committed mutation look like a failure and invites the
    * user to say it again.
    */
-  private async withTimeout<T>(provider: AIProviderName, work: Promise<T>): Promise<T> {
+  private async withTimeout<T>(
+    provider: AIProviderName,
+    work: Promise<T>,
+    timeoutMs: number = this.timeoutMs,
+  ): Promise<T> {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => {
-        reject(
-          new ProviderError(provider, "timeout", `Provider timed out after ${this.timeoutMs}ms`),
-        );
-      }, this.timeoutMs);
+        reject(new ProviderError(provider, "timeout", `Provider timed out after ${timeoutMs}ms`));
+      }, timeoutMs);
     });
     try {
       return await Promise.race([work, timeout]);
@@ -228,6 +244,62 @@ export class AIModelRouter {
     }
 
     throw new AllProvidersFailedError("interpret", failures);
+  }
+
+  /**
+   * The Read stage (Phase 6): describe one uploaded file.
+   *
+   * THROWS, like interpret — the ingest pipeline catches it and saves the file
+   * unread, saying so. Only providers that CAN read this input are tried: an
+   * image skips a text-only model instead of failing on it. The log records
+   * carry no content, same as every other stage.
+   */
+  async read(input: ReadInput, context: { readonly turnId?: string | null } = {}): Promise<RoutedReading> {
+    const chain = this.chainFor(
+      "read",
+      (provider) => typeof provider.read === "function" && (input.kind === "text" || provider.readsImages === true),
+    );
+    const failures: ProviderError[] = [];
+    const requestId = input.requestId ?? correlationId();
+
+    for (const [index, provider] of chain.entries()) {
+      for (let attempt = 1; attempt <= this.maxRetries + 1; attempt += 1) {
+        const started = Date.now();
+        const record = (ok: boolean, failure?: ProviderError) =>
+          this.log({
+            requestId,
+            turnId: context.turnId ?? null,
+            stage: "read",
+            provider: provider.name,
+            model: provider.modelFor("read"),
+            attempt,
+            latencyMs: Date.now() - started,
+            ok,
+            fallbackUsed: index > 0,
+            ...(failure ? { errorCategory: failure.category } : {}),
+          });
+        try {
+          const result = await this.withTimeout(provider.name, provider.read!(input), this.readTimeoutMs);
+          record(true);
+          return { ...result, provider: provider.name, fallbackUsed: index > 0 };
+        } catch (error: unknown) {
+          const failure = classifyProviderError(provider.name, error);
+          failures.push(failure);
+          record(false, failure);
+          // Same policy as interpret: a refusal of THIS file is the same
+          // refusal everywhere; a transport failure is worth another provider.
+          if (!failure.fallbackable && !failure.retryable) throw new AllProvidersFailedError("read", failures);
+          if (failure.retryable && attempt <= this.maxRetries) {
+            await this.sleep(this.backoffMs(attempt));
+            continue;
+          }
+          if (!failure.fallbackable) throw new AllProvidersFailedError("read", failures);
+          break;
+        }
+      }
+    }
+
+    throw new AllProvidersFailedError("read", failures);
   }
 
   /**

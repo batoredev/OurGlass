@@ -15,6 +15,7 @@
  * │ assistant, which is the product thesis, not a limitation.              │
  * └────────────────────────────────────────────────────────────────────────┘
  */
+import type { DocumentReading } from "@ourglass/shared";
 
 /**
  * Mirrors the `field_kind` Postgres enum and packages/db's `FieldKind`.
@@ -296,6 +297,24 @@ export async function fetchDirectory(): Promise<{
 
 export async function fetchProjects(): Promise<readonly Project[]> {
   return (await get<{ projects: Project[] }>("/api/projects")).projects;
+}
+
+/** One saved upload (Phase 6) — `DocumentListItem` in packages/db, as JSON. */
+export interface SavedDocument {
+  readonly id: string;
+  readonly filename: string;
+  readonly kind: "pdf" | "docx" | "xlsx" | "text" | "image";
+  readonly byte_size: number;
+  /** The Read stage's description; null when the file could not be read. */
+  readonly reading: DocumentReading | null;
+  readonly read_failure: string | null;
+  readonly text_truncated: boolean;
+  readonly t_created: string;
+  readonly links: readonly { readonly kind: string; readonly id: string; readonly name: string }[];
+}
+
+export async function fetchDocuments(): Promise<readonly SavedDocument[]> {
+  return (await get<{ documents: SavedDocument[] }>("/api/documents")).documents;
 }
 
 export async function fetchMemories(): Promise<readonly Memory[]> {

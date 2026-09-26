@@ -21,12 +21,20 @@
  */
 import type {
   AIProviderName,
+  AIStage,
   ExtractionResult,
   ProviderFailureCategory,
   ProviderHealth,
   RespondInput,
 } from "@ourglass/shared";
-import { EXTRACTION_INPUT_SCHEMA, EXTRACTION_SYSTEM_PROMPT, isExtraction } from "@ourglass/shared";
+import {
+  DOCUMENT_READING_SCHEMA,
+  EXTRACTION_INPUT_SCHEMA,
+  EXTRACTION_SYSTEM_PROMPT,
+  isExtraction,
+  parseReading,
+} from "@ourglass/shared";
+import { READ_IMAGE_MESSAGE, READ_SYSTEM_PROMPT, readTextMessage } from "./read-prompt.js";
 import { ExtractionError } from "../assistant/extract.js";
 import {
   MAX_REPLY_CHARS,
@@ -41,7 +49,13 @@ import {
 } from "../assistant/respond.js";
 import { ProviderError, classifyProviderError } from "./errors.js";
 import { toGeminiSchema } from "./gemini-schema.js";
-import { interpretMessage, type AIProvider, type InterpretInput } from "./provider.js";
+import {
+  interpretMessage,
+  type AIProvider,
+  type InterpretInput,
+  type ReadInput,
+  type ReadResult,
+} from "./provider.js";
 
 /**
  * The slice of `@google/genai` this provider uses.
@@ -56,10 +70,20 @@ export interface GeminiLikeClient {
   readonly models: {
     generateContent(params: {
       model: string;
-      contents: string;
+      /** A string, or — for an image (Read stage) — one user turn of parts. */
+      contents: string | readonly GeminiContent[];
       config?: Record<string, unknown>;
     }): Promise<GeminiLikeResponse>;
   };
+}
+
+export type GeminiPart =
+  | { readonly text: string }
+  | { readonly inlineData: { readonly mimeType: string; readonly data: string } };
+
+export interface GeminiContent {
+  readonly role: "user";
+  readonly parts: readonly GeminiPart[];
 }
 
 export interface GeminiLikeResponse {
@@ -175,8 +199,73 @@ export class GeminiProvider implements AIProvider {
     this.injected = options.client;
   }
 
-  modelFor(stage: "interpret" | "respond"): string {
-    return stage === "interpret" ? this.interpretModel : this.respondModel;
+  modelFor(stage: AIStage): string {
+    // Read uses the Interpret model, as on Claude (PHASE-6-DESIGN §4).
+    return stage === "respond" ? this.respondModel : this.interpretModel;
+  }
+
+  readonly readsImages = true;
+
+  /** Describe one uploaded file (PHASE-6-DESIGN §4). THROWS a ProviderError. */
+  async read(input: ReadInput): Promise<ReadResult> {
+    const started = performance.now();
+    try {
+      const client = await this.clientOrThrow();
+      const contents: string | GeminiContent[] =
+        input.kind === "text"
+          ? readTextMessage(input.text)
+          : [
+              {
+                role: "user",
+                parts: [{ inlineData: { mimeType: input.mediaType, data: input.base64 } }, { text: READ_IMAGE_MESSAGE }],
+              },
+            ];
+      const response = await client.models.generateContent({
+        model: this.interpretModel,
+        contents,
+        config: {
+          systemInstruction: READ_SYSTEM_PROMPT,
+          responseMimeType: "application/json",
+          responseSchema: toGeminiSchema(DOCUMENT_READING_SCHEMA),
+          maxOutputTokens: 1_500,
+          temperature: 0,
+          thinkingConfig: NO_THINKING,
+        },
+      });
+
+      const finishReason = response.candidates?.[0]?.finishReason;
+      if (finishReason === "MAX_TOKENS") throw new ProviderError("gemini", "truncated", "Reading was truncated");
+      if (finishReason !== undefined && REFUSAL_REASONS.has(finishReason)) {
+        throw new ProviderError("gemini", "refused", `Gemini declined to read the file (${finishReason})`);
+      }
+      let payload: unknown;
+      try {
+        payload = JSON.parse(response.text?.trim() ?? "");
+      } catch {
+        throw new ProviderError("gemini", "malformed_output", "Gemini returned text that is not JSON");
+      }
+      // The authority, as for Interpret: Gemini cannot express
+      // additionalProperties:false, and parseReading keeps known keys only.
+      const reading = parseReading(payload);
+      if (reading === null) {
+        throw new ProviderError("gemini", "schema_invalid", "Gemini's reading did not match the contract");
+      }
+      return {
+        reading,
+        trace: {
+          model: this.interpretModel,
+          latencyMs: performance.now() - started,
+          stopReason: finishReason ?? null,
+          inputTokens: response.usageMetadata?.promptTokenCount ?? null,
+          outputTokens: response.usageMetadata?.candidatesTokenCount ?? null,
+        },
+      };
+    } catch (error: unknown) {
+      const classified = classifyProviderError(this.name, error);
+      this.lastFailureAt = new Date().toISOString();
+      this.lastFailureCategory = classified.category;
+      throw classified;
+    }
   }
 
   /**

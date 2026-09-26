@@ -28,6 +28,7 @@ import {
   forgetMemoryTool,
   rememberTool,
 } from "./memory-tools.js";
+import { linkDocumentTool, saveDocumentTool } from "./document-tools.js";
 
 /**
  * EVERY tool the orchestrator can emit must appear here.
@@ -79,6 +80,11 @@ export function buildToolRegistry(): ToolRegistry {
   // could not emit create_person -> create_commitment, and every person the
   // assistant had not met became an unanswerable "Who's Karthik?".
   registry.register(createPersonTool);
+  // Phase 6 (§32, §33). Driven only by the ingest pipeline — the planner never
+  // sees a file — and registered like any tool so an upload is one undoable
+  // turn (src/ingest/ingest.ts).
+  registry.register(saveDocumentTool);
+  registry.register(linkDocumentTool);
   // Phase 7a (§35) — the CONTROL PLANE. Registered so they run through the
   // same validate/commit/log/undo path, and never emitted by a planner: the
   // orchestrator's gate throws if one ever is (PHASE-7-PERMISSIONS-DESIGN §1).

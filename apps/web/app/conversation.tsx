@@ -13,8 +13,28 @@
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { MAX_UPLOAD_BYTES } from "@ourglass/shared";
 import { Icon } from "./icons";
 import { useDictation } from "./use-dictation";
+
+/** What /api/documents returns for an upload — IngestResponse in @ourglass/api/ingest. */
+interface UploadResult {
+  readonly outcome: "saved" | "unread" | "duplicate" | "rejected" | "failed";
+  readonly documentId: string | null;
+  readonly turnId: string | null;
+  readonly reply: string;
+}
+
+/**
+ * What the picker offers. A HINT for the dialog only — the server decides
+ * from the bytes (ingest/sniff.ts), whatever the extension says.
+ */
+const ACCEPTED_FILES = ".pdf,.docx,.xlsx,.txt,.md,.csv,image/png,image/jpeg,image/webp,image/gif";
+
+/** The user's line for an upload — the same text the server stores, so a reload looks identical. */
+function uploadLine(note: string, filename: string): string {
+  return note === "" ? `📎 ${filename}` : `${note}\n📎 ${filename}`;
+}
 
 interface StoredMessage {
   readonly id: string;
@@ -86,7 +106,10 @@ export function Conversation() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // A file waiting to go with the next send; the typed words become its note.
+  const [attachment, setAttachment] = useState<File | null>(null);
   const streamRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Speech fills the composer; it never sends (Stage 15's scope). The
   // transcript is APPENDED, so dictating after typing keeps both.
@@ -141,27 +164,63 @@ export function Conversation() {
 
   const send = useCallback(async () => {
     const utterance = draft.trim();
-    if (utterance === "" || busy) return;
+    const file = attachment;
+    if ((utterance === "" && file === null) || busy) return;
+    // Checked here only to save a pointless upload; the server enforces it.
+    if (file !== null && file.size > MAX_UPLOAD_BYTES) {
+      setNotice("That file is over 10 MB — too large to send.");
+      return;
+    }
 
     setDraft("");
+    setAttachment(null);
     setNotice(null);
     // A turn is on its way; anything said now belongs to the NEXT one, and a
     // microphone left open after sending is its own kind of surprise.
     dictation.stop();
     setBusy(true);
     const stamp = `local-${Date.now()}`;
-    setEntries((current) => [...current, { key: stamp, role: "user", body: utterance }]);
+    const line = file === null ? utterance : uploadLine(utterance, file.name);
+    setEntries((current) => [...current, { key: stamp, role: "user", body: line }]);
 
     try {
-      const response = await fetch("/api/turn", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ utterance }),
-      });
+      // A file goes to the upload pipeline, never to /api/turn: its words
+      // must not reach Interpret (docs/PHASE-6-DESIGN.md §1). The typed text
+      // travels with it as a NOTE, used to link it to people and projects.
+      let response: Response;
+      if (file !== null) {
+        const form = new FormData();
+        form.append("file", file);
+        if (utterance !== "") form.append("note", utterance);
+        response = await fetch("/api/documents", { method: "POST", body: form });
+      } else {
+        response = await fetch("/api/turn", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ utterance }),
+        });
+      }
 
       if (!response.ok) {
         const failure = (await response.json().catch(() => null)) as { error?: string } | null;
-        setNotice(failure?.error ?? `The turn failed (${response.status}).`);
+        setNotice(failure?.error ?? `That didn't go through (${response.status}).`);
+        return;
+      }
+
+      if (file !== null) {
+        const result = (await response.json()) as UploadResult;
+        setEntries((current) => [
+          ...current,
+          {
+            key: `${stamp}-reply`,
+            role: "assistant",
+            body: result.reply,
+            // An upload reply is a template BY DESIGN, so the "template" hint
+            // would be noise; an undoable save shows its card like a turn.
+            turnId: result.turnId,
+            committed: result.turnId ? ["save_document"] : [],
+          },
+        ]);
         return;
       }
 
@@ -183,7 +242,7 @@ export function Conversation() {
     } finally {
       setBusy(false);
     }
-  }, [draft, busy, dictation]);
+  }, [draft, attachment, busy, dictation]);
 
   const undo = useCallback(async (turnId: string) => {
     setNotice(null);
@@ -316,6 +375,21 @@ export function Conversation() {
       )}
 
       <div className="composer-wrap">
+        {attachment && (
+          <div className="composer-attachment">
+            <Icon name="attach" />
+            <span className="composer-attachment-name">{attachment.name}</span>
+            <button
+              type="button"
+              className="composer-attachment-remove"
+              aria-label={`Remove ${attachment.name}`}
+              disabled={busy}
+              onClick={() => setAttachment(null)}
+            >
+              <Icon name="close" />
+            </button>
+          </div>
+        )}
         <form
           className="composer"
           onSubmit={(event) => {
@@ -323,10 +397,41 @@ export function Conversation() {
             void send();
           }}
         >
+          {/* FIRST in the form: the composer grid is `auto 1fr auto auto`, a
+              tool before the text box (the prototype's layout). The picker
+              itself stays hidden (so it takes no grid cell); this button is
+              its accessible face. The input is reset after each pick so
+              choosing the same file twice still fires a change. */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            hidden
+            accept={ACCEPTED_FILES}
+            onChange={(event) => {
+              const picked = event.target.files?.[0] ?? null;
+              event.target.value = "";
+              if (picked) setAttachment(picked);
+            }}
+          />
+          <button
+            type="button"
+            className="composer-tool"
+            aria-label="Attach a file"
+            disabled={busy}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Icon name="attach" />
+          </button>
           <textarea
             id="composer-input"
             rows={1}
-            placeholder={dictation.listening ? "Listening…" : "Tell me anything..."}
+            placeholder={
+              dictation.listening
+                ? "Listening…"
+                : attachment
+                  ? "Add a note, like “the final Hult brief” (optional)"
+                  : "Tell me anything..."
+            }
             aria-label="Message OurGlass"
             value={draft}
             disabled={busy}
@@ -359,7 +464,7 @@ export function Conversation() {
             type="submit"
             className="composer-tool composer-send"
             aria-label="Send"
-            disabled={busy || draft.trim() === ""}
+            disabled={busy || (draft.trim() === "" && attachment === null)}
           >
             <Icon name="send" />
           </button>

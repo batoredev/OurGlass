@@ -24,7 +24,14 @@ import type {
   ProviderHealth,
   RespondInput,
 } from "@ourglass/shared";
-import { EXTRACTION_INPUT_SCHEMA, EXTRACTION_SYSTEM_PROMPT, isExtraction } from "@ourglass/shared";
+import {
+  DOCUMENT_READING_SCHEMA,
+  EXTRACTION_INPUT_SCHEMA,
+  EXTRACTION_SYSTEM_PROMPT,
+  isExtraction,
+  parseReading,
+} from "@ourglass/shared";
+import { READ_SYSTEM_PROMPT, readTextMessage } from "./read-prompt.js";
 import { ExtractionError } from "../assistant/extract.js";
 import {
   MAX_REPLY_CHARS,
@@ -39,7 +46,13 @@ import {
   type RespondTrace,
 } from "../assistant/respond.js";
 import { ProviderError, classifyProviderError } from "./errors.js";
-import { interpretMessage, type AIProvider, type InterpretInput } from "./provider.js";
+import {
+  interpretMessage,
+  type AIProvider,
+  type InterpretInput,
+  type ReadInput,
+  type ReadResult,
+} from "./provider.js";
 
 /** Ollama's `/api/chat` response, as documented. Only the fields we read. */
 export interface OllamaChatResponse {
@@ -229,9 +242,20 @@ export interface QwenProviderOptions {
   /** Respond-stage budget. Short on purpose: the template is always ready. */
   readonly timeoutMs?: number | undefined;
   readonly interpretTimeoutMs?: number | undefined;
+  /** Read-stage budget: a 10k-token document takes a local model a while. */
+  readonly readTimeoutMs?: number | undefined;
   /** Injected in tests so nothing reaches the network. */
   readonly fetchImpl?: FetchLike | undefined;
 }
+
+/**
+ * Ollama's default context window is a few thousand tokens and it TRUNCATES
+ * the prompt silently past it — a long document would be read as its first
+ * page with no error. The Read stage sets the window explicitly: 40k chars of
+ * text (~10k tokens) + the prompt + a 1,500-token answer fits in 16k.
+ */
+export const QWEN_READ_NUM_CTX = 16_384;
+const QWEN_DEFAULT_READ_TIMEOUT_MS = 90_000;
 
 export class QwenProvider implements AIProvider {
   readonly name: AIProviderName = "qwen";
@@ -240,7 +264,10 @@ export class QwenProvider implements AIProvider {
   private readonly model: string;
   private readonly timeoutMs: number;
   private readonly interpretTimeoutMs: number;
+  private readonly readTimeoutMs: number;
   private readonly fetchImpl: FetchLike;
+  /** A text model: an image goes to Claude or Gemini (the router skips qwen for it). */
+  readonly readsImages = false;
 
   private lastFailureAt: string | null = null;
   private lastFailureCategory: ProviderFailureCategory | null = null;
@@ -251,7 +278,66 @@ export class QwenProvider implements AIProvider {
     this.model = options.model ?? OLLAMA_DEFAULT_MODEL;
     this.timeoutMs = options.timeoutMs ?? RESPOND_TIMEOUT_MS;
     this.interpretTimeoutMs = options.interpretTimeoutMs ?? QWEN_DEFAULT_INTERPRET_TIMEOUT_MS;
+    this.readTimeoutMs = options.readTimeoutMs ?? QWEN_DEFAULT_READ_TIMEOUT_MS;
     this.fetchImpl = options.fetchImpl ?? (globalThis.fetch as unknown as FetchLike);
+  }
+
+  /** Describe one uploaded TEXT file (PHASE-6-DESIGN §4). THROWS a ProviderError. */
+  async read(input: ReadInput): Promise<ReadResult> {
+    const started = performance.now();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.readTimeoutMs);
+    try {
+      if (input.kind !== "text") {
+        // The router filters on readsImages, so reaching here is a routing
+        // bug — fallbackable, so it costs a hop rather than the upload.
+        throw new ProviderError("qwen", "unavailable", "The local model reads text, not images");
+      }
+      const response = await this.chat(
+        {
+          model: this.model,
+          messages: [
+            { role: "system", content: READ_SYSTEM_PROMPT },
+            { role: "user", content: readTextMessage(input.text) },
+          ],
+          stream: false,
+          ...NO_THINKING,
+          format: DOCUMENT_READING_SCHEMA,
+          options: { temperature: 0, num_predict: 1_500, num_ctx: QWEN_READ_NUM_CTX },
+        },
+        controller.signal,
+      );
+      if (response.done_reason === "length") {
+        throw new ProviderError("qwen", "truncated", "Qwen truncated the reading");
+      }
+      let payload: unknown;
+      try {
+        payload = JSON.parse(response.message?.content?.trim() ?? "");
+      } catch {
+        throw new ProviderError("qwen", "malformed_output", "Qwen returned text that is not JSON");
+      }
+      const reading = parseReading(payload);
+      if (reading === null) {
+        throw new ProviderError("qwen", "schema_invalid", "Qwen's reading did not match the contract");
+      }
+      return {
+        reading,
+        trace: {
+          model: this.model,
+          latencyMs: performance.now() - started,
+          stopReason: response.done_reason ?? null,
+          inputTokens: response.prompt_eval_count ?? null,
+          outputTokens: response.eval_count ?? null,
+        },
+      };
+    } catch (error: unknown) {
+      const classified = classifyProviderError(this.name, error);
+      this.lastFailureAt = new Date().toISOString();
+      this.lastFailureCategory = classified.category;
+      throw classified;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   modelFor(): string {

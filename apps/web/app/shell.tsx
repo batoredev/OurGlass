@@ -19,6 +19,7 @@ export const SURFACES = [
   { href: "/people", icon: "people", label: "People" },
   { href: "/projects", icon: "projects", label: "Projects" },
   { href: "/memory", icon: "memories", label: "Memories" },
+  { href: "/files", icon: "files", label: "Files" },
 ] as const;
 
 const MOBILE = [

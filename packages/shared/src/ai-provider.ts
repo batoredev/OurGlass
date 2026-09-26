@@ -31,13 +31,17 @@ export function isAIProviderName(value: unknown): value is AIProviderName {
 }
 
 /**
- * The two stages a provider serves.
+ * The stages a provider serves.
  *
  * Deliberately NOT the four stages of the pipeline. Resolve and Mutate are
  * fully deterministic and never see a model — that is the §37 boundary, and
  * naming them here would suggest a provider could be plugged into them.
+ *
+ * `read` (Phase 6) describes an uploaded file. It is the ONLY stage that ever
+ * sees file content, and its output cannot express an action — see
+ * document-contract.ts.
  */
-export const AI_STAGES = ["interpret", "respond"] as const;
+export const AI_STAGES = ["interpret", "respond", "read"] as const;
 
 export type AIStage = (typeof AI_STAGES)[number];
 

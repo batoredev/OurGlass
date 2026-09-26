@@ -72,6 +72,10 @@ export const RISK_BY_TOOL: Readonly<Record<string, RiskLevel>> = {
   create_person: "REVERSIBLE_WRITE",
   create_entity_record: "REVERSIBLE_WRITE",
   remember: "REVERSIBLE_WRITE",
+  // Phase 6. Internal records of a file the user just sent, undone by
+  // invalidation; neither leaves the system nor acts on the file's content.
+  save_document: "REVERSIBLE_WRITE",
+  link_document: "REVERSIBLE_WRITE",
 
   forget_memory: "IMPORTANT_STATE_CHANGE",
   correct_relationship: "IMPORTANT_STATE_CHANGE",

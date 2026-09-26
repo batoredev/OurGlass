@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { NextConfig } from "next";
-import { securityHeaders } from "./lib/security-headers";
+import { UPLOADED_FILE_CSP, securityHeaders } from "./lib/security-headers";
 
 /**
  * Local development reads the REPO-ROOT `.env`.
@@ -56,6 +56,13 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: [...securityHeaders(process.env.NODE_ENV !== "production")] },
+      // AFTER the global rule, on purpose: for the same header key Next
+      // applies the LAST matching rule, and a route handler's own header
+      // loses to both. An uploaded file is served with no origin at all.
+      {
+        source: "/api/documents/:id/file",
+        headers: [{ key: "Content-Security-Policy", value: UPLOADED_FILE_CSP }],
+      },
     ];
   },
 };

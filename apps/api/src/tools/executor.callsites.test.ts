@@ -21,6 +21,10 @@ const ALLOWED: Readonly<Record<string, string>> = {
   "api/src/reminders/poller.ts": "scheduled INTERNAL tools only — see the name check below",
   "api/src/permissions/release.ts": "releasing or declining a held action IS the user's approval",
   "web/app/api/permissions/route.ts": "setting or revoking a grant — control-plane tools only",
+  // Phase 6. Two REVERSIBLE_WRITE tools the gate would pass immediately
+  // anyway, with arguments built by code — never chosen by a model (see the
+  // name check below and PHASE-6-DESIGN §1).
+  "api/src/ingest/ingest.ts": "the upload pipeline — save_document and link_document only",
 };
 
 const SKIP_DIRS = new Set(["node_modules", "dist", ".next", ".open-next", ".wrangler"]);
@@ -71,6 +75,14 @@ describe("executeTurn call sites", () => {
     // external action — this is where that would first appear.
     expect(new Set(toolNamesIn("api/src/reminders/poller.ts"))).toEqual(
       new Set(["fire_reminder", "evaluate_workflow"]),
+    );
+  });
+
+  it("the upload pipeline executes only the two document tools", () => {
+    // A file that could cause any other write is the injection path Phase 6
+    // exists to close — this is where it would first appear.
+    expect(new Set(toolNamesIn("api/src/ingest/ingest.ts"))).toEqual(
+      new Set(["save_document", "link_document"]),
     );
   });
 
