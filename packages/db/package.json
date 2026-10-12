@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@ourglass/shared": "workspace:*",
-    "pg": "^8.16.3",
+    "pg": "^8.23.1",
     "node-pg-migrate": "9.0.0"
   },
   "devDependencies": {
