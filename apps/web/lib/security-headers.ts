@@ -1,10 +1,10 @@
 /**
- * Response headers for every route — Track P2 of docs/REMAINING-EXECUTION-PLAN.md.
+ * Response headers for every page — Track P2 of docs/REMAINING-EXECUTION-PLAN.md.
  *
- * A Cloudflare Worker is a public URL the moment it deploys, and until this
- * file `next.config.ts` set no security headers at all. Kept out of
- * next.config.ts so a test can pin them without importing a module that
- * loads `.env` into the process.
+ * The site is static on Cloudflare Pages, which reads headers from an `_headers`
+ * file; scripts/write-headers.ts writes that file from this module after
+ * `next build`. Kept separate so a test can pin the values without importing
+ * a module that loads `.env` into the process.
  *
  * ┌─ WHAT THIS CSP DOES NOT DO, STATED SO NOBODY ASSUMES IT ────────────────┐
  * │ script-src allows 'unsafe-inline'. Next.js bootstraps hydration with    │
@@ -12,9 +12,9 @@
  * │ scripts blocks the app. A nonce CSP needs dynamic rendering plus a      │
  * │ proxy that mints the nonce — a real change, recorded as follow-up.      │
  * │ What this policy DOES stop: loading script, style, font, image or       │
- * │ fetch from any other origin; being framed (clickjacking); <base> and    │
- * │ form-action hijacks; plugins. Everything the app uses is same-origin —  │
- * │ fonts are self-hosted by next/font — so nothing legitimate is blocked.  │
+ * │ fetch from any other origin — except `connect-src` to the API origin,   │
+ * │ which is named, never a wildcard; being framed (clickjacking); <base>   │
+ * │ and form-action hijacks; plugins. Fonts are self-hosted by next/font.   │
  * └─────────────────────────────────────────────────────────────────────────┘
  */
 
@@ -23,7 +23,7 @@ export interface Header {
   readonly value: string;
 }
 
-export function contentSecurityPolicy(dev: boolean): string {
+export function contentSecurityPolicy(dev: boolean, apiOrigin: string | null = null): string {
   return [
     "default-src 'self'",
     // Dev only: React Refresh evaluates code, and HMR talks over a websocket.
@@ -32,7 +32,7 @@ export function contentSecurityPolicy(dev: boolean): string {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
-    `connect-src 'self'${dev ? " ws: wss:" : ""}`,
+    `connect-src 'self'${apiOrigin ? ` ${apiOrigin}` : ""}${dev ? " ws: wss:" : ""}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -51,9 +51,9 @@ export function contentSecurityPolicy(dev: boolean): string {
  */
 export const UPLOADED_FILE_CSP = "sandbox; default-src 'none'; img-src 'self'";
 
-export function securityHeaders(dev: boolean): readonly Header[] {
+export function securityHeaders(dev: boolean, apiOrigin: string | null = null): readonly Header[] {
   return [
-    { key: "Content-Security-Policy", value: contentSecurityPolicy(dev) },
+    { key: "Content-Security-Policy", value: contentSecurityPolicy(dev, apiOrigin) },
     // Browsers ignore HSTS received over plain http, so this is inert on
     // localhost and binding on the deployed https origin. No `preload`: that
     // is a one-way submission to browser vendors, and an owner decision.

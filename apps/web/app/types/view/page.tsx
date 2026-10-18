@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * One user-defined entity type, rendered generically.
  *
@@ -14,14 +16,14 @@
  * │ generic renderer.                                                      │
  * └────────────────────────────────────────────────────────────────────────┘
  */
+import { Suspense, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { fetchEntityRecords, fetchPeople, type EntityRecord, type Person } from "../../../lib/api";
 import { isNumericKind, renderValue } from "../../../lib/render-value";
 import { LoadError, Page, Table, formatWhen, type Column } from "../../ui";
+import { AsyncPage } from "../../async-page";
 
-export const dynamic = "force-dynamic";
-
-export default async function EntityTypePage({ params }: { params: Promise<{ key: string }> }) {
-  const { key } = await params;
+async function renderEntityType(key: string) {
 
   let data: Awaited<ReturnType<typeof fetchEntityRecords>>;
   let peopleById: Map<string, Person>;
@@ -73,4 +75,21 @@ export default async function EntityTypePage({ params }: { params: Promise<{ key
       />
     </Page>
   );
+}
+
+// Static site: one page for every type, chosen by `?key=`. A dynamic path
+// segment (/types/[key]) would need every key known at build time, and the
+// whole point of the registry is that new types appear at runtime.
+export default function EntityTypePage() {
+  return (
+    <Suspense>
+      <EntityTypeWithKey />
+    </Suspense>
+  );
+}
+
+function EntityTypeWithKey() {
+  const key = useSearchParams().get("key") ?? "";
+  const render = useCallback(() => renderEntityType(key), [key]);
+  return <AsyncPage render={render} />;
 }

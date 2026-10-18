@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * §29 Memory — what the assistant believes, with its provenance.
  *
@@ -6,12 +8,13 @@
  * there is no edit control here: a second write path would bypass the tool
  * layer, `action_log` and undo.
  */
+import { Suspense, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
+import { AsyncPage } from "../async-page";
 import { fetchMemories, type Memory } from "../../lib/api";
 import { EmptyState, LoadFailure, PageHeader } from "../surface";
 
-export const dynamic = "force-dynamic";
-
-export default async function MemoryPage({
+async function renderMemory({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string }>;
@@ -90,4 +93,20 @@ export default async function MemoryPage({
       </section>
     </section>
   );
+}
+
+// Static site: the query string is read in the browser, inside the Suspense
+// boundary Next requires around useSearchParams in a static export.
+export default function MemoryPage() {
+  return (
+    <Suspense>
+      <MemoryPageWithQuery />
+    </Suspense>
+  );
+}
+
+function MemoryPageWithQuery() {
+  const q = useSearchParams().get("q") ?? undefined;
+  const render = useCallback(() => renderMemory({ searchParams: Promise.resolve({ q }) }), [q]);
+  return <AsyncPage render={render} />;
 }

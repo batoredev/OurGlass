@@ -1,18 +1,19 @@
+"use client";
+
 /**
  * §29 People — who the assistant knows, and what each is carrying.
  *
  * The counts come from `commitments`, so a person with nothing open says so
  * rather than showing an invented summary line.
  */
+import { AsyncPage } from "../async-page";
 import { fetchCommitments, fetchDirectory } from "../../lib/api";
 import { Avatar } from "../icons";
 import { EmptyState, LoadFailure, PageHeader } from "../surface";
 
-export const dynamic = "force-dynamic";
-
 const TERMINAL = new Set(["completed", "completed_late", "cancelled", "superseded"]);
 
-export default async function PeoplePage() {
+async function renderPeople() {
   let directory: Awaited<ReturnType<typeof fetchDirectory>>;
   let openByPerson: Map<string, number>;
   try {
@@ -74,4 +75,8 @@ export default async function PeoplePage() {
       )}
     </section>
   );
+}
+
+export default function PeoplePage() {
+  return <AsyncPage render={renderPeople} />;
 }

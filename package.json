@@ -11,14 +11,16 @@
   "scripts": {
     "build:libs": "pnpm --filter @ourglass/shared --filter @ourglass/db --filter @ourglass/api run build",
     "typecheck": "pnpm run build:libs && pnpm -r --if-present run typecheck",
-    "lint": "eslint . --ignore-pattern \"**/.open-next/**\" && pnpm -r --if-present run lint",
+    "lint": "eslint . && pnpm -r --if-present run lint",
     "test": "pnpm run build:libs && pnpm -r --if-present run test",
     "build": "pnpm -r --if-present run build",
-    "dev": "pnpm run build:libs && pnpm --parallel --filter @ourglass/web --filter @ourglass/api run dev",
+    "dev": "pnpm run build:libs && pnpm --parallel --filter @ourglass/web --filter @ourglass/edge --filter @ourglass/api run dev",
     "db:migrate": "pnpm --filter @ourglass/db run migrate",
     "db:reset": "pnpm --filter @ourglass/db run reset",
     "eval:ai": "pnpm run build:libs && pnpm --filter @ourglass/evals run eval:ai",
-    "check:models": "pnpm run build:libs && pnpm --filter @ourglass/evals run check:models"
+    "check:models": "pnpm run build:libs && pnpm --filter @ourglass/evals run check:models",
+    "build:edge": "pnpm run build:libs && pnpm --filter @ourglass/edge run build",
+    "build:site": "pnpm --filter @ourglass/shared run build && pnpm --filter @ourglass/web run build"
   },
   "devDependencies": {
     "typescript": "6.0.3",

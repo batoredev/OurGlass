@@ -19,7 +19,9 @@ let pool: Pool | null = null;
 
 export function getPool(): Pool {
   if (!pool) {
-    const url = process.env["DATABASE_URL"];
+    // DATABASE_URL when set explicitly; otherwise the connection string every
+    // Supabase Edge Function is given automatically.
+    const url = process.env["DATABASE_URL"] || process.env["SUPABASE_DB_URL"];
     if (!url) throw new Error("DATABASE_URL is required");
     pool = createPool(url);
   }

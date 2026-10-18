@@ -16,6 +16,7 @@
  * └────────────────────────────────────────────────────────────────────────┘
  */
 import type { DocumentReading } from "@ourglass/shared";
+import { apiBase, apiFetch } from "./session";
 
 /**
  * Mirrors the `field_kind` Postgres enum and packages/db's `FieldKind`.
@@ -137,95 +138,21 @@ export interface Permissions {
 }
 
 /**
- * SAME-ORIGIN by default.
- *
- * The API now lives in this app's own Route Handlers (docs/
- * DEPLOYMENT-DESIGN.md §1), so there is no second host to point at — one
- * Cloudflare Worker serves the UI and the API, which is also why there is no
- * CORS configuration anywhere.
- *
- * Server components fetch during render, where a relative URL has no origin
- * to resolve against, so an absolute base is still needed there. In the
- * browser it stays empty and the path is relative.
- */
-/**
- * THE REQUEST'S OWN ORIGIN, not a configured one.
- *
- * A server component fetching this app's API is calling ITSELF, so the right
- * base is whatever host the browser just reached — `localhost:3000` in
- * development, the Worker's hostname in production, and correct on both
- * without configuration.
- *
- * A configured base is a fact that can go stale, and did: `.env` still carried
- * `NEXT_PUBLIC_API_URL=http://localhost:3001` from the Fastify server deleted
- * in the Cloudflare port, so every page rendered "Cannot reach the API". The
- * env var is now only a fallback for rendering with no request context.
- */
-async function apiBase(): Promise<string> {
-  // In the browser a relative URL is already same-origin.
-  if (typeof window !== "undefined") return "";
-  try {
-    const { headers } = await import("next/headers");
-    const incoming = await headers();
-    const host = incoming.get("host");
-    if (host) {
-      const forwarded = incoming.get("x-forwarded-proto");
-      const protocol = forwarded ?? (host.startsWith("localhost") ? "http" : "https");
-      return `${protocol}://${host}`;
-    }
-  } catch {
-    // Outside a request (a build step): fall through.
-  }
-  return process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:3000";
-}
-
-/**
- * The incoming request's credentials, for a server component's fetch.
- *
- * Server components render by calling this app's own API over HTTP. That call
- * starts on the SERVER, so the browser's session cookie is not attached to it
- * automatically — without forwarding, every page would render "Not signed in"
- * for a signed-in user. In the browser there is nothing to forward: the
- * request is same-origin and carries the cookie itself.
- */
-async function forwardedCredentials(): Promise<Record<string, string>> {
-  if (typeof window !== "undefined") return {};
-  try {
-    const { headers } = await import("next/headers");
-    const incoming = await headers();
-    const forwarded: Record<string, string> = {};
-    const cookie = incoming.get("cookie");
-    const authorization = incoming.get("authorization");
-    if (cookie) forwarded["cookie"] = cookie;
-    if (authorization) forwarded["authorization"] = authorization;
-    return forwarded;
-  } catch {
-    // Outside a request (a build step): nothing to forward.
-    return {};
-  }
-}
-
-/**
  * One fetch, with the failure mode named rather than swallowed.
  *
- * The API's read routes register only behind the demo flag, so the
- * overwhelmingly likely failure in development is a 404 from a server started
- * without `ENABLE_DEMO_ENDPOINT=true`. Returning an empty array there would
- * render an empty table and the user would conclude their data was gone —
- * the exact confusion the API's own 404-vs-empty distinction exists to
- * prevent. So this THROWS, and the surfaces show why.
+ * The API is a Supabase Edge Function on its own origin (lib/session.ts says
+ * where, and attaches the access token). The overwhelmingly likely failures
+ * are not being signed in (401) and an API that is closed (404). Returning an
+ * empty array there would render an empty table and the user would conclude
+ * their data was gone — so this THROWS, and the surfaces show why.
  */
 async function get<T>(path: string): Promise<T> {
-  const base = await apiBase();
   let response: Response;
   try {
-    response = await fetch(`${base}${path}`, {
-      cache: "no-store",
-      headers: await forwardedCredentials(),
-    });
+    response = await apiFetch(path);
   } catch (error: unknown) {
     throw new Error(
-      `Cannot reach the API at ${base || "this origin"}. Is it running? ` +
+      `Cannot reach the API at ${apiBase() || "this origin"}. Is it running? ` +
         `(${error instanceof Error ? error.message : String(error)})`,
     );
   }

@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * §29 Today — what is overdue, what is due, what has no date.
  *
@@ -5,13 +7,12 @@
  * are different KINDS of attention: one needs action now, the other needs a
  * decision about when.
  */
+import { AsyncPage } from "../async-page";
 import { fetchDirectory, fetchToday, type Commitment, type Today } from "../../lib/api";
 import { Icon, StatusPill } from "../icons";
 import { EmptyState, LoadFailure, statusLabel, statusTone, when } from "../surface";
 
-export const dynamic = "force-dynamic";
-
-export default async function TodayPage() {
+async function renderToday() {
   let today: Today;
   let nameOf: (id: string | null) => string;
   try {
@@ -129,4 +130,8 @@ export default async function TodayPage() {
       )}
     </section>
   );
+}
+
+export default function TodayPage() {
+  return <AsyncPage render={renderToday} />;
 }

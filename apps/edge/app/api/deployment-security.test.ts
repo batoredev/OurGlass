@@ -52,8 +52,11 @@ beforeEach(() => {
   authMock.mockResolvedValue(null);
 });
 
-describe("wrangler.toml does not enable the demo endpoints", () => {
-  const toml = readFileSync(resolve(HERE, "../../wrangler.toml"), "utf8");
+// Moved from wrangler.toml when hosting moved to Supabase Edge Functions: the
+// committed deployment config is now supabase/config.toml, and the same three
+// properties must hold of it.
+describe("supabase/config.toml does not enable the demo endpoints", () => {
+  const toml = readFileSync(resolve(HERE, "../../../../supabase/config.toml"), "utf8");
 
   // The file talks about ENABLE_DEMO_ENDPOINT at length; only an ACTIVE
   // setting is a finding, so comment lines are stripped before looking.
@@ -66,15 +69,16 @@ describe("wrangler.toml does not enable the demo endpoints", () => {
     expect(active.filter((line) => line.includes("ENABLE_DEMO_ENDPOINT"))).toEqual([]);
   });
 
-  it("still declares the [vars] table, so a future non-secret var has a home", () => {
-    expect(active).toContain("[vars]");
+  it("declares both Edge Functions", () => {
+    expect(active).toContain("[functions.api]");
+    expect(active).toContain("[functions.reminders]");
   });
 
   it("carries no secret-looking assignment", () => {
-    // wrangler.toml is COMMITTED and this repo is PUBLIC. Secrets belong in
-    // `wrangler secret put`, which never touches the file.
+    // config.toml is COMMITTED and this repo is PUBLIC. Secrets belong in
+    // `supabase secrets set`, which never touches the file.
     const secretish =
-      /^(DATABASE_URL|ANTHROPIC_API_KEY|GEMINI_API_KEY|VOYAGE_API_KEY|OURGLASS_ACCESS_TOKEN|SUPABASE_SECRET_KEY|ALERT_WEBHOOK_URL)\s*=/;
+      /^(DATABASE_URL|ANTHROPIC_API_KEY|GEMINI_API_KEY|VOYAGE_API_KEY|OURGLASS_ACCESS_TOKEN|SUPABASE_SECRET_KEY|ALERT_WEBHOOK_URL|CRON_SECRET)\s*=/;
     expect(active.filter((line) => secretish.test(line))).toEqual([]);
   });
 });

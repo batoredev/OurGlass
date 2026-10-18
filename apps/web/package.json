@@ -4,20 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "build": "next build && node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/write-headers.mts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint . --ignore-pattern \"**/.open-next/**\"",
-    "test": "vitest run",
-    "preview": "node scripts/build-worker.mjs && opennextjs-cloudflare preview",
-    "deploy:staging": "node scripts/build-worker.mjs && opennextjs-cloudflare deploy -- --env staging",
-    "deploy": "node scripts/build-worker.mjs && opennextjs-cloudflare deploy",
-    "build:worker": "node scripts/build-worker.mjs"
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@opennextjs/cloudflare": "1.20.6",
-    "@ourglass/api": "workspace:*",
-    "@ourglass/db": "workspace:*",
     "@ourglass/shared": "workspace:*",
     "next": "16.3.4",
     "react": "^19.0.0",
@@ -30,7 +22,6 @@
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.4",
     "typescript": "6.0.3",
-    "vitest": "4.1.11",
-    "wrangler": "4.136.1"
+    "vitest": "4.1.11"
   }
 }

@@ -32,8 +32,8 @@ export async function GET() {
     // unauthenticated caller — a free map of the backend, handed out at
     // exactly the moment the system is already unhealthy.
     //
-    // wrangler.toml's [observability] block puts console output in Workers
-    // Logs, so the operator loses nothing.
+    // console output lands in the Supabase Edge Function logs, so the
+    // operator loses nothing.
     //
     console.error("[health] database check failed:", error);
     return NextResponse.json(

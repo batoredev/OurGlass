@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * §29 Activity — every mutation, with who caused it.
  *
@@ -7,12 +9,11 @@
  * both, because "why did it message me at 5?" is answerable only if the
  * scheduled work is visible.
  */
+import { AsyncPage } from "../async-page";
 import { fetchActivity, type ActivityEntry } from "../../lib/api";
 import { LoadError, Page, Table, formatWhen, type Column } from "../ui";
 
-export const dynamic = "force-dynamic";
-
-export default async function ActivityPage() {
+async function renderActivity() {
   let activity: readonly ActivityEntry[];
   try {
     activity = await fetchActivity();
@@ -36,4 +37,8 @@ export default async function ActivityPage() {
       <Table columns={columns} rows={activity} rowKey={(entry) => entry.id} empty="activity" />
     </Page>
   );
+}
+
+export default function ActivityPage() {
+  return <AsyncPage render={renderActivity} />;
 }

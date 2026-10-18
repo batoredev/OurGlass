@@ -1,12 +1,13 @@
+"use client";
+
 /**
  * §29 Projects — context gathered from conversation.
  */
+import { AsyncPage } from "../async-page";
 import { fetchProjects, type Project } from "../../lib/api";
 import { EmptyState, LoadFailure, PageHeader } from "../surface";
 
-export const dynamic = "force-dynamic";
-
-export default async function ProjectsPage() {
+async function renderProjects() {
   let projects: readonly Project[];
   try {
     projects = await fetchProjects();
@@ -45,4 +46,8 @@ export default async function ProjectsPage() {
       )}
     </section>
   );
+}
+
+export default function ProjectsPage() {
+  return <AsyncPage render={renderProjects} />;
 }

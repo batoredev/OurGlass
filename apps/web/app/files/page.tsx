@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Files — what was sent, what it says, what it belongs to (spec §32, §33).
  *
@@ -5,10 +7,10 @@
  * shown as quoted data, and nothing here writes. Acting on a file is done in
  * conversation, in the user's own words (docs/PHASE-6-DESIGN.md §1).
  */
+import { AsyncPage } from "../async-page";
+import { DownloadLink } from "./download-link";
 import { fetchDocuments, type SavedDocument } from "../../lib/api";
 import { EmptyState, LoadFailure, PageHeader } from "../surface";
-
-export const dynamic = "force-dynamic";
 
 /** read_failure codes (ingest/reply.ts UnreadReason), as a short label. */
 const UNREAD: Readonly<Record<string, string>> = {
@@ -53,7 +55,7 @@ function Mentions({ doc }: { doc: SavedDocument }) {
   );
 }
 
-export default async function FilesPage() {
+async function renderFiles() {
   let docs: readonly SavedDocument[];
   try {
     docs = await fetchDocuments();
@@ -84,7 +86,7 @@ export default async function FilesPage() {
             <div className="row memory-row" key={doc.id}>
               <div>
                 <div className="memory-text">
-                  <a href={`/api/documents/${doc.id}/file`}>{doc.filename}</a>
+                  <DownloadLink id={doc.id} filename={doc.filename} />
                   {doc.reading?.title ? ` — ${doc.reading.title}` : ""}
                 </div>
                 {doc.reading?.summary ? <p className="file-summary">{doc.reading.summary}</p> : null}
@@ -110,4 +112,8 @@ export default async function FilesPage() {
       </div>
     </section>
   );
+}
+
+export default function FilesPage() {
+  return <AsyncPage render={renderFiles} />;
 }

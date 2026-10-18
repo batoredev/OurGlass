@@ -2,9 +2,8 @@
 
 /**
  * The buttons on the Permissions page. Client components only because a click
- * needs a handler; the data they act on is rendered by the server page.
+ * needs a handler; the data they act on is loaded by the page (AsyncPage).
  */
-import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import {
   confirmPendingAction,
@@ -14,9 +13,9 @@ import {
   type ControlResult,
 } from "../../lib/control";
 import type { ActionType } from "../../lib/api";
+import { refreshData } from "../../lib/session";
 
 function useControl() {
-  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
 
@@ -25,8 +24,8 @@ function useControl() {
     startTransition(async () => {
       const result = await action();
       if (result.ok) {
-        // Re-render the server page so the lists show what actually happened.
-        router.refresh();
+        // Reload the page data so the lists show what actually happened.
+        refreshData();
       } else {
         setMessage(result.message);
       }

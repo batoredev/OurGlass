@@ -1,20 +1,22 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import type { NextConfig } from "next";
-import { UPLOADED_FILE_CSP, securityHeaders } from "./lib/security-headers";
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants";
+import { securityHeaders } from "./lib/security-headers";
 
 /**
  * Local development reads the REPO-ROOT `.env`.
  *
  * Next only loads `.env` from its own directory, and this monorepo keeps one
  * `.env` at the root — the same file the poller and the paid lanes use. Without
- * this, `pnpm dev` starts the web app with no DATABASE_URL and no provider key,
- * and every page fails in a way that looks like broken code rather than missing
+ * this, `pnpm dev` starts the web app with no NEXT_PUBLIC_API_URL, and every
+ * page fails in a way that looks like broken code rather than missing
  * configuration.
  *
- * AN ALREADY-SET VARIABLE ALWAYS WINS, so `OURGLASS_ACCESS_TOKEN=… pnpm dev`
- * overrides the file rather than fighting it. In production there is no file:
- * Workers supplies secrets, and this is skipped.
+ * AN ALREADY-SET VARIABLE ALWAYS WINS, so `NEXT_PUBLIC_API_URL=… pnpm dev`
+ * overrides the file rather than fighting it. On Cloudflare Pages there is no
+ * file: NEXT_PUBLIC_API_URL is set in the Pages project, and this is skipped.
+ * Only NEXT_PUBLIC_* values ever reach the browser bundle.
  *
  * Deliberately not a dependency and not a second copy of the file. A duplicated
  * `.env` under `apps/web` would be one more place for a real key to be copied
@@ -42,29 +44,41 @@ function loadRootEnv(): void {
 
 loadRootEnv();
 
-const nextConfig: NextConfig = {
-  reactStrictMode: true,
-  transpilePackages: ["@ourglass/shared"],
-  // NO IMAGE OPTIMIZER. This app renders no `next/image` — the only asset is an
-  // inline SVG icon — and the optimizer drags in `sharp`, whose native
-  // `.node` binaries cannot be bundled into a Worker (the Cloudflare build
-  // failed on exactly that). Cloudflare Images or a custom loader is the route
-  // if a real image ever appears; see opennext.js.org/cloudflare/howtos/image.
-  images: { unoptimized: true },
-  // Every route, pages and /api alike. See lib/security-headers.ts for what
-  // the CSP does and — stated there on purpose — does not do.
-  async headers() {
-    return [
-      { source: "/:path*", headers: [...securityHeaders(process.env.NODE_ENV !== "production")] },
-      // AFTER the global rule, on purpose: for the same header key Next
-      // applies the LAST matching rule, and a route handler's own header
-      // loses to both. An uploaded file is served with no origin at all.
-      {
-        source: "/api/documents/:id/file",
-        headers: [{ key: "Content-Security-Policy", value: UPLOADED_FILE_CSP }],
-      },
-    ];
-  },
-};
+/** The API origin, for the CSP's connect-src (lib/security-headers.ts). */
+function apiOrigin(): string | null {
+  const url = process.env["NEXT_PUBLIC_API_URL"];
+  if (!url) return null;
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
 
-export default nextConfig;
+/**
+ * A STATIC SITE in production (Cloudflare Pages): `next build` writes plain
+ * HTML/JS to `out/`, and the API is a Supabase Edge Function on its own origin
+ * (NEXT_PUBLIC_API_URL). Headers then come from `out/_headers`, written by
+ * scripts/write-headers.ts — a static export cannot send any itself.
+ *
+ * `next dev` serves the same headers directly, so the CSP a developer runs
+ * under is the one that ships.
+ */
+export default function config(phase: string): NextConfig {
+  const dev = phase === PHASE_DEVELOPMENT_SERVER;
+  return {
+    reactStrictMode: true,
+    transpilePackages: ["@ourglass/shared"],
+    ...(dev ? {} : { output: "export" as const }),
+    // NO IMAGE OPTIMIZER. This app renders no `next/image` — the only asset is
+    // an inline SVG icon — and a static export has no server to optimize on.
+    images: { unoptimized: true },
+    ...(dev
+      ? {
+          async headers() {
+            return [{ source: "/:path*", headers: [...securityHeaders(true, apiOrigin())] }];
+          },
+        }
+      : {}),
+  };
+}

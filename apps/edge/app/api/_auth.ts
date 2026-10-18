@@ -12,7 +12,8 @@
  *            `Authorization: Bearer <token>` (curl, scripts) or a session
  *            cookie issued by POST /api/session (the browser).
  *   demo     No token, ENABLE_DEMO_ENDPOINT=true. LOCAL DEVELOPMENT ONLY —
- *            open, exactly as before. wrangler.toml is tested never to set it.
+ *            open, exactly as before. supabase/config.toml is tested never
+ *            to set it.
  *   closed   Neither. Every guarded route 404s: refuse by default.
  *
  * A token that is set but too short is a MISCONFIGURATION and refuses with a

@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * §35 Permissions — held actions awaiting approval, and standing rules.
  *
@@ -7,17 +9,16 @@
  * The one surface with buttons, and deliberately so: these decisions are the
  * ones the model must never make on your behalf (PHASE-7-PERMISSIONS-DESIGN §1).
  */
+import { AsyncPage } from "../async-page";
 import { fetchPermissions, type PendingAction, type PermissionGrant, type Permissions } from "../../lib/api";
 import { LoadError, Page, Table, formatWhen, type Column } from "../ui";
 import { PendingActionButtons, RevokeButton, SetPermissionForm } from "./controls";
-
-export const dynamic = "force-dynamic";
 
 function isOpen(action: PendingAction): boolean {
   return action.status === "pending" && new Date(action.expires_at).getTime() > Date.now();
 }
 
-export default async function PermissionsPage() {
+async function renderPermissions() {
   let permissions: Permissions;
   try {
     permissions = await fetchPermissions();
@@ -82,4 +83,8 @@ export default async function PermissionsPage() {
       </div>
     </Page>
   );
+}
+
+export default function PermissionsPage() {
+  return <AsyncPage render={renderPermissions} />;
 }

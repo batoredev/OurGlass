@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { MAX_UPLOAD_BYTES } from "@ourglass/shared";
 import { Icon } from "./icons";
 import { useDictation } from "./use-dictation";
+import { apiFetch } from "../lib/session";
 
 /** What /api/documents returns for an upload — IngestResponse in @ourglass/api/ingest. */
 interface UploadResult {
@@ -126,7 +127,7 @@ export function Conversation() {
     let cancelled = false;
     void (async () => {
       try {
-        const response = await fetch("/api/messages", { cache: "no-store" });
+        const response = await apiFetch("/api/messages");
         if (response.status === 401) {
           setNotice("Not signed in. Open /login with the deployment's access token.");
           return;
@@ -192,9 +193,9 @@ export function Conversation() {
         const form = new FormData();
         form.append("file", file);
         if (utterance !== "") form.append("note", utterance);
-        response = await fetch("/api/documents", { method: "POST", body: form });
+        response = await apiFetch("/api/documents", { method: "POST", body: form });
       } else {
-        response = await fetch("/api/turn", {
+        response = await apiFetch("/api/turn", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ utterance }),
@@ -246,7 +247,7 @@ export function Conversation() {
 
   const undo = useCallback(async (turnId: string) => {
     setNotice(null);
-    const response = await fetch("/api/undo", {
+    const response = await apiFetch("/api/undo", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ turnId }),

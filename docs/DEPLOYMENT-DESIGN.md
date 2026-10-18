@@ -1,10 +1,99 @@
-# Deployment — GitHub + Supabase + Cloudflare
+# Deployment — GitHub + Supabase + Cloudflare Pages
 
-**Importers: none.** Read before touching `apps/api/src/server.ts`,
+**Importers: none.** Read before touching `apps/edge`, `supabase/`,
 `apps/api/src/reminders/poller.ts`, or anything in `apps/web`.
 
-**Target, as chosen by the owner:** code on **GitHub**, database on **Supabase**, hosting on
-**Cloudflare**.
+## Current hosting (decided 2026-10-19)
+
+| Piece | Where | Built from |
+|---|---|---|
+| Database | Supabase Postgres + pgvector | `packages/db/migrations` via `pnpm db:migrate` (unchanged) |
+| API (every `/api/*` route) | Supabase Edge Function **`api`** | `apps/edge` → `pnpm run build:edge` → `supabase/functions/api/ourglass.js` |
+| Reminders + conditional rules | Supabase Edge Function **`reminders`**, called each minute by `pg_cron` + `pg_net` | `apps/edge/src/reminders.ts`; schedule in `supabase/cron/schedule-reminders.sql` |
+| Frontend | **Cloudflare Pages**, static files | `apps/web` → `next build` (`output: "export"`) → `apps/web/out` |
+
+**Why it changed.** The first Workers deploy uploaded but answered 500 on every request:
+`Dynamic require of "/.next/server/middleware-manifest.json" is not supported`. The bundle had
+been built on Windows and carried backslash paths (`.next\\server\\…`), and the OpenNext adapter
+documents Windows support as limited. The owner chose to drop server-side Next.js hosting rather
+than move the build to Linux. Recorded in `docs/DECISIONS.md`.
+
+**What did not change.** The route files moved from `apps/web/app/api` to `apps/edge/app/api`
+byte-for-byte apart from comments and the cross-site check. `src/router.ts` dispatches to them;
+`next/server` resolves to `src/next-server-shim.ts` (a `Response` subclass). The orchestrator,
+tools, repositories and `pollOnce` are untouched — the same portability §0 below credits to
+PHASE-1-DESIGN §5.
+
+**What did change, and the trade-offs taken:**
+
+- **Pages load in the browser.** Each server-rendered page's body became an async `render()`
+  run by `app/async-page.tsx`; `refreshData()` replaces `router.refresh()`.
+  `/types/[key]` became `/types/view?key=…`: a static site cannot have runtime path segments.
+- **Sign-in is a bearer token held by the browser** (`apps/web/lib/session.ts`). The API is on
+  another origin, where a session cookie would be a third-party cookie. The site's CSP allows
+  scripts from `'self'` only, and `connect-src` names the API origin and nothing else.
+- **Uploads download, never open inline.** The API's sandbox CSP protected the inline view; a
+  `blob:` URL would run an uploaded HTML/SVG file as the site itself.
+- **CORS.** The API answers browsers only from its own origin and `ALLOWED_ORIGINS` (exact
+  matches). `rejectCrossSite` uses the same list.
+- **Edge Function JWT verification is off** (`supabase/config.toml`): the API checks
+  `OURGLASS_ACCESS_TOKEN`, the reminders function checks `CRON_SECRET`.
+- **The bundle is self-contained** (esbuild, every dependency inside). Its banner supplies what
+  Node code expects under Deno: `require`, `process`, `Buffer`, `global`; bare built-ins are
+  rewritten to `node:` imports. Verified by loading the bundle in Deno 2.1 against the real
+  Supabase database before any deploy.
+
+### Deploying
+
+One-time, for each Supabase project:
+
+```bash
+supabase login
+supabase link --project-ref <PROJECT-REF>
+supabase secrets set OURGLASS_ACCESS_TOKEN=<32+ chars> ALLOWED_ORIGINS=https://<site>.pages.dev \
+  CRON_SECRET=<32+ chars> SUPABASE_URL=https://<PROJECT-REF>.supabase.co SUPABASE_SECRET_KEY=<sb_secret_…>
+# optional: ANTHROPIC_API_KEY, GEMINI_API_KEY, VOYAGE_API_KEY, ALERT_WEBHOOK_URL
+```
+
+**Leave `DATABASE_URL` unset in the function secrets.** Every Edge Function is given
+`SUPABASE_DB_URL`, and `_lib.ts` and `reminders.ts` fall back to it. Measured from a Windows
+machine under Deno 2.1, the first connection through the direct `db.<ref>.supabase.co` string
+took ~55 s (later ones ~36 ms), while Node connected at once — so the platform-provided URL is
+the path to use, and the first deployed `/api/health` timing is worth checking.
+
+Each deploy of the API:
+
+```bash
+pnpm run build:edge
+supabase functions deploy api --use-api
+supabase functions deploy reminders --use-api
+```
+
+Then run `supabase/cron/schedule-reminders.sql` once in the SQL Editor (it says what to fill in).
+
+Cloudflare Pages, one-time, connected to the GitHub repository:
+
+| Setting | Value |
+|---|---|
+| Build command | `npx pnpm@10.15.1 install --frozen-lockfile && npx pnpm@10.15.1 run build:site` |
+| Build output directory | `apps/web/out` |
+| Environment variable | `NEXT_PUBLIC_API_URL=https://<PROJECT-REF>.supabase.co/functions/v1` |
+| Environment variable | `NODE_VERSION=24` (the repo requires Node ≥ 24; confirm the Pages build image offers it — not verified here) |
+
+`build:site` builds `@ourglass/shared` first: the site imports it from its built `dist/`.
+
+Check: `https://<PROJECT-REF>.supabase.co/functions/v1/api/health` answers `"db":true`, then sign
+in at `https://<site>.pages.dev/login`.
+
+---
+
+## History: the Cloudflare Workers design (2026-09, superseded above)
+
+Kept because §0–§4 explain why the code ports at all. Workers-specific instructions below no
+longer apply.
+
+**Target, as chosen by the owner at the time:** code on **GitHub**, database on **Supabase**,
+hosting on **Cloudflare Workers**.
 
 This is not a configuration change. **Cloudflare Workers are V8 isolates, not Node**, and three
 things this codebase does today cannot run there. All four findings below were verified against

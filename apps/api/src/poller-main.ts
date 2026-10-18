@@ -3,15 +3,15 @@
  *
  * ================================ READ THIS ================================
  * `startReminderPoller` was written in Phase 3, documented, and NEVER CALLED —
- * not by the Fastify server, not by any test. `apps/web/worker/scheduled.ts`
- * even says it "stays in the codebase for local `pnpm dev`", which described a
+ * not by the Fastify server, not by any test. The Cloudflare cron handler
+ * even said it "stays in the codebase for local `pnpm dev`", which described a
  * call site that did not exist. This file is that call site.
  *
- * In PRODUCTION the poller is a Cloudflare Cron Trigger calling `pollOnce`
- * (see `apps/web/worker/scheduled.ts`): a Worker has no process to hold an
- * interval. Locally there IS a process, and a 30-second in-process loop beats
- * waiting on Cloudflare's one-minute floor while watching a reminder you just
- * set.
+ * In PRODUCTION the poller is the `reminders` Supabase Edge Function, called
+ * once a minute by pg_cron (see `apps/edge/lib/scheduled.ts`): a function has
+ * no process to hold an interval. Locally there IS a process, and a 30-second
+ * in-process loop beats waiting on pg_cron's one-minute floor while watching a
+ * reminder you just set.
  *
  * Both paths call the SAME `pollOnce` with the same injected clock. That is
  * the property Phase 3's design bought, and it is why neither needed adapting.

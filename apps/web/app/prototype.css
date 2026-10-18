@@ -825,3 +825,15 @@ main:focus { outline: none; }
 .file-summary { margin: 4px 0 0; color: var(--muted-on-color); font-size: 14px; line-height: 1.45; }
 .file-mentions { margin: 6px 0 0; padding-left: 18px; color: var(--ink); font-size: 13px; line-height: 1.5; }
 .memory-text a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+
+/* A button that reads as a link: Files downloads through the API with the access token. */
+.link-button {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}

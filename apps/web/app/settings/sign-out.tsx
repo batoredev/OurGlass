@@ -1,8 +1,9 @@
 "use client";
 
-/** Clears the session cookie and returns to the sign-in page. */
+/** Forgets the access token on this browser and returns to the sign-in page. */
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { clearToken } from "../../lib/session";
 
 export function SignOutButton() {
   const router = useRouter();
@@ -14,10 +15,8 @@ export function SignOutButton() {
       disabled={busy}
       onClick={() => {
         setBusy(true);
-        void fetch("/api/session", { method: "DELETE" }).then(() => {
-          router.push("/login");
-          router.refresh();
-        });
+        clearToken();
+        router.push("/login");
       }}
     >
       Sign out

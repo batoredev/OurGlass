@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Settings — the §35 control plane, plus the way out.
  *
@@ -8,19 +10,18 @@
  * system that IS built — standing rules per action, and approvals for held
  * actions — and an honest note about the rest.
  */
+import { AsyncPage } from "../async-page";
 import Link from "next/link";
 import { fetchPermissions, type PendingAction, type Permissions } from "../../lib/api";
 import { PendingActionButtons, RevokeButton, SetPermissionForm } from "../permissions/controls";
 import { LoadFailure, PageHeader } from "../surface";
 import { SignOutButton } from "./sign-out";
 
-export const dynamic = "force-dynamic";
-
 function isOpen(action: PendingAction): boolean {
   return action.status === "pending" && new Date(action.expires_at).getTime() > Date.now();
 }
 
-export default async function SettingsPage() {
+async function renderSettings() {
   let permissions: Permissions;
   try {
     permissions = await fetchPermissions();
@@ -144,4 +145,8 @@ export default async function SettingsPage() {
       </section>
     </section>
   );
+}
+
+export default function SettingsPage() {
+  return <AsyncPage render={renderSettings} />;
 }

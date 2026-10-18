@@ -1,16 +1,17 @@
+"use client";
+
 /**
  * The dynamic-type index — every type the assistant has been asked to track.
  *
  * Listed from the REGISTRY, never from a hardcoded array. This page has no
  * knowledge of what types exist; it asks.
  */
+import { AsyncPage } from "../async-page";
 import Link from "next/link";
 import { fetchEntityTypes, type EntityTypeWithFields } from "../../lib/api";
 import { LoadError, Page, Table, type Column } from "../ui";
 
-export const dynamic = "force-dynamic";
-
-export default async function TypesPage() {
+async function renderTypes() {
   let types: readonly EntityTypeWithFields[];
   try {
     types = await fetchEntityTypes();
@@ -27,7 +28,7 @@ export default async function TypesPage() {
       key: "name",
       header: "Type",
       render: (type) => (
-        <Link href={`/types/${encodeURIComponent(type.type_key)}`}>{type.display_name}</Link>
+        <Link href={`/types/view?key=${encodeURIComponent(type.type_key)}`}>{type.display_name}</Link>
       ),
     },
     { key: "key", header: "Key", render: (type) => type.type_key },
@@ -53,4 +54,8 @@ export default async function TypesPage() {
       <Table columns={columns} rows={types} rowKey={(type) => type.id} empty="types defined" />
     </Page>
   );
+}
+
+export default function TypesPage() {
+  return <AsyncPage render={renderTypes} />;
 }

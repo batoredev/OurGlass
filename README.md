@@ -20,8 +20,9 @@ TypeScript end-to-end, pnpm monorepo:
 
 | Path | What |
 |---|---|
-| `apps/web` | Next.js 16 — the app: the conversation, the read surfaces, and every HTTP route under `/api` |
-| `apps/api` | The assistant itself — orchestrator, typed tool registry, AI providers, reminder poller. **A library the web app imports, not a server.** `pnpm dev` here runs the poller |
+| `apps/web` | Next.js 16, exported as a **static site** (Cloudflare Pages) — the conversation and the read surfaces. It calls the API over HTTP |
+| `apps/edge` | Every HTTP route under `/api`, bundled into the **Supabase Edge Functions** `api` and `reminders`. `pnpm dev` here serves the same routes on <http://localhost:8787> |
+| `apps/api` | The assistant itself — orchestrator, typed tool registry, AI providers, reminder poller. **A library `apps/edge` imports, not a server.** `pnpm dev` here runs the poller |
 | `packages/shared` | Types shared between `web` and `api` — the tool-call contract |
 | `packages/db` | Schema, migrations (`node-pg-migrate`), repositories |
 | `packages/evals` | Extraction eval harness — recorded fixtures (free, CI) + a live-model lane (manual, costs tokens) |
@@ -57,10 +58,14 @@ pnpm dev                          # http://localhost:3000
 That sequence is the whole fresh-clone path — no other setup exists. If any step here doesn't
 work as described, that's a bug in this README or the scaffold, not a step you're missing.
 
-`pnpm dev` builds the shared libraries first and then runs two things: the Next.js app on
-port 3000, and the reminder poller. The web app imports `@ourglass/api` from its built
-`dist/`, so the build step is not optional — skipping it on a fresh clone fails to resolve
-the package.
+`pnpm dev` builds the shared libraries first and then runs three things: the web app on
+port 3000, the API on port 8787 (loopback only), and the reminder poller. `apps/edge`
+imports `@ourglass/api` from its built `dist/`, so the build step is not optional — skipping
+it on a fresh clone fails to resolve the package. `.env` needs
+`NEXT_PUBLIC_API_URL=http://localhost:8787` so the pages know where the API is.
+
+Hosting — Supabase Edge Functions for the API, Cloudflare Pages for the site — and every
+deploy command are in [`docs/DEPLOYMENT-DESIGN.md`](docs/DEPLOYMENT-DESIGN.md).
 
 To run the checks instead: `pnpm typecheck && pnpm lint && pnpm test`.
 
@@ -69,22 +74,23 @@ what to type, what should happen, and what is deliberately not built yet.
 
 ### Talking to the assistant
 
-Open <http://localhost:3000> and type. There is no separate API server: every route lives in
-the Next.js app under `/api`, and `apps/api` is the library behind them.
+Open <http://localhost:3000> and type. The page calls the API at <http://localhost:8787/api/…>
+(`apps/edge`), and `apps/api` is the library behind it. Deployed, the same routes live at
+`https://<project-ref>.supabase.co/functions/v1/api/…`.
 
 The spec's own Barkha narrative, in the UI or over HTTP:
 
 ```bash
-curl -s localhost:3000/api/turn -H 'content-type: application/json' \
+curl -s localhost:8787/api/turn -H 'content-type: application/json' \
   -d '{"utterance":"Barkha needs to give me the article by 6. Remind me at 5 to ask her."}'
 
 # Complete it, late. This takes TWO turns, and that is correct behaviour --
 # see the note below.
-curl -s localhost:3000/api/turn -H 'content-type: application/json' \
+curl -s localhost:8787/api/turn -H 'content-type: application/json' \
   -d '{"utterance":"Barkha gave the article at 11."}'
 
 # Undo -- pass the turnId from any response above.
-curl -s localhost:3000/api/undo -H 'content-type: application/json' \
+curl -s localhost:8787/api/undo -H 'content-type: application/json' \
   -d '{"turnId":"<turnId from step 1>"}'
 ```
 
@@ -134,7 +140,8 @@ because it needs a live database.
 | `pnpm lint` | ESLint across every package |
 | `pnpm test` | Unit tests — fast, no Docker required |
 | `pnpm build` | Production build of every package |
-| `pnpm dev` | Runs `apps/web` and `apps/api` in watch mode |
+| `pnpm dev` | Runs `apps/web`, `apps/edge` (the API) and `apps/api` (the poller) in watch mode |
+| `pnpm run build:edge` | Bundles the two Supabase Edge Functions into `supabase/functions/*/ourglass.js` |
 | `pnpm db:migrate` | Applies pending migrations (from Phase 1 — see `packages/db/migrations/`) |
 | `pnpm db:reset` | Drops and recreates the local dev database, then migrates from zero (from Phase 1) |
 

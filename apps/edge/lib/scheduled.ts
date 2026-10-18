@@ -1,12 +1,12 @@
 /**
- * The Cron Trigger handler — reminders and conditional rules on Cloudflare
+ * The scheduled pass — reminders and conditional rules, one poll per call
  * (docs/DEPLOYMENT-DESIGN.md §3).
  *
  * ┌─ WHY THIS EXISTS AT ALL ───────────────────────────────────────────────┐
- * │ `startReminderPoller` calls `setInterval` every 30 seconds. On Workers │
- * │ that does not work: timers are supported, but Cloudflare's own docs    │
- * │ say they "don't persist across requests in the serverless context".    │
- * │ A Worker has no process to hold an interval.                          │
+ * │ `startReminderPoller` calls `setInterval` every 30 seconds. A Supabase │
+ * │ Edge Function, like a Worker before it, has no long-running process to │
+ * │ hold an interval. Supabase `pg_cron` + `pg_net` call the `reminders`   │
+ * │ function once a minute instead, and that function calls this.         │
  * └────────────────────────────────────────────────────────────────────────┘
  *
  * ⚠ `pollOnce` IS CALLED UNCHANGED — not adapted, not wrapped, not rewritten.
@@ -31,14 +31,14 @@ import { buildToolRegistry } from "@ourglass/api/tools";
 import { pollOnce, systemClock } from "@ourglass/api/reminders/poller";
 import { createPool, withTransaction } from "@ourglass/db";
 import type { DatabaseTransaction } from "@ourglass/shared";
-import { cronFailedMessage, sendAlert } from "../lib/alert";
+import { cronFailedMessage, sendAlert } from "./alert";
 
 export interface Env {
   DATABASE_URL: string;
-  /** Optional (`wrangler secret put VOYAGE_API_KEY`). Enables the memory-embedding backfill. */
-  VOYAGE_API_KEY?: string;
-  /** Optional (`wrangler secret put ALERT_WEBHOOK_URL`). A Slack or Discord webhook. */
-  ALERT_WEBHOOK_URL?: string;
+  /** Optional (`supabase secrets set VOYAGE_API_KEY=...`). Enables the memory-embedding backfill. */
+  VOYAGE_API_KEY?: string | undefined;
+  /** Optional (`supabase secrets set ALERT_WEBHOOK_URL=...`). A Slack or Discord webhook. */
+  ALERT_WEBHOOK_URL?: string | undefined;
 }
 
 /**
@@ -83,21 +83,8 @@ export async function runScheduled(env: Env): Promise<void> {
     // Reminders silently stopping is the outage this app would otherwise hide.
     await sendAlert("cron_failed", cronFailedMessage(error, new Date()), { webhookUrl: env.ALERT_WEBHOOK_URL });
   } finally {
-    // A Worker isolate may be evicted at any time; releasing the pool keeps
-    // Supabase's connection count honest rather than relying on eviction.
+    // An Edge Function instance may be shut down at any time; releasing the
+    // pool keeps Supabase's connection count honest rather than relying on it.
     await pool.end();
   }
 }
-
-/**
- * Named before export so the object is inspectable and the lint rule against
- * anonymous default exports stays satisfied — Cloudflare reads `scheduled`
- * off whatever the module's default happens to be.
- */
-const worker = {
-  async scheduled(_controller: unknown, env: Env): Promise<void> {
-    await runScheduled(env);
-  },
-};
-
-export default worker;

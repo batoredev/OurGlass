@@ -20,14 +20,14 @@ const ALLOWED: Readonly<Record<string, string>> = {
   "api/src/assistant/orchestrator.ts": "runTurn — model-driven, gated by the §35 permission gate",
   "api/src/reminders/poller.ts": "scheduled INTERNAL tools only — see the name check below",
   "api/src/permissions/release.ts": "releasing or declining a held action IS the user's approval",
-  "web/app/api/permissions/route.ts": "setting or revoking a grant — control-plane tools only",
+  "edge/app/api/permissions/route.ts": "setting or revoking a grant — control-plane tools only",
   // Phase 6. Two REVERSIBLE_WRITE tools the gate would pass immediately
   // anyway, with arguments built by code — never chosen by a model (see the
   // name check below and PHASE-6-DESIGN §1).
   "api/src/ingest/ingest.ts": "the upload pipeline — save_document and link_document only",
 };
 
-const SKIP_DIRS = new Set(["node_modules", "dist", ".next", ".open-next", ".wrangler"]);
+const SKIP_DIRS = new Set(["node_modules", "dist", ".next", "out"]);
 
 function sourceFiles(dir: string): string[] {
   const out: string[] = [];
@@ -52,7 +52,9 @@ function withoutComments(source: string): string {
   return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 }
 
-const callSites = [join(APPS, "api", "src"), join(APPS, "web")]
+// apps/edge holds the HTTP routes (Supabase Edge Function); apps/web is the
+// static site and must have none — scanning it is what proves that.
+const callSites = [join(APPS, "api", "src"), join(APPS, "edge"), join(APPS, "web")]
   .flatMap(sourceFiles)
   .filter((file) => !file.endsWith(join("tools", "executor.ts")))
   .filter((file) => /\bexecuteTurn\(/.test(withoutComments(readFileSync(file, "utf8"))))
@@ -87,7 +89,7 @@ describe("executeTurn call sites", () => {
   });
 
   it("the permissions route executes only control-plane tools", () => {
-    expect(new Set(toolNamesIn("web/app/api/permissions/route.ts"))).toEqual(
+    expect(new Set(toolNamesIn("edge/app/api/permissions/route.ts"))).toEqual(
       new Set(["set_permission", "revoke_permission"]),
     );
   });

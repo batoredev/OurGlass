@@ -11,6 +11,7 @@
  * │ validated executor, so every change is logged and undoable.            │
  * └────────────────────────────────────────────────────────────────────────┘
  */
+import { apiFetch } from "./session";
 
 export interface ControlResult {
   readonly ok: boolean;
@@ -21,7 +22,7 @@ export interface ControlResult {
 async function send(path: string, init: RequestInit): Promise<ControlResult> {
   let response: Response;
   try {
-    response = await fetch(path, {
+    response = await apiFetch(path, {
       ...init,
       // JSON always: the routes refuse anything else, which is what stops an
       // HTML form on another site from reaching them.

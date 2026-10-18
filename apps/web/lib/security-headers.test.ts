@@ -28,6 +28,14 @@ describe("security headers", () => {
     expect(csp).not.toMatch(/https?:/);
   });
 
+  it("lets the page call the named API origin, and only that one", () => {
+    const csp = contentSecurityPolicy(false, "https://ref.supabase.co");
+    const connect = csp.split("; ").find((directive) => directive.startsWith("connect-src"));
+    expect(connect).toBe("connect-src 'self' https://ref.supabase.co");
+    // Every other directive stays same-origin.
+    expect(csp.replace(connect ?? "", "")).not.toMatch(/https?:/);
+  });
+
   it("allows eval and websockets ONLY in development", () => {
     // React Refresh and HMR need them in dev; production must not.
     expect(contentSecurityPolicy(false)).not.toContain("unsafe-eval");

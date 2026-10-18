@@ -3,12 +3,14 @@
 /**
  * Sign in with the deployment's access token (PHASE-7-PERMISSIONS-DESIGN §8).
  *
- * The token goes to /api/session once and comes back as an HttpOnly cookie —
- * it is never stored by this page, so no script can read it afterwards.
+ * The token is checked once against /api/session, then kept in this browser
+ * (lib/session.ts) and sent as `Authorization: Bearer` with every API call —
+ * the API is on another origin, where a session cookie would not be sent.
  */
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Page } from "../ui";
+import { apiFetch, setToken as saveToken } from "../../lib/session";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,15 +23,15 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch("/api/session", {
+      const response = await apiFetch("/api/session", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ token }),
       });
       if (response.ok) {
+        saveToken(token);
         setToken("");
         router.push("/");
-        router.refresh();
         return;
       }
       const body = (await response.json().catch(() => null)) as { error?: string } | null;

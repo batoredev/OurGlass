@@ -6,8 +6,6 @@
  */
 import { Conversation } from "./conversation";
 
-export const dynamic = "force-dynamic";
-
 export default function HomePage() {
   return <Conversation />;
 }

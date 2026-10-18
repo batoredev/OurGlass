@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * §29 Commitments — the primary abstraction (spec §6), read-only.
  *
@@ -6,6 +8,9 @@
  * filter is a query parameter rather than client state, so a filtered view is
  * a link you can share and reload.
  */
+import { Suspense, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
+import { AsyncPage } from "../async-page";
 import Link from "next/link";
 import {
   fetchCommitments,
@@ -14,8 +19,6 @@ import {
 } from "../../lib/api";
 import { Avatar, StatusPill } from "../icons";
 import { EmptyState, LoadFailure, PageHeader, statusLabel, statusTone, when } from "../surface";
-
-export const dynamic = "force-dynamic";
 
 const TABS = [
   ["all", "All"],
@@ -26,7 +29,7 @@ const TABS = [
 
 const TERMINAL = new Set(["completed", "completed_late", "cancelled", "superseded"]);
 
-export default async function CommitmentsPage({
+async function renderCommitments({
   searchParams,
 }: {
   searchParams: Promise<{ filter?: string }>;
@@ -118,4 +121,20 @@ export default async function CommitmentsPage({
       </div>
     </section>
   );
+}
+
+// Static site: the query string is read in the browser, inside the Suspense
+// boundary Next requires around useSearchParams in a static export.
+export default function CommitmentsPage() {
+  return (
+    <Suspense>
+      <CommitmentsPageWithQuery />
+    </Suspense>
+  );
+}
+
+function CommitmentsPageWithQuery() {
+  const filter = useSearchParams().get("filter") ?? undefined;
+  const render = useCallback(() => renderCommitments({ searchParams: Promise.resolve({ filter }) }), [filter]);
+  return <AsyncPage render={render} />;
 }

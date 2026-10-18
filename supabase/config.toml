@@ -1,0 +1,16 @@
+# Supabase CLI configuration — Edge Functions only.
+#
+# The database schema is NOT managed here: packages/db/migrations (run with
+# `pnpm db:migrate`) remains the single mechanism, and pgmigrations its record.
+
+project_id = "ourglass"
+
+# The API checks its own access token (apps/edge/app/api/_auth.ts), not a
+# Supabase JWT, so Supabase's gateway check is off. Every route still refuses
+# without OURGLASS_ACCESS_TOKEN.
+[functions.api]
+verify_jwt = false
+
+# Guarded by CRON_SECRET instead (apps/edge/src/reminders.ts).
+[functions.reminders]
+verify_jwt = false

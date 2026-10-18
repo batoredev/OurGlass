@@ -13,6 +13,10 @@ export default tseslint.config(
       "**/.next/**",
       "**/node_modules/**",
       "graphify-out/**",
+      // Build output: the static site export and the generated Edge Function
+      // bundles (scripts/build-edge.mjs) — not source, never hand-edited.
+      "apps/web/out/**",
+      "supabase/functions/*/ourglass.js",
     ],
   },
   {
