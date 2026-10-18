@@ -1,0 +1,9 @@
+# Kept out of the knowledge graph (`/graphify --update`).
+#
+# Test fixtures are sample data, not architecture — and brief.docx is a
+# DELIBERATE prompt-injection document (docs/PHASE-6-DESIGN.md §9). Feeding it
+# to graphify's LLM extraction would put its words into the graph as if they
+# described this codebase.
+apps/api/test-fixtures/
+# graphify's own conversions of the files above.
+graphify-out/converted/

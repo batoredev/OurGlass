@@ -189,6 +189,9 @@ Full rules: `.claude/rules/wat.md`
 
 ## Project
 
+**Resuming in a fresh session? Read `docs/HANDOFF.md` first** — the current state, the ordered
+work left (starting with the Phase 6 security-review fixes), and the owner's working rules.
+
 **Product:** Batore Personal Assistant — an internal-use conversational AI assistant. Full
 spec in `docs/SPEC.md`, execution plan in `docs/EXECUTION-PLAN.md`, locked decisions and
 research findings in `docs/DECISIONS.md`, phase checklist in `docs/PHASES.md`.
