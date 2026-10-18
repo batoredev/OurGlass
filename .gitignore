@@ -7,6 +7,9 @@ scratchpad/
 .claude-backup-before-os/
 .env
 .env.*
+# Any other copy of .env ("…/.env copy", ".env-backup") — the repo is public.
+.env*
+!.env.example
 !.env.example
 credentials.json
 token.json
