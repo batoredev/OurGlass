@@ -232,7 +232,7 @@ function inGrammarOrder(schema: typeof EXTRACTION_INPUT_SCHEMA): Record<string, 
 
 export const QWEN_EXTRACTION_SCHEMA = inGrammarOrder(EXTRACTION_INPUT_SCHEMA);
 
-const QWEN_EXTRACTION_PROMPT =
+export const QWEN_EXTRACTION_PROMPT =
   `${EXTRACTION_SYSTEM_PROMPT}\n\n${INTENT_KIND_GUIDE}\n\n` +
   `Respond with JSON that matches this JSON Schema exactly:\n${JSON.stringify(QWEN_EXTRACTION_SCHEMA)}`;
 

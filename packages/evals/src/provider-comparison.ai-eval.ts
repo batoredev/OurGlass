@@ -25,6 +25,9 @@ const config = loadAIConfig(process.env);
 const candidates: AIProvider[] = [
   buildProvider("claude", config),
   buildProvider("gemini", config),
+  buildProvider("groq", config),
+  buildProvider("cerebras", config),
+  buildProvider("openrouter", config),
   // Opt-in, exactly as in the app: Ollama has no key, so a base URL is the signal.
   ...(config.ollama.baseUrl ? [buildProvider("qwen", config)] : []),
 ];

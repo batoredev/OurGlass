@@ -25,6 +25,7 @@ import {
 } from "@ourglass/shared";
 import { ClaudeProvider } from "./claude.js";
 import { GeminiProvider } from "./gemini.js";
+import { OpenAICompatProvider, type OpenAICompatName } from "./openai-compat.js";
 import { QwenProvider } from "./qwen.js";
 import type { AIProvider } from "./provider.js";
 import { AIModelRouter, type RouterOptions } from "./router.js";
@@ -64,6 +65,8 @@ export interface AIConfig {
     readonly interpretModel: string | undefined;
     readonly respondModel: string | undefined;
   };
+  /** The free backups (openai-compat.ts). An empty key means "not configured". */
+  readonly backups: Readonly<Record<OpenAICompatName, { readonly apiKey: string; readonly model: string | undefined }>>;
   readonly ollama: {
     /** Null when OLLAMA_BASE_URL was not set — see `loadAIConfig`. */
     readonly baseUrl: string | null;
@@ -179,6 +182,11 @@ export function loadAIConfig(env: AIEnv): AIConfig {
       interpretModel: env["GEMINI_INTERPRET_MODEL"]?.trim() || undefined,
       respondModel: env["GEMINI_RESPONSE_MODEL"]?.trim() || undefined,
     },
+    backups: {
+      groq: { apiKey: env["GROQ_API_KEY"]?.trim() ?? "", model: env["GROQ_MODEL"]?.trim() || undefined },
+      cerebras: { apiKey: env["CEREBRAS_API_KEY"]?.trim() ?? "", model: env["CEREBRAS_MODEL"]?.trim() || undefined },
+      openrouter: { apiKey: env["OPENROUTER_API_KEY"]?.trim() ?? "", model: env["OPENROUTER_MODEL"]?.trim() || undefined },
+    },
     ollama: {
       baseUrl: ollamaBaseUrl !== "" ? ollamaBaseUrl : null,
       model: env["OLLAMA_MODEL"]?.trim() || undefined,
@@ -211,6 +219,18 @@ export function buildProvider(name: AIProviderName, config: AIConfig): AIProvide
         interpretModel: config.gemini.interpretModel,
         respondModel: config.gemini.respondModel,
         timeoutMs: config.respondTimeoutMs,
+      });
+    case "groq":
+    case "cerebras":
+    case "openrouter":
+      return new OpenAICompatProvider({
+        name,
+        apiKey: config.backups[name].apiKey,
+        model: config.backups[name].model,
+        // As for Qwen: the provider must not give up before the router does.
+        interpretTimeoutMs: config.timeoutMs,
+        timeoutMs: config.respondTimeoutMs,
+        readTimeoutMs: config.readTimeoutMs,
       });
     case "qwen":
       return new QwenProvider({
@@ -249,8 +269,8 @@ export function buildTranscriber(env: AIEnv): GeminiProvider | null {
 export class NoProviderConfiguredError extends Error {
   constructor() {
     super(
-      "No AI provider is configured. Set ANTHROPIC_API_KEY, or GEMINI_API_KEY, " +
-        "or OLLAMA_BASE_URL (with Ollama running).",
+      "No AI provider is configured. Set ANTHROPIC_API_KEY, GEMINI_API_KEY, GROQ_API_KEY, " +
+        "CEREBRAS_API_KEY or OPENROUTER_API_KEY, or OLLAMA_BASE_URL (with Ollama running).",
     );
     this.name = "NoProviderConfiguredError";
   }

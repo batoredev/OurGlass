@@ -15,14 +15,16 @@
  */
 
 /**
- * ORDER IS THE DEFAULT PRIORITY: Claude, then Gemini, then Qwen.
+ * ORDER IS THE DEFAULT PRIORITY: Claude, then Gemini, then the free backups
+ * (Groq, Cerebras, OpenRouter — apps/api/src/ai/openai-compat.ts), then Qwen.
+ * Only providers with a key (or, for Qwen, a base URL) are ever tried.
  *
  * Declared once. `AI_PROVIDER_ORDER` overrides it at runtime, and nothing
  * else in the codebase may hardcode a sequence — a second copy of this list
  * is the two-declarations-of-one-fact shape behind nearly every defect this
  * project has recorded.
  */
-export const AI_PROVIDER_NAMES = ["claude", "gemini", "qwen"] as const;
+export const AI_PROVIDER_NAMES = ["claude", "gemini", "groq", "cerebras", "openrouter", "qwen"] as const;
 
 export type AIProviderName = (typeof AI_PROVIDER_NAMES)[number];
 

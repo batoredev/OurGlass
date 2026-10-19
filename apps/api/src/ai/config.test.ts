@@ -24,13 +24,17 @@ describe("provider order", () => {
     // so including it unconditionally would put it in every chain — and a
     // deployment with no Ollama would pay a connection timeout on every
     // fallback before failing.
-    expect(loadAIConfig({}).order).toEqual(["claude", "gemini"]);
+    // The free backups come after Gemini; each is skipped while it has no key.
+    expect(loadAIConfig({}).order).toEqual(["claude", "gemini", "groq", "cerebras", "openrouter"]);
   });
 
   it("includes Qwen once OLLAMA_BASE_URL is set explicitly", () => {
     expect(loadAIConfig({ OLLAMA_BASE_URL: "http://localhost:11434" }).order).toEqual([
       "claude",
       "gemini",
+      "groq",
+      "cerebras",
+      "openrouter",
       "qwen",
     ]);
   });
@@ -155,16 +159,21 @@ describe("buildAIRouter", () => {
     const router = buildAIRouter({ ANTHROPIC_API_KEY: KEY });
     const health = router.health();
 
-    expect(health.map((h) => h.provider)).toEqual(["claude", "gemini"]);
+    expect(health.map((h) => h.provider)).toEqual(["claude", "gemini", "groq", "cerebras", "openrouter"]);
     expect(health[0]?.configured).toBe(true);
     // Present in the list but skipped by the router — an unset key is a
     // choice, not an error.
-    expect(health[1]?.configured).toBe(false);
+    expect(health.slice(1).every((h) => !h.configured)).toBe(true);
   });
 
   it("builds with only a Gemini key", () => {
     const health = buildAIRouter({ GEMINI_API_KEY: KEY }).health();
     expect(health.find((h) => h.provider === "gemini")?.configured).toBe(true);
+  });
+
+  it("builds with only a free backup key — Gemini out, Groq answers", () => {
+    const health = buildAIRouter({ GROQ_API_KEY: KEY }).health();
+    expect(health.find((h) => h.provider === "groq")?.configured).toBe(true);
   });
 
   it("builds with only Ollama", () => {
@@ -196,6 +205,9 @@ describe("describeProviders never leaks a secret", () => {
     expect(described).toEqual([
       { provider: "claude", configured: true },
       { provider: "gemini", configured: true },
+      { provider: "groq", configured: false },
+      { provider: "cerebras", configured: false },
+      { provider: "openrouter", configured: false },
     ]);
 
     // Asserted, not merely intended: this shape is destined for /api/health,
