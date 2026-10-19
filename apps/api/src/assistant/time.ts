@@ -150,7 +150,12 @@ export function resolveTime(
     // │ `sourcePhrase` keeps the user's ORIGINAL words, so the resolution   │
     // │ stays auditable.                                                    │
     // └─────────────────────────────────────────────────────────────────────┘
-    const deadlineRetry = phrase.replace(/^(?:by|due(?:\s+by)?)\s+/i, "at ");
+    // A BARE clock number ("6", "5:30") is retried the same way: Gemini
+    // Flash-Lite trims "by 6" to "6" despite the prompt's "verbatim", and
+    // chrono reads a lone number as nothing at all.
+    const deadlineRetry = /^\d{1,2}(?::\d{2})?$/.test(phrase)
+      ? `at ${phrase}`
+      : phrase.replace(/^(?:by|due(?:\s+by)?)\s+/i, "at ");
     if (deadlineRetry !== phrase) {
       results = chrono.casual.parse(deadlineRetry, chronoReference, options);
     }

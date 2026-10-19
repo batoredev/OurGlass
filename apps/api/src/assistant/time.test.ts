@@ -158,6 +158,9 @@ describe("resolveTime direction", () => {
     expect(forward("at 11")).toMatchObject({ at: "2026-09-09T17:30:00.000Z" });  // 11 PM today
     expect(forward("at 1")).toMatchObject({ at: "2026-09-09T19:30:00.000Z" });   // 1 AM tomorrow (1 PM passed)
     expect(forward("at 5:30")).toMatchObject({ at: "2026-09-09T12:00:00.000Z" }); // 5:30 PM today
+    // A bare number — what Flash-Lite emits for "by 6" — reads as "at 6".
+    expect(forward("6")).toMatchObject({ at: "2026-09-09T12:30:00.000Z", precision: "minute" });
+    expect(forward("5:30")).toMatchObject({ at: "2026-09-09T12:00:00.000Z" });
 
     // Late evening, 23:30 IST: "remind me at 5" is 5 AM tomorrow, across midnight.
     const lateNight = new Date("2026-09-09T18:00:00.000Z");
