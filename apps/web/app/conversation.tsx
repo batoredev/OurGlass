@@ -428,8 +428,10 @@ export function Conversation() {
             rows={1}
             placeholder={
               dictation.listening
-                ? "Listening…"
-                : attachment
+                ? "Listening… press the mic again when you're done"
+                : dictation.transcribing
+                  ? "Transcribing…"
+                  : attachment
                   ? "Add a note, like “the final Hult brief” (optional)"
                   : "Tell me anything..."
             }
@@ -446,16 +448,17 @@ export function Conversation() {
               }
             }}
           />
-          {/* Rendered only where the browser has SpeechRecognition — Firefox
-              gets no button rather than a dead one. Speech goes INTO the box;
-              it never sends, so a misheard word is corrected before the turn. */}
+          {/* Rendered wherever speech can reach the box: the browser's own
+              recognition, or a recorded clip the API transcribes (Brave,
+              Firefox). Speech goes INTO the box; it never sends, so a
+              misheard word is corrected before the turn. */}
           {dictation.supported && (
             <button
               type="button"
               className="composer-tool"
               aria-label={dictation.listening ? "Stop dictating" : "Dictate a message"}
               aria-pressed={dictation.listening}
-              disabled={busy}
+              disabled={busy || dictation.transcribing}
               onClick={dictation.toggle}
             >
               <Icon name="mic" />

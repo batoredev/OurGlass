@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   appendTranscript,
+  canRecord,
+  chooseDictationMode,
   dictationErrorMessage,
+  downsample,
+  encodeWav,
   finalTranscript,
+  isSilent,
   speechRecognitionCtor,
   type SpeechResultEvent,
 } from "./dictation";
@@ -57,14 +62,69 @@ describe("appendTranscript", () => {
 });
 
 describe("dictationErrorMessage", () => {
-  it("says nothing when the user simply did not speak", () => {
-    expect(dictationErrorMessage("no-speech")).toBeNull();
+  it("says nothing when the user cancelled, but says so when nothing was heard", () => {
     expect(dictationErrorMessage("aborted")).toBeNull();
+    // Silence used to show nothing, which made the mic look broken.
+    expect(dictationErrorMessage("no-speech")).toMatch(/didn't catch anything/i);
+  });
+
+  it("does not blame the network for a browser with no speech service (Brave)", () => {
+    expect(dictationErrorMessage("network")).toMatch(/switched to recorded voice input/i);
+    expect(dictationErrorMessage("network")).not.toMatch(/needs a network connection/i);
   });
 
   it("explains a blocked microphone in terms of what to do", () => {
     expect(dictationErrorMessage("not-allowed")).toMatch(/blocked/i);
     expect(dictationErrorMessage("audio-capture")).toMatch(/no microphone/i);
     expect(dictationErrorMessage("anything else")).toMatch(/type instead/i);
+  });
+});
+
+describe("chooseDictationMode", () => {
+  const recorder = { navigator: { mediaDevices: { getUserMedia() {} } }, AudioContext: function AudioContext() {} };
+  const speech = { webkitSpeechRecognition: function Recognition() {} };
+
+  it("uses the browser's own recognition where it has one (Chrome, Edge, Safari)", () => {
+    expect(chooseDictationMode({ ...speech, ...recorder })).toBe("browser");
+  });
+
+  it("records in Brave even though it exposes SpeechRecognition", () => {
+    // Brave's SpeechRecognition fails every time with `network`.
+    const brave = { ...speech, ...recorder, navigator: { ...recorder.navigator, brave: {} } };
+    expect(chooseDictationMode(brave)).toBe("recorder");
+  });
+
+  it("records where there is no SpeechRecognition (Firefox), and offers nothing if it cannot record", () => {
+    expect(chooseDictationMode(recorder)).toBe("recorder");
+    expect(chooseDictationMode({})).toBeNull();
+    expect(canRecord({ navigator: {} })).toBe(false);
+  });
+});
+
+describe("recorded clips", () => {
+  it("encodes 16-bit mono PCM WAV with a correct header", () => {
+    const wav = encodeWav([new Float32Array([0, 1, -1]), new Float32Array([0.5])], 16_000);
+    const view = new DataView(wav.buffer);
+    const ascii = (from: number, to: number) => String.fromCharCode(...wav.subarray(from, to));
+    expect(ascii(0, 4)).toBe("RIFF");
+    expect(ascii(8, 12)).toBe("WAVE");
+    expect(view.getUint32(24, true)).toBe(16_000);
+    expect(view.getUint16(34, true)).toBe(16);
+    expect(view.getUint32(40, true)).toBe(8); // four samples, two bytes each
+    expect(wav.byteLength).toBe(44 + 8);
+    expect(view.getInt16(46, true)).toBe(0x7fff);
+    expect(view.getInt16(48, true)).toBe(-0x8000);
+  });
+
+  it("calls a clip of zeros or faint hiss silent, and a voice not", () => {
+    expect(isSilent(new Float32Array(16_000))).toBe(true);
+    expect(isSilent(new Float32Array([0.001, -0.005, 0.01]))).toBe(true);
+    expect(isSilent(new Float32Array([0, 0.3, -0.2]))).toBe(false);
+  });
+
+  it("downsamples by averaging, and passes through when no reduction is needed", () => {
+    const out = downsample([new Float32Array([1, 1, 1, 0, 0, 0])], 48_000, 16_000);
+    expect(Array.from(out)).toEqual([1, 0]);
+    expect(Array.from(downsample([new Float32Array([0.25, 0.5])], 16_000, 16_000))).toEqual([0.25, 0.5]);
   });
 });

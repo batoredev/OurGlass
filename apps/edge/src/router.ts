@@ -27,6 +27,7 @@ import * as permissions from "../app/api/permissions/route";
 import * as projects from "../app/api/projects/route";
 import * as session from "../app/api/session/route";
 import * as today from "../app/api/today/route";
+import * as transcribe from "../app/api/transcribe/route";
 import * as turn from "../app/api/turn/route";
 import * as undo from "../app/api/undo/route";
 import { isAllowedOrigin } from "../app/api/_http";
@@ -68,6 +69,7 @@ const ROUTES: readonly Route[] = [
   route("/projects", projects),
   route("/session", session),
   route("/today", today),
+  route("/transcribe", transcribe),
   route("/turn", turn),
   route("/undo", undo),
 ];

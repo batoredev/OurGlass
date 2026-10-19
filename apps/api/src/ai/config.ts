@@ -227,6 +227,24 @@ export function buildProvider(name: AIProviderName, config: AIConfig): AIProvide
   }
 }
 
+/**
+ * The dictation transcriber, or null when there is no Gemini key.
+ *
+ * Gemini only: of the three providers it is the one that takes audio. It uses
+ * the Interpret model (GEMINI_INTERPRET_MODEL), so it shares that model's quota
+ * — one request per dictation.
+ */
+export function buildTranscriber(env: AIEnv): GeminiProvider | null {
+  const config = loadAIConfig(env);
+  if (config.gemini.apiKey === "") return null;
+  return new GeminiProvider({
+    apiKey: config.gemini.apiKey,
+    interpretModel: config.gemini.interpretModel,
+    respondModel: config.gemini.respondModel,
+    timeoutMs: config.timeoutMs,
+  });
+}
+
 /** Raised when the environment configures no usable provider at all. */
 export class NoProviderConfiguredError extends Error {
   constructor() {
