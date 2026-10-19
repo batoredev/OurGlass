@@ -63,10 +63,21 @@ if (ONLY.length > 0 && FIXTURES.length !== ONLY.length) {
  * hour was too short for a local model: 101 fixtures at ~35s is ~59 minutes,
  * and the run would have died a fixture or two from the end.
  */
-const EVAL_TIMEOUT_MS = FIXTURES.length * (config.timeoutMs + 5_000) * Math.max(1, configured.length);
+const EVAL_TIMEOUT_MS =
+  FIXTURES.length * (config.timeoutMs + 5_000 + Math.max(0, Number(process.env["EVAL_PACE_MS"] ?? 0) || 0)) *
+  Math.max(1, configured.length);
 
 /** Optional per-fixture dump — the aggregate table says how many, not which. */
 const REPORT_PATH = process.env["EVAL_REPORT_PATH"];
+
+/**
+ * Optional pause between fixtures, in ms. A free tier's per-MINUTE cap is
+ * the binding limit, not the daily one: the first Gemini free-tier run
+ * (2026-10-19) sent fixtures back to back, got ~9 answers, and 90 were
+ * refused as rate_limit — a run that measured the quota, not the model.
+ * `EVAL_PACE_MS=7000` keeps a ~10 requests/minute tier under its cap.
+ */
+const PACE_MS = Math.max(0, Number(process.env["EVAL_PACE_MS"] ?? 0) || 0);
 
 describe("provider comparison (PAID)", () => {
   it(
@@ -77,6 +88,7 @@ describe("provider comparison (PAID)", () => {
       for (const provider of configured) {
         const scores: FixtureScore[] = [];
         for (const fixture of FIXTURES) {
+          if (PACE_MS > 0 && scores.length > 0) await new Promise((resolve) => setTimeout(resolve, PACE_MS));
           const started = performance.now();
           let extraction: Extraction | null = null;
           let category: string | null = null;

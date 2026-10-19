@@ -44,6 +44,14 @@ describe("toGeminiSchema", () => {
     expect(intent?.properties?.["kind"]?.enum).toHaveLength(INTENT_KINDS.length);
   });
 
+  it("carries objectText's description to Gemini", () => {
+    // Without a schema-level description Gemini omitted objectText from every
+    // commitment (first free-tier eval, 2026-10-19), and each turn asked
+    // "what is it Barkha owes?". The converter must not drop it.
+    const intent = toGeminiSchema(EXTRACTION_INPUT_SCHEMA).properties?.["intents"]?.items;
+    expect(intent?.properties?.["objectText"]?.description).toMatch(/Always set it for information/);
+  });
+
   it("maps the scalar types", () => {
     const converted = toGeminiSchema({
       type: "object",

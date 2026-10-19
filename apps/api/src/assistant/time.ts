@@ -189,7 +189,31 @@ export function resolveTime(
     return { tier: "unresolved", sourcePhrase: phrase, reason: "incomplete_date" };
   }
 
-  const at = civilToUtc(civil as CivilDateTime, timezone);
+  // ┌─ "AT 5", SAID AT 4 PM, IS 5 PM TODAY ──────────────────────────────────┐
+  // │ chrono reads a bare hour as AM. With forwardDate it then moves a past  │
+  // │ 5 AM to TOMORROW — so "remind me at 5", typed at 4:20 PM, was saved   │
+  // │ for Tue 5:00 AM. Live, on the first Gemini turn (2026-10-19), and an   │
+  // │ older "at 5" reminder in the data had fired at 5 AM the same way.      │
+  // │                                                                        │
+  // │ When the user gave an hour with NO am/pm and NO day, both 5:00 and     │
+  // │ 17:00 are readings of what they said, so take the one the direction    │
+  // │ points at: the next such clock time for a reminder or deadline, the    │
+  // │ most recent for a completion ("gave it at 11", said at 11:30 PM, is    │
+  // │ 11 PM). A stated am/pm, a 24-hour time or a named day ("tomorrow at    │
+  // │ 5") is left to chrono — this only chooses between two readings the     │
+  // │ words genuinely allow.                                                 │
+  // └────────────────────────────────────────────────────────────────────────┘
+  const bareHour =
+    statedClockTime &&
+    direction !== "none" &&
+    !parsed.start.isCertain("meridiem") &&
+    !parsed.start.isCertain("day") &&
+    !parsed.start.isCertain("weekday") &&
+    civil.hour >= 1 &&
+    civil.hour <= 12;
+  const at = bareHour
+    ? nearestClockTime(civil as CivilDateTime, now, timezone, direction)
+    : civilToUtc(civil as CivilDateTime, timezone);
 
   // A PAST phrase must never resolve into the future. End of day would do
   // exactly that for "today" or "this morning", and a completion recorded
@@ -214,6 +238,59 @@ interface CivilDateTime {
   readonly minute: number;
   readonly second: number;
   readonly millisecond: number;
+}
+
+/**
+ * The next (forward) or most recent (past) instant at which the local clock
+ * in `timezone` reads `civil`'s hour — taken as either am or pm — and minute.
+ *
+ * Candidates are yesterday, today and tomorrow (local) at both readings; six
+ * instants always contain the answer, because any clock time recurs within
+ * 12 hours. Each goes through `civilToUtc`, so DST is handled per candidate.
+ */
+function nearestClockTime(
+  civil: CivilDateTime,
+  now: Date,
+  timezone: string,
+  direction: Exclude<TimeDirection, "none">,
+): Date {
+  const today = civilDateAt(now, timezone);
+  const base = civil.hour % 12;
+  const candidates: Date[] = [];
+  for (const dayOffset of [-1, 0, 1]) {
+    // Date.UTC normalises day 0 / day 32, rolling the month and year.
+    const date = new Date(Date.UTC(today.year, today.month - 1, today.day + dayOffset));
+    for (const hour of [base, base + 12]) {
+      candidates.push(
+        civilToUtc(
+          {
+            year: date.getUTCFullYear(),
+            month: date.getUTCMonth() + 1,
+            day: date.getUTCDate(),
+            hour,
+            minute: civil.minute,
+            second: civil.second,
+            millisecond: civil.millisecond,
+          },
+          timezone,
+        ),
+      );
+    }
+  }
+  const t = now.getTime();
+  const sorted = candidates.sort((a, b) => a.getTime() - b.getTime());
+  const pick =
+    direction === "forward"
+      ? sorted.find((candidate) => candidate.getTime() > t)
+      : sorted.filter((candidate) => candidate.getTime() <= t).at(-1);
+  // Unreachable with the six candidates above; chrono's reading is the fallback.
+  return pick ?? civilToUtc(civil, timezone);
+}
+
+/** The calendar date `instant` falls on in `timezone`. */
+function civilDateAt(instant: Date, timezone: string): { year: number; month: number; day: number } {
+  const local = new Date(instant.getTime() + offsetMinutesAt(instant, timezone) * 60_000);
+  return { year: local.getUTCFullYear(), month: local.getUTCMonth() + 1, day: local.getUTCDate() };
 }
 
 /**

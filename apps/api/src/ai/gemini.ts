@@ -135,6 +135,20 @@ export interface GeminiLikeResponse {
 const NO_THINKING = { thinkingBudget: 0 } as const;
 
 /**
+ * The thinking config for `model`: NO_THINKING, except where the model
+ * rejects it.
+ *
+ * Flash-Lite answers `thinkingBudget: 0` with a bare 400 "Request contains an
+ * invalid argument" — every Interpret call failed as bad_request in the first
+ * Flash-Lite eval (2026-10-19). It does not think by default (no thought
+ * tokens in its usage, verified live), so leaving the field out is what
+ * "no thinking" means there.
+ */
+export function thinkingConfigFor(model: string): typeof NO_THINKING | undefined {
+  return /flash-lite/i.test(model) ? undefined : NO_THINKING;
+}
+
+/**
  * Gemini's own Respond budget. MEASURED on the shipped model, thinking off:
  *
  *   2026-09-18  10.0s 10.3s 11.3s 11.8s 18.8s          (Google under load; 503s seen)
@@ -229,7 +243,7 @@ export class GeminiProvider implements AIProvider {
           responseSchema: toGeminiSchema(DOCUMENT_READING_SCHEMA),
           maxOutputTokens: 1_500,
           temperature: 0,
-          thinkingConfig: NO_THINKING,
+          thinkingConfig: thinkingConfigFor(this.interpretModel),
         },
       });
 
@@ -304,7 +318,7 @@ export class GeminiProvider implements AIProvider {
           maxOutputTokens: 1_200,
           // Deterministic-leaning: this is extraction, not composition.
           temperature: 0,
-          thinkingConfig: NO_THINKING,
+          thinkingConfig: thinkingConfigFor(this.interpretModel),
         },
       });
 
@@ -420,7 +434,7 @@ export class GeminiProvider implements AIProvider {
         config: {
           systemInstruction: RESPOND_SYSTEM_PROMPT,
           maxOutputTokens: MAX_RESPOND_TOKENS,
-          thinkingConfig: NO_THINKING,
+          thinkingConfig: thinkingConfigFor(this.respondModel),
           abortSignal: controller.signal,
           // NO TOOLS, and no `tools` key at all — not an empty allowlist a
           // config change could widen. This stage holds no DB handle, so even

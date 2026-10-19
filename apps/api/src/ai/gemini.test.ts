@@ -19,6 +19,7 @@ import { RESPOND_TIMEOUT_MS } from "../assistant/respond.js";
 import {
   GEMINI_RESPOND_TIMEOUT_MS,
   GeminiProvider,
+  thinkingConfigFor,
   type GeminiLikeClient,
   type GeminiLikeResponse,
 } from "./gemini.js";
@@ -50,6 +51,37 @@ function client(response: Partial<GeminiLikeResponse> | (() => never)): GeminiLi
 function provider(response: Partial<GeminiLikeResponse> | (() => never)) {
   return new GeminiProvider({ apiKey: "", client: client(response) });
 }
+
+describe("thinkingConfigFor", () => {
+  it("turns thinking off on Flash, which accepts thinkingBudget: 0", () => {
+    expect(thinkingConfigFor("gemini-3.5-flash")).toEqual({ thinkingBudget: 0 });
+  });
+
+  it("sends nothing to Flash-Lite, which rejects the field with a 400", () => {
+    // Verified live 2026-10-19: every Flash-Lite Interpret call was
+    // bad_request until the field was dropped; Lite does not think by default.
+    expect(thinkingConfigFor("gemini-3.5-flash-lite")).toBeUndefined();
+    expect(thinkingConfigFor("gemini-3.1-flash-lite")).toBeUndefined();
+  });
+
+  it("passes the per-model choice into the actual request", async () => {
+    let captured: Record<string, unknown> | undefined;
+    const lite = new GeminiProvider({
+      apiKey: "",
+      interpretModel: "gemini-3.5-flash-lite",
+      client: {
+        models: {
+          async generateContent(request: { config?: Record<string, unknown> }) {
+            captured = request.config;
+            return { text: JSON.stringify(VALID_EXTRACTION), candidates: [{ finishReason: "STOP" }] } as GeminiLikeResponse;
+          },
+        },
+      } as unknown as GeminiLikeClient,
+    });
+    await lite.interpret({ utterance: "Barkha needs to give me the article" });
+    expect(captured?.["thinkingConfig"]).toBeUndefined();
+  });
+});
 
 describe("interpret normalises into the shared contract", () => {
   it("parses schema-constrained JSON into an Extraction", async () => {

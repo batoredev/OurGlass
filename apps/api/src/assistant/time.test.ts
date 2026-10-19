@@ -121,7 +121,9 @@ describe("resolveTime direction", () => {
   });
 
   it("still resolves reminders forwards", () => {
-    expect(forward("at 5")).toMatchObject({ at: "2026-09-09T23:30:00.000Z" });
+    // 13:30 IST, "at 5": the NEXT 5 o'clock is 5 PM today. This line used to
+    // pin 23:30Z — Thu 5:00 AM — which is the bug the live Gemini turn hit.
+    expect(forward("at 5")).toMatchObject({ at: "2026-09-09T11:30:00.000Z" });
     expect(forward("tomorrow at 5pm")).toMatchObject({ at: "2026-09-10T11:30:00.000Z" });
     // End of Friday, not chrono's implied noon: "by Friday" is a day you have
     // all of, and the reply says "Fri, Sep 18" rather than inventing 12:00 PM.
@@ -147,6 +149,29 @@ describe("resolveTime direction", () => {
       expect(resolved.at, phrase).not.toContain("T08:00:00");
       expect(resolved.at, phrase).toContain("T18:29:59.999Z"); // 23:59:59 IST
     }
+  });
+
+  it("reads a bare hour (no am/pm, no day) as the next — or last — time the clock shows it", () => {
+    // Reference: Wed 13:30 IST (08:00Z).
+    expect(forward("at 5")).toMatchObject({ at: "2026-09-09T11:30:00.000Z" });   // 5 PM today
+    expect(forward("by 6")).toMatchObject({ at: "2026-09-09T12:30:00.000Z" });   // 6 PM today
+    expect(forward("at 11")).toMatchObject({ at: "2026-09-09T17:30:00.000Z" });  // 11 PM today
+    expect(forward("at 1")).toMatchObject({ at: "2026-09-09T19:30:00.000Z" });   // 1 AM tomorrow (1 PM passed)
+    expect(forward("at 5:30")).toMatchObject({ at: "2026-09-09T12:00:00.000Z" }); // 5:30 PM today
+
+    // Late evening, 23:30 IST: "remind me at 5" is 5 AM tomorrow, across midnight.
+    const lateNight = new Date("2026-09-09T18:00:00.000Z");
+    expect(resolveTime({ kind: "deterministic", sourcePhrase: "at 5" }, lateNight, "Asia/Kolkata", "forward"))
+      .toMatchObject({ at: "2026-09-09T23:30:00.000Z" });
+    // ...and "gave it at 11", said then, is 11 PM — spec §20's late completion.
+    expect(resolveTime({ kind: "deterministic", sourcePhrase: "at 11" }, lateNight, "Asia/Kolkata", "past"))
+      .toMatchObject({ at: "2026-09-09T17:30:00.000Z" });
+  });
+
+  it("leaves am/pm, 24-hour times and named days to chrono", () => {
+    expect(forward("at 5am")).toMatchObject({ at: "2026-09-09T23:30:00.000Z" });  // stated: tomorrow 5 AM
+    expect(forward("at 17:00")).toMatchObject({ at: "2026-09-09T11:30:00.000Z" });
+    expect(forward("tomorrow at 5pm")).toMatchObject({ at: "2026-09-10T11:30:00.000Z" });
   });
 
   it("keeps minute precision when a clock time IS stated", () => {

@@ -174,7 +174,19 @@ const INTENT_SCHEMA = {
     sourceText: { type: "string" },
     owner: ENTITY_SCHEMA,
     recipient: ENTITY_SCHEMA,
-    objectText: { type: "string" },
+    // DESCRIBED IN THE SCHEMA, not only in the prompt. Gemini's structured
+    // output dropped this field from EVERY commitment in the first free-tier
+    // run (2026-10-19) — "Karthik owes me the budget" came back with owner,
+    // recipient and time but no "the budget" — so each turn asked "what is it
+    // Karthik owes?". The prompt's "omitting [an optional field] is always
+    // safe" reads as covering this one too; a schema description is what a
+    // structured-output model weighs per field.
+    objectText: {
+      type: "string",
+      description:
+        "The thing owed or done, as a short noun phrase in the user's words, e.g. \"the article\". " +
+        "Always set it for information and completion_update intents.",
+    },
     time: TIME_SCHEMA,
     reminderBody: { type: "string" },
     relatedEntity: ENTITY_SCHEMA,
