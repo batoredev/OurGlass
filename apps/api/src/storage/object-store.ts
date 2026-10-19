@@ -200,8 +200,12 @@ export function objectStoreFromEnv(
   env: Readonly<Record<string, string | undefined>>,
   fetchImpl?: FetchLike,
 ): ObjectStore | null {
-  const url = env["SUPABASE_URL"]?.trim();
-  const secretKey = env["SUPABASE_SECRET_KEY"]?.trim();
+  // STORAGE_* first: Supabase reserves the SUPABASE_ prefix for Edge Function
+  // secrets (`supabase secrets set` skips those names), so a deployed function
+  // is configured with STORAGE_URL / STORAGE_SECRET_KEY. Locally and in tests
+  // the SUPABASE_* names keep working.
+  const url = (env["STORAGE_URL"] || env["SUPABASE_URL"])?.trim();
+  const secretKey = (env["STORAGE_SECRET_KEY"] || env["SUPABASE_SECRET_KEY"])?.trim();
   if (!url || !secretKey) return null;
   let parsed: URL;
   try {

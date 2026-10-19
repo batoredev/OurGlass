@@ -51,9 +51,18 @@ One-time, for each Supabase project:
 supabase login
 supabase link --project-ref <PROJECT-REF>
 supabase secrets set OURGLASS_ACCESS_TOKEN=<32+ chars> ALLOWED_ORIGINS=https://<site>.pages.dev \
-  CRON_SECRET=<32+ chars> SUPABASE_URL=https://<PROJECT-REF>.supabase.co SUPABASE_SECRET_KEY=<sb_secret_…>
+  CRON_SECRET=<32+ chars> STORAGE_URL=https://<PROJECT-REF>.supabase.co STORAGE_SECRET_KEY=<sb_secret_…>
 # optional: ANTHROPIC_API_KEY, GEMINI_API_KEY, VOYAGE_API_KEY, ALERT_WEBHOOK_URL
 ```
+
+**`STORAGE_*`, not `SUPABASE_*`:** `supabase secrets set` silently skips names starting with
+`SUPABASE_` (reserved), so file storage reads `STORAGE_URL` / `STORAGE_SECRET_KEY` first and
+falls back to the `SUPABASE_*` names used locally (`apps/api/src/storage/object-store.ts`).
+Passing values with `--env-file` rather than on the command line keeps them out of shell
+history.
+
+**The `api` bundle is minified** (`scripts/build-edge.mjs`): unminified at 5.2 MB, Supabase's
+deploy endpoint refused it with 413; minified it is 2.9 MB.
 
 **Leave `DATABASE_URL` unset in the function secrets.** Every Edge Function is given
 `SUPABASE_DB_URL`, and `_lib.ts` and `reminders.ts` fall back to it. Measured from a Windows
@@ -71,7 +80,20 @@ supabase functions deploy reminders --use-api
 
 Then run `supabase/cron/schedule-reminders.sql` once in the SQL Editor (it says what to fill in).
 
-Cloudflare Pages, one-time, connected to the GitHub repository:
+Cloudflare Pages — **direct upload** (what the first deploy used; no GitHub connection needed):
+
+```bash
+NEXT_PUBLIC_API_URL=https://<PROJECT-REF>.supabase.co/functions/v1 pnpm run build:site
+# Run wrangler from OUTSIDE the repo: inside it, npx tries to install into the pnpm
+# workspace and fails on `workspace:*`.
+npx wrangler@4.136.1 pages project create ourglass --production-branch main --force   # once
+npx wrangler@4.136.1 pages deploy <repo>/apps/web/out --project-name ourglass --branch main
+```
+
+`--force` is needed on `project create` only: current wrangler otherwise redirects Pages
+commands to static assets on Workers, and that redirect failed to find the folder.
+
+Or, connected to the GitHub repository (builds on every push):
 
 | Setting | Value |
 |---|---|

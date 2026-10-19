@@ -141,6 +141,16 @@ describe("objectStoreFromEnv", () => {
       SupabaseObjectStore,
     );
   });
+
+  it("reads STORAGE_* — the names a Supabase Edge Function can be given", () => {
+    // `supabase secrets set` skips SUPABASE_-prefixed names, so a deployed
+    // function only ever has these.
+    expect(objectStoreFromEnv({ STORAGE_URL: "https://proj.supabase.co", STORAGE_SECRET_KEY: NEW_SECRET })).toBeInstanceOf(
+      SupabaseObjectStore,
+    );
+    // The same https-or-loopback rule applies to them.
+    expect(objectStoreFromEnv({ STORAGE_URL: "http://proj.supabase.co", STORAGE_SECRET_KEY: NEW_SECRET })).toBeNull();
+  });
 });
 
 describe("MemoryObjectStore", () => {

@@ -69,6 +69,11 @@ for (const { entry, out } of entries) {
     banner: { js: banner },
     plugins: [nodePrefix],
     legalComments: "none",
+    // Minified: unminified, the `api` bundle (5.2 MB) was refused by Supabase's
+    // deploy endpoint with 413. keepNames because errors are told apart by
+    // class name and `.name` in places, and those must survive.
+    minify: true,
+    keepNames: true,
     logLevel: "info",
   });
 }
