@@ -136,4 +136,12 @@ export interface AIRequestLog {
    * to read said nothing. The reason is now recorded as the stage computed it.
    */
   readonly fallbackReason?: RespondFallbackReason;
+  /**
+   * Interpret successes only: each intent's kind and the NAMES of the fields
+   * the model filled, e.g. "information:objectText,owner,time". Never values —
+   * the user's words stay out of logs. Added when a live Gemini turn kept
+   * asking "what is it Barkha owes?" and nothing recorded which field the
+   * model had left out.
+   */
+  readonly intentFields?: readonly string[];
 }

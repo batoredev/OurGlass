@@ -141,6 +141,12 @@ export async function POST(request: Request) {
     // reply just says "try again". Operational facts only; never the words.
     const outage = allModelsFailedMessage(attempts, new Date());
     if (outage) await sendAlert("ai_all_failed", outage, { webhookUrl: process.env["ALERT_WEBHOOK_URL"] });
+    // OURGLASS_DEBUG_AI=true echoes this turn's per-attempt log lines — model,
+    // latency, failure category, intent field NAMES — so a live extraction can
+    // be diagnosed with curl. They carry no key and none of the user's words.
+    if (process.env["OURGLASS_DEBUG_AI"] === "true") {
+      return NextResponse.json({ ...result, debug: { attempts } });
+    }
     return NextResponse.json(result);
   } catch (error: unknown) {
     if (error instanceof UnknownUserError) {

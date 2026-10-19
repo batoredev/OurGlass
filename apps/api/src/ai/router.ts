@@ -209,6 +209,13 @@ export class AIModelRouter {
             latencyMs: Date.now() - started,
             ok: true,
             fallbackUsed: index > 0,
+            intentFields: result.extraction.intents.map(
+              (intent) =>
+                `${intent.kind}:${Object.keys(intent)
+                  .filter((key) => key !== "kind" && key !== "sourceText" && key !== "inferenceLevel")
+                  .sort()
+                  .join(",")}`,
+            ),
           });
           return { ...result, provider: provider.name, fallbackUsed: index > 0 };
         } catch (error: unknown) {
