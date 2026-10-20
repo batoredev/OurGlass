@@ -72,6 +72,18 @@ for the extractors.
 
 Also noted, not a bug: undo never deletes stored bytes and there is no delete path.
 
+### 1a. The Worker build fails on Linux (found 2026-10-20) — blocks deploying
+`pnpm --filter @ourglass/web run build:worker` fails on Linux, on `main` before the
+2026-10-20 dependency updates as well as after them: `Could not resolve "pg-cloudflare"` from
+`pg/lib/stream.js`. Next's output tracing copies only `pg-cloudflare`'s `default` export
+(`dist/empty.js`) into `.open-next`, while the Worker bundler resolves its `workerd` export
+(`dist/index.js`), which was never copied. It was recorded as passing on the owner's machine on
+2026-09-24 and 2026-09-26. CI's Deploy job runs on Linux and has never reached this step (it
+skips until the Cloudflare secrets exist), so turning on automatic deploys (`YOUR-ACTIONS.md`
+item 14) would fail here. Likely fix, to verify: trace `pg-cloudflare`'s `dist/` and `esm/` via
+`outputFileTracingIncludes` in `next.config.ts`, confirm with `wrangler deploy --dry-run`, and
+add a CI step that runs `build:worker` so it cannot regress unseen again.
+
 ### 2. Finish the knowledge-graph refresh
 Standing rule: `/graphify --update` after every feature. The last run stopped after detection
 (84 changed files: 75 code, 9 docs). `.graphifyignore` keeps `apps/api/test-fixtures/` out — one
