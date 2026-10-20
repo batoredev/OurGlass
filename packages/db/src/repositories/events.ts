@@ -67,37 +67,29 @@ export async function getById(tx: Queryable, id: string): Promise<Event | null> 
 }
 
 /**
+ * How long an event with no stated end is taken to last, for clashes and for
+ * its Google Calendar copy (integrations/google-calendar.ts uses this too).
+ */
+export const DEFAULT_EVENT_MINUTES = 30;
+
+/**
  * Events overlapping a proposed window — §24's detection query.
  *
  * ⚠ `'[)'` — HALF-OPEN, and this is a product decision rather than a SQL
  * detail. An event ending at 5:00 and one starting at 5:00 must NOT conflict:
  * back-to-back meetings are normal, and reporting them is the false positive
- * that trains a user to dismiss the conflict surface entirely. A false
- * conflict is worse than no conflict.
+ * that trains a user to dismiss the conflict surface entirely.
  *
- * `COALESCE(ends_at, starts_at)` treats an event with no end as
- * INSTANTANEOUS, not infinite. An open-ended event that swallowed every later
- * window would make the surface useless the moment one existed.
+ * A NULL `ends_at` MEANS DEFAULT_EVENT_MINUTES, on both sides. It used to
+ * mean a single instant, so only two meetings at the SAME minute clashed:
+ * "Meeting with Arjun at 6" and a new meeting at 6:15 were both booked
+ * (reported 2026-10-20). A meeting is not an instant; thirty minutes is the
+ * length Google Calendar is given for it, so the two agree. Before that the
+ * instant was itself a fix — `tstzrange(t, t, '[)')` is EMPTY and matched
+ * nothing — and a real range sidesteps both problems with one bound style.
  *
  * Events with no `starts_at` are excluded: an unscheduled event cannot
  * overlap anything.
- *
- * A NULL `ends_at` IS A POINT, NOT AN EMPTY RANGE, and the bound style below
- * is the whole reason this works.
- *
- * `tstzrange(t, t, '[)')` is EMPTY -- the lower bound is included, the upper
- * excluded, and they are the same instant, so it contains nothing and `&&`
- * matches nothing. The original version wrote exactly that for every event
- * with no end time, which is EVERY event the assistant creates: it never
- * invents a duration. So conflict detection silently returned nothing for the
- * one shape it was built to catch, and nothing failed -- proactive.test.ts
- * exercises detectTimeConflicts against a fake transaction and never reaches
- * this SQL.
- *
- * `'[]'` makes it the single-instant range `[t, t]`, which overlaps anything
- * containing t. Back-to-back meetings still do NOT conflict: a real range
- * keeps `'[)'`, so `[t, t+1h)` excludes t+1h and the next meeting starting
- * there is free.
  */
 export async function findOverlapping(
   tx: Queryable,
@@ -109,12 +101,11 @@ export async function findOverlapping(
     `SELECT * FROM events_current
       WHERE starts_at IS NOT NULL
         AND ($3::uuid IS NULL OR id <> $3::uuid)
-        AND tstzrange(starts_at, COALESCE(ends_at, starts_at),
-                      CASE WHEN ends_at IS NULL THEN '[]' ELSE '[)' END)
-         && tstzrange($1::timestamptz, COALESCE($2::timestamptz, $1::timestamptz),
-                      CASE WHEN $2::timestamptz IS NULL THEN '[]' ELSE '[)' END)
+        AND tstzrange(starts_at, COALESCE(ends_at, starts_at + make_interval(mins => $4::int)), '[)')
+         && tstzrange($1::timestamptz,
+                      COALESCE($2::timestamptz, $1::timestamptz + make_interval(mins => $4::int)), '[)')
       ORDER BY starts_at`,
-    [startsAt, endsAt, excludeId ?? null],
+    [startsAt, endsAt, excludeId ?? null, DEFAULT_EVENT_MINUTES],
   );
   return rows;
 }

@@ -911,3 +911,10 @@ main:focus { outline: none; }
 .toggle-input:checked { background: var(--mint); }
 .toggle-input:checked::after { transform: translateX(22px); }
 .toggle-input:disabled { opacity: .5; cursor: progress; }
+
+/* The checklist lines are buttons now: full width, left-aligned, clickable. */
+button.checklist-item { width: 100%; font: inherit; color: inherit; text-align: left; cursor: pointer; transition: transform .1s, box-shadow .1s; }
+button.checklist-item:hover { transform: translate(-1px, -1px); box-shadow: 5px 5px 0 var(--ink); }
+button.checklist-item.done:hover { box-shadow: 3px 3px 0 var(--ink); }
+button.checklist-item:disabled { cursor: progress; opacity: .7; }
+.checklist > li { list-style: none; }

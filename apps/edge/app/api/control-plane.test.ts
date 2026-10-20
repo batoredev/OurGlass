@@ -37,6 +37,10 @@ vi.mock("@ourglass/api/permissions", () => ({
   declinePendingAction: declineMock,
 }));
 
+// The confirm route reads Google's config, because a held action may be
+// add_to_google_calendar. Not under test here: no Google.
+vi.mock("@ourglass/api/integrations", () => ({ googleConfigFromEnv: () => null }));
+
 const ORIGIN = "http://localhost:3000";
 const params = { params: Promise.resolve({ id: "11111111-1111-4111-8111-111111111111" }) };
 

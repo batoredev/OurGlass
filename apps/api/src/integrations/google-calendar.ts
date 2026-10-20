@@ -19,13 +19,15 @@
  * ===========================================================================
  */
 
+import { events } from "@ourglass/db";
+
 export const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
 
-/** A meeting with no stated end lasts this long on Google (OurGlass stores it as a point). */
-export const DEFAULT_MEETING_MINUTES = 30;
+/** A meeting with no stated end — ONE declaration, shared with the clash check. */
+export const DEFAULT_MEETING_MINUTES = events.DEFAULT_EVENT_MINUTES;
 /** How long a connect link stays valid. */
 const STATE_TTL_MS = 10 * 60 * 1000;
 

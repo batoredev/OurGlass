@@ -113,6 +113,11 @@ export function removeThought(id: string) {
   return sendForTurn(`/api/thoughts?id=${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
+/** Tick or untick a line of Today's checklist. */
+export function checkItem(kind: string, id: string, done: boolean) {
+  return sendForTurn("/api/today/check", { method: "POST", body: JSON.stringify({ kind, id, done }) });
+}
+
 export function undoTurn(turnId: string) {
   return sendForTurn("/api/undo", { method: "POST", body: JSON.stringify({ turnId }) });
 }

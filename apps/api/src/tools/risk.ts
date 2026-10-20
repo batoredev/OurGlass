@@ -80,6 +80,8 @@ export const RISK_BY_TOOL: Readonly<Record<string, RiskLevel>> = {
   create_thought: "REVERSIBLE_WRITE",
   move_thought: "REVERSIBLE_WRITE",
   remove_thought: "REVERSIBLE_WRITE",
+  // A tick on Today's checklist — internal, and undone by restoring the mark.
+  set_checklist_mark: "REVERSIBLE_WRITE",
 
   // §34 — leaves OurGlass and cannot be undone from here. Confirmed by
   // default; "always allow" in Settings lets meetings go straight through.

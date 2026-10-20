@@ -29,6 +29,7 @@ import {
 import {
   commitments,
   entityRecords,
+  events,
   googleAccounts,
   memories,
   messages,
@@ -1772,19 +1773,22 @@ async function planEvent(intent: ExtractedIntent, ctx: PlanContext): Promise<Int
     };
   }
 
+  // A meeting is DEFAULT_EVENT_MINUTES long unless the user said otherwise —
+  // stored, not implied, so OurGlass, the clash check and Google Calendar all
+  // hold the same end.
   const startsAt = new Date(time.at);
-  const conflicts = await detectTimeConflicts(ctx.tx, startsAt, null, null);
+  const endsAt = new Date(startsAt.getTime() + events.DEFAULT_EVENT_MINUTES * 60_000);
+  const conflicts = await detectTimeConflicts(ctx.tx, startsAt, endsAt, null);
   const clash = conflicts[0];
   if (clash) {
+    // NOT BOOKED. Two meetings must not overlap (owner, 2026-10-20), and
+    // there is no follow-up turn to answer "keep both?" with, so the honest
+    // reply names the clash and asks for another time.
     return {
       calls: [],
       facts: [],
-      // Rendered by the same function the proactive gate uses, so the two
-      // surfaces cannot drift into describing a conflict differently.
       questions: [
-        renderProactiveLine({ kind: "conflict", rowId: clash.existingEventId, conflict: clash }, (iso) =>
-          formatLocal(iso, ctx.timezone),
-        ),
+        `That clashes with ${clash.existingTitle} at ${formatLocal(clash.existingStartsAt, ctx.timezone)} — pick another time for ${title}.`,
       ],
     };
   }
@@ -1798,13 +1802,13 @@ async function planEvent(intent: ExtractedIntent, ctx: PlanContext): Promise<Int
     calls: [
       {
         name: "create_event",
-        input: { id: eventId, title, starts_at: time.at, ends_at: null, location: null, notes: null },
+        input: { id: eventId, title, starts_at: time.at, ends_at: endsAt.toISOString(), location: null, notes: null },
       },
       ...(toGoogle
         ? [
             {
               name: "add_to_google_calendar",
-              input: { event_id: eventId, title, starts_at: time.at, ends_at: null, time_zone: ctx.timezone },
+              input: { event_id: eventId, title, starts_at: time.at, ends_at: endsAt.toISOString(), time_zone: ctx.timezone },
             },
           ]
         : []),

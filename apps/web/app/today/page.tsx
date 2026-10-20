@@ -9,6 +9,7 @@
  */
 import Link from "next/link";
 import { AsyncPage } from "../async-page";
+import { TodayChecklist } from "./checklist";
 import { fetchDirectory, fetchToday, type Commitment, type Today } from "../../lib/api";
 import { Icon, StatusPill } from "../icons";
 import { EmptyState, LoadFailure, statusLabel, statusTone, when } from "../surface";
@@ -44,9 +45,6 @@ async function renderToday() {
     </div>
   );
 
-  const done = today.checklist.filter((item) => item.done).length;
-  const KIND_LABEL = { commitment: "Commitment", meeting: "Meeting", reminder: "Reminder" } as const;
-
   const nothing =
     today.checklist.length === 0 &&
     today.overdue.length === 0 &&
@@ -75,34 +73,12 @@ async function renderToday() {
       </header>
 
       {today.checklist.length > 0 && (
-        <section className="section" aria-labelledby="checklist-title">
-          <div className="checklist-head">
-            <h2 className="section-title" id="checklist-title">
-              Today&rsquo;s checklist
-            </h2>
-            <span className="checklist-count">
-              {done} done · {today.checklist.length - done} to do
-            </span>
-          </div>
-          <ul className="checklist">
-            {today.checklist.map((item) => (
-              <li key={`${item.kind}-${item.id}`} className={`checklist-item ${item.done ? "done" : "todo"}`}>
-                <span className="checklist-box" aria-hidden="true">
-                  {item.done ? <Icon name="check" /> : null}
-                </span>
-                <span className="checklist-body">
-                  <span className="checklist-title">{item.title}</span>
-                  <span className="checklist-meta">
-                    {KIND_LABEL[item.kind]} ·{" "}
-                    {new Date(item.at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
-                    {item.detail ? ` · ${item.detail}` : ""}
-                  </span>
-                </span>
-                <span className="checklist-state">{item.done ? "Done" : "To do"}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+        // Keyed on the server's view, so a reload with different data resets
+        // the list instead of keeping stale local ticks.
+        <TodayChecklist
+          key={today.checklist.map((item) => `${item.kind}:${item.id}:${item.done}`).join("|")}
+          initial={today.checklist}
+        />
       )}
 
       {today.events.length > 0 && (

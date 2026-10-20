@@ -91,6 +91,20 @@ suite("events.findOverlapping", () => {
     expect(await overlapping(at(60))).toEqual([]);
   });
 
+  it("an open-ended meeting lasts DEFAULT_EVENT_MINUTES: 15 minutes later clashes", async () => {
+    // Reported 2026-10-20: a meeting at 6 and one at 6:15 were both booked,
+    // because an event with no end was a single instant.
+    await seed("Meeting with Arjun", FIVE_PM);
+
+    expect((await overlapping(at(15))).map((row) => row.title)).toEqual(["Meeting with Arjun"]);
+  });
+
+  it("...and one starting as it ends (30 minutes later) does not — back to back", async () => {
+    await seed("Meeting with Arjun", FIVE_PM);
+
+    expect(await overlapping(at(events.DEFAULT_EVENT_MINUTES))).toEqual([]);
+  });
+
   it("a different time does not conflict", async () => {
     await seed("Hult review", FIVE_PM);
 

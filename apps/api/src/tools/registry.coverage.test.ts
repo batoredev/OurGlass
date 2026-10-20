@@ -109,6 +109,9 @@ describe("tool registry coverage", () => {
     create_thought: "Thoughts page only — no chat path yet",
     move_thought: "Thoughts page only — a move is a drag, not a sentence",
     remove_thought: "Thoughts page only — no chat path yet",
+    // A tick on Today's checklist (migration 015). A commitment's tick is
+    // complete_commitment, which the chat reaches; this one is a click.
+    set_checklist_mark: "Today checklist only — a tick is a click",
   };
 
   it("never lets the conversational planner emit a document tool (PHASE-6-DESIGN §1)", () => {

@@ -33,6 +33,7 @@ export * as permissions from "./repositories/permissions.js";
 export * as documents from "./repositories/documents.js";
 export * as thoughts from "./repositories/thoughts.js";
 export * as googleAccounts from "./repositories/google-accounts.js";
+export * as checklistMarks from "./repositories/checklist-marks.js";
 
 export type { Person, CreatePersonInput } from "./repositories/people.js";
 export type { Organization } from "./repositories/organizations.js";

@@ -35,6 +35,7 @@ import * as googleCallback from "../app/api/google/callback/route";
 import * as googleConnect from "../app/api/google/connect/route";
 import * as meetings from "../app/api/meetings/route";
 import * as thoughts from "../app/api/thoughts/route";
+import * as todayCheck from "../app/api/today/check/route";
 import { isAllowedOrigin } from "../app/api/_http";
 import { routePath } from "./route-path";
 
@@ -82,6 +83,7 @@ const ROUTES: readonly Route[] = [
   route("/google", google),
   route("/meetings", meetings),
   route("/thoughts", thoughts),
+  route("/today/check", todayCheck),
 ];
 
 const ALLOWED_METHODS = "GET, POST, PATCH, DELETE, OPTIONS";

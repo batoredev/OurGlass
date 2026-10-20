@@ -31,6 +31,7 @@ import {
 import { linkDocumentTool, saveDocumentTool } from "./document-tools.js";
 import { createThoughtTool, moveThoughtTool, removeThoughtTool } from "./thought-tools.js";
 import { createAddToGoogleCalendarTool } from "./google-calendar-tool.js";
+import { setChecklistMarkTool } from "./checklist-tools.js";
 import type { GoogleOAuthConfig } from "../integrations/google-calendar.js";
 
 /**
@@ -102,6 +103,8 @@ export function buildToolRegistry(options: ToolRegistryOptions = {}): ToolRegist
   registry.register(createThoughtTool);
   registry.register(moveThoughtTool);
   registry.register(removeThoughtTool);
+  // Today's checklist (migration 015): ticking a meeting or reminder.
+  registry.register(setChecklistMarkTool);
   // §34. The first EXTERNAL_ACTION: held for confirmation unless allowed.
   registry.register(createAddToGoogleCalendarTool(options.google ?? null));
   // Phase 7a (§35) — the CONTROL PLANE. Registered so they run through the
@@ -125,3 +128,4 @@ export {
 } from "./executor.js";
 export * from "./errors.js";
 export * from "./risk.js";
+export { completionTurn } from "./checklist-tools.js";

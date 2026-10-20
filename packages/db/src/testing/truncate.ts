@@ -57,6 +57,8 @@ export const TRUNCATABLE_TABLES = [
   // Migration 014. Neither references another table.
   "thoughts",
   "google_accounts",
+  // Migration 015. References nothing by FK (item_id is polymorphic).
+  "checklist_marks",
   "reminders",
   "events",
   "messages",

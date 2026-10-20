@@ -6,7 +6,7 @@
  * the UI should stay free to change.
  */
 import { NextResponse } from "next/server";
-import { commitments, events, people, reminders } from "@ourglass/db";
+import { checklistMarks, commitments, events, people, reminders } from "@ourglass/db";
 import { authorize } from "../_auth";
 import { localDayWindow, read, userTimeZone } from "../_lib";
 
@@ -34,6 +34,14 @@ export async function GET(request: Request) {
     read((tx) => people.list(tx)),
   ]);
   const nameOf = new Map(everyone.map((person) => [person.id, person.display_name]));
+  // The user's own ticks (migration 015) override the automatic reading of a
+  // meeting (done once begun) or reminder (done once fired), either way.
+  const marks = await read((tx) =>
+    checklistMarks.listCurrentFor(tx, [
+      ...todaysEvents.map((row) => ({ kind: "meeting" as const, id: row.id })),
+      ...todaysReminders.map((row) => ({ kind: "reminder" as const, id: row.id })),
+    ]),
+  );
   const checklist = [
     ...open
       .filter((row) => inDay(row.expected_at) || inDay(row.completed_at))
@@ -52,7 +60,7 @@ export async function GET(request: Request) {
       title: row.title,
       detail: row.google_event_id ? "On Google Calendar" : null,
       at: row.starts_at!.toISOString(),
-      done: row.starts_at!.getTime() <= now.getTime(),
+      done: marks.get(`meeting:${row.id}`) ?? row.starts_at!.getTime() <= now.getTime(),
       status: null,
     })),
     ...todaysReminders.map((row) => ({
@@ -61,7 +69,7 @@ export async function GET(request: Request) {
       title: row.body,
       detail: null,
       at: row.fire_at!.toISOString(),
-      done: row.fired_at !== null,
+      done: marks.get(`reminder:${row.id}`) ?? row.fired_at !== null,
       status: null,
     })),
   ].sort((a, b) => a.at.localeCompare(b.at));
