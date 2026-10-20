@@ -25,6 +25,12 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "vitest"
         update-types: ["version-update:semver-major"]
+      # Follows the Node runtime (engines and every workflow's node-version:
+      # 24), not npm's latest. Raise it in the same change that moves the
+      # runtime — types for a newer Node let code compile against APIs the
+      # app cannot call, and 26.x already fails the api build.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"

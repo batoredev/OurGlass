@@ -119,6 +119,11 @@ confirmed it:
   proposes patch/minor security fixes on the pinned line without re-litigating the major
   bump every week. Revisit the ignores when the plan's "TS 7 as a measured spike" and
   "Vitest 5" follow-ups actually happen.
+- **`@types/node` follows the runtime, so its majors are ignored too (2026-10-20).**
+  Dependabot keeps proposing `@types/node` 26 (most recently #12 and #16). The runtime is
+  Node 24 (`engines`, every workflow's `node-version`), and 26.x fails the api build
+  (`Uint8Array<ArrayBufferLike>` is not assignable to `BufferSource`). It stays `^24` and
+  moves in the same change that moves the runtime.
 
 ## Phase 1 decisions (Mission 1 four-lens review — full design in `docs/PHASE-1-DESIGN.md`)
 
