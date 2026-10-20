@@ -53,12 +53,15 @@ export type OpenAICompatName = Extract<AIProviderName, "groq" | "cerebras" | "op
 
 /** Where each backup lives and what it runs by default. Verify before relying on a model: catalogs churn. */
 export const OPENAI_COMPAT_DEFAULTS: Readonly<Record<OpenAICompatName, { baseUrl: string; model: string }>> = {
-  // Groq free tier: ~30 requests/min, ~1,000/day on the 70B (secondary sources, 2026).
-  groq: { baseUrl: "https://api.groq.com/openai/v1", model: "llama-3.3-70b-versatile" },
+  // Verified against GET /models with a real key, 2026-10-20: Llama 3.3 70B is
+  // gone from Groq (model_not_found); gpt-oss-120b is the strongest chat model.
+  groq: { baseUrl: "https://api.groq.com/openai/v1", model: "openai/gpt-oss-120b" },
   cerebras: { baseUrl: "https://api.cerebras.ai/v1", model: "gpt-oss-120b" },
-  // `openrouter/free` routes to a free model that supports the requested
-  // features (structured output); a fixed `vendor/model:free` id also works.
-  openrouter: { baseUrl: "https://openrouter.ai/api/v1", model: "openrouter/free" },
+  // A FIXED model, not the `openrouter/free` auto-router: that picked a slow
+  // model which timed out at 20 s on the first live call (2026-10-20). Of the
+  // five free models supporting structured outputs that day, all reason; this
+  // is the largest.
+  openrouter: { baseUrl: "https://openrouter.ai/api/v1", model: "nvidia/nemotron-3-super-120b-a12b:free" },
 };
 
 /** The OpenAI chat-completions response, only the fields read. */
@@ -87,15 +90,19 @@ export interface OpenAICompatOptions {
  * the answer — the failure Gemini Flash showed on Respond (thinking ate the
  * budget, the reply hit MAX_TOKENS). Ask for low effort and leave room.
  */
-function reasoningParams(model: string): Record<string, unknown> {
-  return /gpt-oss/i.test(model) ? { reasoning_effort: "low" } : {};
+function reasoningParams(name: OpenAICompatName, model: string): Record<string, unknown> {
+  // OpenRouter normalises reasoning control into one `reasoning` object for
+  // every model behind it; `exclude` keeps the thinking out of the reply.
+  if (name === "openrouter") return { reasoning: { effort: "low", exclude: true } };
+  return isReasoningModel(name, model) ? { reasoning_effort: "low" } : {};
 }
-function isReasoningModel(model: string): boolean {
-  return /gpt-oss/i.test(model);
+function isReasoningModel(name: OpenAICompatName, model: string): boolean {
+  // Every free OpenRouter model with structured outputs reasoned (2026-10-20).
+  return name === "openrouter" || /gpt-oss|qwen3|nemotron|deepseek-r/i.test(model);
 }
 
 export class OpenAICompatProvider implements AIProvider {
-  readonly name: AIProviderName;
+  readonly name: OpenAICompatName;
   /** Text models: an image is read by Claude or Gemini (the router skips these). */
   readonly readsImages = false;
 
@@ -136,7 +143,7 @@ export class OpenAICompatProvider implements AIProvider {
     const response = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
       method: "POST",
       headers,
-      body: JSON.stringify({ model: this.model, ...reasoningParams(this.model), ...body }),
+      body: JSON.stringify({ model: this.model, ...reasoningParams(this.name, this.model), ...body }),
       signal,
     });
     if (!response.ok) {
@@ -186,7 +193,7 @@ export class OpenAICompatProvider implements AIProvider {
         ],
         "extract_intents",
         QWEN_EXTRACTION_SCHEMA,
-        isReasoningModel(this.model) ? 4_000 : 1_200,
+        isReasoningModel(this.name, this.model) ? 4_000 : 1_200,
         controller.signal,
       );
       const choice = response.choices?.[0];
@@ -255,7 +262,7 @@ export class OpenAICompatProvider implements AIProvider {
           temperature: 0.3,
           // NO response_format and NO tools: this stage wants one short
           // sentence of prose, and an absent tool list cannot be widened.
-          max_tokens: isReasoningModel(this.model) ? 1_000 : MAX_RESPOND_TOKENS,
+          max_tokens: isReasoningModel(this.name, this.model) ? 1_000 : MAX_RESPOND_TOKENS,
         },
         controller.signal,
       );
@@ -298,7 +305,7 @@ export class OpenAICompatProvider implements AIProvider {
         ],
         "document_reading",
         DOCUMENT_READING_SCHEMA,
-        isReasoningModel(this.model) ? 4_000 : 1_500,
+        isReasoningModel(this.name, this.model) ? 4_000 : 1_500,
         controller.signal,
       );
       const choice = response.choices?.[0];

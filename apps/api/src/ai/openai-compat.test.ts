@@ -65,7 +65,7 @@ describe("OpenAICompatProvider", () => {
     expect(calls[0]?.url).toBe("https://api.groq.com/openai/v1/chat/completions");
     expect(calls[0]?.headers["authorization"]).toBe("Bearer gsk_test");
     expect((calls[0]?.body["response_format"] as { type: string }).type).toBe("json_schema");
-    expect(calls[0]?.body["model"]).toBe("llama-3.3-70b-versatile");
+    expect(calls[0]?.body["model"]).toBe("openai/gpt-oss-120b");
   });
 
   it("retries once in json_object mode when a model rejects json_schema with a 400", async () => {
@@ -104,6 +104,14 @@ describe("OpenAICompatProvider", () => {
     expect(calls[0]?.body["model"]).toBe("gpt-oss-120b");
     expect(calls[0]?.body["reasoning_effort"]).toBe("low");
     expect(calls[0]?.body["max_tokens"]).toBeGreaterThan(1_200);
+  });
+
+  it("sends OpenRouter its own reasoning control, not reasoning_effort", async () => {
+    const { calls, fetchImpl } = fakeFetch([{ json: completion(JSON.stringify(EXTRACTION)) }]);
+    const p = new OpenAICompatProvider({ name: "openrouter", apiKey: "k", fetchImpl });
+    await p.interpret({ utterance: "Karthik owes me the budget by Friday" });
+    expect(calls[0]?.body["reasoning"]).toEqual({ effort: "low", exclude: true });
+    expect(calls[0]?.body["reasoning_effort"]).toBeUndefined();
   });
 
   it("respond never throws: a failure becomes the template reply", async () => {
