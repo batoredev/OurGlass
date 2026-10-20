@@ -117,6 +117,16 @@ export interface EntityTypeDefinitionHint {
   readonly fields: readonly EntityFieldHint[];
 }
 
+/**
+ * §34 — an email the user asked to send, DRAFTED by Interpret from the user's
+ * own words. Never sent from here: send_email is HIGH_IMPACT_ACTION, so the
+ * draft is held and the user reads, edits and presses Send.
+ */
+export interface EmailDraftHint {
+  readonly subject: string;
+  readonly body: string;
+}
+
 /** §36 — one instance: "log a 45 minute gym session today". */
 export interface EntityRecordHint {
   readonly typeKey: string;
@@ -186,6 +196,13 @@ export interface ExtractedIntent {
    * nobody asked for.
    */
   readonly eventTitle?: string;
+
+  /**
+   * §34 — "email Moorthy that the meeting moved to 7". The person is
+   * `recipient`; this is the drafted subject and body. An action, never
+   * execution: OurGlass drafts it here and the user sends it.
+   */
+  readonly emailDraft?: EmailDraftHint;
 }
 
 export interface Extraction {
@@ -346,7 +363,7 @@ const REQUIRED_INTENT_FIELDS: Readonly<Record<IntentKind, readonly FieldRequirem
     {
       field: "reminderBody",
       severity: "blocking",
-      satisfiedBy: ["condition", "entityTypeDefinition", "entityRecord", "eventTitle"],
+      satisfiedBy: ["condition", "entityTypeDefinition", "entityRecord", "eventTitle", "emailDraft"],
     },
   ],
   completion_update: [{ field: "objectText", severity: "blocking" }],
@@ -437,7 +454,8 @@ export function isExtraction(value: unknown): value is Extraction {
       isConditionOrUndefined(intent.condition) &&
       isTypeDefinitionOrUndefined(intent.entityTypeDefinition) &&
       isEntityRecordOrUndefined(intent.entityRecord) &&
-      isStringOrUndefined(intent.eventTitle);
+      isStringOrUndefined(intent.eventTitle) &&
+      isEmailDraftOrUndefined(intent.emailDraft);
   });
 }
 
@@ -473,7 +491,18 @@ const INTENT_KEYS = [
   "entityTypeDefinition",
   "entityRecord",
   "eventTitle",
+  "emailDraft",
 ] as const;
+
+function isEmailDraftOrUndefined(value: unknown): boolean {
+  if (value === undefined) return true;
+  return (
+    isRecord(value) &&
+    hasOnlyKeys(value, ["subject", "body"]) &&
+    typeof value["subject"] === "string" &&
+    typeof value["body"] === "string"
+  );
+}
 
 const STATUS_HINTS: readonly string[] = [
   "pending",

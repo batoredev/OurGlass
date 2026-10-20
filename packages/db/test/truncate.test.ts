@@ -53,6 +53,8 @@ describe("truncateAll", () => {
         "events",
         // Migration 015.
         "checklist_marks",
+        // Migration 016.
+        "sent_emails",
         // Migration 014.
         "google_accounts",
         "thoughts",

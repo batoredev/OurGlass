@@ -17,6 +17,8 @@ import { MAX_UPLOAD_BYTES } from "@ourglass/shared";
 import { Icon } from "./icons";
 import { useDictation } from "./use-dictation";
 import { apiFetch } from "../lib/session";
+import { fetchEmailDrafts, type EmailDraft } from "../lib/api";
+import { EmailDraftCard } from "./email-draft";
 
 /** What /api/documents returns for an upload — IngestResponse in @ourglass/api/ingest. */
 interface UploadResult {
@@ -52,6 +54,8 @@ interface TurnResult {
   readonly asked: readonly string[];
   readonly committed: readonly string[];
   readonly degraded: boolean;
+  /** Emails drafted this turn, held for the user to send (§34). */
+  readonly drafts?: readonly EmailDraft[];
 }
 
 interface Entry {
@@ -106,6 +110,20 @@ export function Conversation() {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // Email drafts waiting to be sent — shown as cards until sent or cancelled,
+  // including after a reload (GET /api/email-drafts).
+  const [drafts, setDrafts] = useState<readonly EmailDraft[]>([]);
+  useEffect(() => {
+    let live = true;
+    fetchEmailDrafts()
+      .then((held) => {
+        if (live) setDrafts(held);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
   const [loaded, setLoaded] = useState(false);
   // A file waiting to go with the next send; the typed words become its note.
   const [attachment, setAttachment] = useState<File | null>(null);
@@ -226,6 +244,13 @@ export function Conversation() {
       }
 
       const result = (await response.json()) as TurnResult;
+      if (result.drafts && result.drafts.length > 0) {
+        const fresh = result.drafts;
+        setDrafts((current) => [
+          ...current,
+          ...fresh.filter((draft) => !current.some((held) => held.pendingActionId === draft.pendingActionId)),
+        ]);
+      }
       setEntries((current) => [
         ...current,
         {
@@ -358,6 +383,18 @@ export function Conversation() {
             </div>
           ),
         )}
+
+        {drafts.map((draft) => (
+          <div className="message-group" key={`draft-${draft.pendingActionId}`}>
+            <EmailDraftCard
+              draft={draft}
+              onDone={(message) => {
+                setDrafts((current) => current.filter((held) => held.pendingActionId !== draft.pendingActionId));
+                setNotice(message);
+              }}
+            />
+          </div>
+        ))}
 
         {busy && (
           <div className="message-group">

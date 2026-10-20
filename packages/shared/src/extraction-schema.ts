@@ -64,9 +64,15 @@ the field and the category always agree:
   "put the dentist on my calendar at 4"). OurGlass schedules it itself and copies it to the user's calendar,
   so this is ALWAYS an action, never execution. Put the time in the time field as always. NOT for a
   reminder — "remind me at 5" is reminderBody.
-An action is something to do INSIDE the assistant (a reminder, a meeting, a rule, a new kind of thing to
-track). Execution is only for acting elsewhere: sending an email, sharing a Drive file, or changing or
-deleting an event that already exists on a calendar.
+- emailDraft (action): the user asks to email or write to someone ("email Moorthy that the meeting moved to
+  7 and ask him to bring the budget"). Put the person in recipient and WRITE the email: a short subject and
+  a polite, clear body in the first person, as the user, saying exactly what they asked and nothing more —
+  no invented facts, dates or promises. Start with "Hi <first name>," and end with a short sign-off line
+  such as "Thanks," with no name after it. OurGlass shows the draft for the user to send, so this is ALWAYS
+  an action, never execution.
+An action is something to do INSIDE the assistant (a reminder, a meeting, an email draft, a rule, a new kind
+of thing to track). Execution is only for acting elsewhere that OurGlass cannot: sharing a Drive file, or
+changing or deleting an event that already exists on a calendar.
 Do not invent commitments, people, dates, or context.`;
 
 const ENTITY_SCHEMA = {
@@ -211,6 +217,18 @@ const INTENT_SCHEMA = {
     // Described in the schema, like objectText: a structured-output model
     // weighs per-field descriptions, and "schedule a meeting with Moorthy at
     // 6 pm" was declined as execution before this (2026-10-20).
+    emailDraft: {
+      type: "object",
+      additionalProperties: false,
+      description:
+        "An email the user asked to send, drafted from their words; the person goes in recipient. " +
+        "Drafting an email is always an action intent, never execution.",
+      properties: {
+        subject: { type: "string", description: "A short subject line." },
+        body: { type: "string", description: "The full email body, first person as the user, starting \"Hi <name>,\"." },
+      },
+      required: ["subject", "body"],
+    },
     eventTitle: {
       type: "string",
       description:

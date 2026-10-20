@@ -135,6 +135,13 @@ export interface EventScheduledFact {
   readonly googleCalendar?: boolean;
 }
 
+/** §34 — an email drafted for the user to send (held; never sent by a turn). */
+export interface EmailDraftedFact {
+  readonly kind: "email_drafted";
+  readonly toName: string;
+  readonly subject: string;
+}
+
 export type CommittedFact =
   | CommitmentCreatedFact
   | ReminderCreatedFact
@@ -146,7 +153,8 @@ export type CommittedFact =
   | EntityTypeDefinedFact
   | EntityFieldsAddedFact
   | EntityRecordCreatedFact
-  | EventScheduledFact;
+  | EventScheduledFact
+  | EmailDraftedFact;
 
 // ---------------------------------------------------------------------------
 // RespondInput / Responder — the call contract (§5.1).

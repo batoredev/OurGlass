@@ -37,26 +37,65 @@ function heldCalls(raw: unknown): readonly ToolCall[] {
  * A concurrent second release cannot execute twice: its status update matches
  * zero rows, the tool throws, and its whole turn rolls back.
  */
-export async function releasePendingAction(deps: Deps, id: string): Promise<ReleaseOutcome> {
+/**
+ * What the user changed on an email draft card before pressing Send. Applied
+ * ONLY to a held send_email — never to any other held call — and a new
+ * address is also remembered for that person (set_person_email), first, so
+ * the next email to them fills it in.
+ */
+export interface EmailEdits {
+  readonly to?: string;
+  readonly subject?: string;
+  readonly body?: string;
+}
+
+function withEmailEdits(calls: readonly ToolCall[], edits: EmailEdits | undefined): readonly ToolCall[] {
+  if (!edits) return calls;
+  return calls.flatMap((call) => {
+    if (call.name !== "send_email") return [call];
+    const input = (call.input ?? {}) as Record<string, unknown>;
+    const edited = {
+      ...input,
+      ...(edits.to !== undefined ? { to: edits.to.trim() } : {}),
+      ...(edits.subject !== undefined ? { subject: edits.subject } : {}),
+      ...(edits.body !== undefined ? { body: edits.body } : {}),
+    };
+    const newAddress =
+      edits.to !== undefined && edits.to.trim() !== "" && edits.to.trim() !== input["to"] && typeof input["person_id"] === "string";
+    return newAddress
+      ? [{ name: "set_person_email", input: { person_id: input["person_id"], email: edits.to!.trim() } }, { ...call, input: edited }]
+      : [{ ...call, input: edited }];
+  });
+}
+
+export async function releasePendingAction(deps: Deps, id: string, edits?: EmailEdits): Promise<ReleaseOutcome> {
   const pending = await deps.db.withTransaction((tx) => permissions.getPendingAction(tx, id));
   if (!pending) {
     return { ok: false, reason: "not_found", errors: [] };
   }
 
-  const calls = heldCalls(pending.calls);
+  const calls = withEmailEdits(heldCalls(pending.calls), edits);
   const outcome = await executeTurn(
     [{ name: "release_pending_action", input: { pending_action_id: id } }, ...calls],
     deps,
   );
 
   if (outcome.ok) {
-    // The first result is the release marker; the rest are the held calls'.
+    // The first result is the release marker; the rest are the held calls'
+    // (plus set_person_email, when a draft card supplied a new address).
     return { ok: true, turnId: outcome.turnId, results: outcome.results.slice(1) };
   }
 
   if (outcome.toolName === "release_pending_action") {
     // Not pending, expired, or unknown — nothing ran and nothing to record.
     return { ok: false, reason: "not_pending", errors: outcome.errors };
+  }
+
+  // An email draft stays PENDING when it fails: a mistyped address or a
+  // missing Gmail permission is fixed on the card and sent again, and marking
+  // the draft failed would throw away what the user wrote.
+  if (outcome.toolName === "send_email" || outcome.toolName === "set_person_email") {
+    return { ok: false, reason: "invalid", errors: outcome.errors };
   }
 
   // A HELD call failed validation. Record it outside the rolled-back turn.

@@ -34,6 +34,7 @@ export * as documents from "./repositories/documents.js";
 export * as thoughts from "./repositories/thoughts.js";
 export * as googleAccounts from "./repositories/google-accounts.js";
 export * as checklistMarks from "./repositories/checklist-marks.js";
+export * as sentEmails from "./repositories/sent-emails.js";
 
 export type { Person, CreatePersonInput } from "./repositories/people.js";
 export type { Organization } from "./repositories/organizations.js";

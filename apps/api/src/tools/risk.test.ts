@@ -100,13 +100,16 @@ describe("the classification itself, where it is non-obvious", () => {
     expect(riskFor("evaluate_workflow")).toBe("REVERSIBLE_WRITE");
   });
 
-  it("has exactly one action that leaves the system: Google Calendar (§34)", () => {
-    // The first, and so far only, tool that reaches an outside service. It
-    // must be EXTERNAL_ACTION — held for confirmation unless the user allows
-    // it — and nothing else may quietly join it.
+  it("has exactly two actions that leave the system, each at the right level (§34)", () => {
+    // Calendar is EXTERNAL_ACTION: held unless the user allows it. Email is
+    // HIGH_IMPACT_ACTION: it cannot be unsent, so it is confirmed EVERY time
+    // and a standing "allow" is refused. Nothing else may quietly join them.
     const external = Object.entries(RISK_BY_TOOL).filter(
       ([, level]) => level === "EXTERNAL_ACTION" || level === "HIGH_IMPACT_ACTION",
     );
-    expect(external).toEqual([["add_to_google_calendar", "EXTERNAL_ACTION"]]);
+    expect(external).toEqual([
+      ["add_to_google_calendar", "EXTERNAL_ACTION"],
+      ["send_email", "HIGH_IMPACT_ACTION"],
+    ]);
   });
 });

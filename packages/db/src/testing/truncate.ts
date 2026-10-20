@@ -59,6 +59,8 @@ export const TRUNCATABLE_TABLES = [
   "google_accounts",
   // Migration 015. References nothing by FK (item_id is polymorphic).
   "checklist_marks",
+  // Migration 016. References people, so listed before it.
+  "sent_emails",
   "reminders",
   "events",
   "messages",

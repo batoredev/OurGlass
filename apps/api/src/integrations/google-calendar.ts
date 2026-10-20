@@ -22,6 +22,13 @@
 import { events } from "@ourglass/db";
 
 export const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+/**
+ * SEND ONLY: OurGlass can send as the user, and cannot read, search or delete
+ * their mail. A "sensitive" scope, not "restricted" — no paid security review
+ * to publish. Optional at consent: without it, email drafts say to reconnect.
+ */
+export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
+const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const EVENTS_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events";
@@ -140,7 +147,10 @@ export function authorizationUrl(config: GoogleOAuthConfig, state: string): stri
     redirect_uri: config.redirectUri,
     response_type: "code",
     // openid + email: only to show WHICH account is connected in Settings.
-    scope: `openid email ${CALENDAR_SCOPE}`,
+    scope: `openid email ${CALENDAR_SCOPE} ${GMAIL_SEND_SCOPE}`,
+    // Already-granted scopes carry over, so reconnecting to add Gmail keeps
+    // Calendar without asking for it twice.
+    include_granted_scopes: "true",
     // offline + consent: Google issues a refresh token only on a consented
     // offline grant, and without one the connection would last an hour.
     access_type: "offline",
@@ -275,6 +285,64 @@ export async function insertEvent(token: string, event: NewCalendarEvent, fetchF
   if (!response.ok || !json.id) {
     throw new GoogleCalendarError(
       `Google Calendar refused the event (${response.status}${json.error?.message ? `: ${json.error.message}` : ""}).`,
+      response.status,
+    );
+  }
+  return json.id;
+}
+
+// ---------------------------------------------------------------------------
+// Gmail (send only)
+// ---------------------------------------------------------------------------
+
+export function canSendEmail(scope: string): boolean {
+  return scope.split(/\s+/).includes(GMAIL_SEND_SCOPE);
+}
+
+export interface OutgoingEmail {
+  readonly to: string;
+  readonly subject: string;
+  readonly body: string;
+}
+
+/** RFC 2047 encoded-word for a non-ASCII header; plain ASCII passes through. */
+function encodeHeader(value: string): string {
+  // eslint-disable-next-line no-control-regex
+  if (/^[\x00-\x7F]*$/.test(value)) return value;
+  return `=?UTF-8?B?${btoa(String.fromCharCode(...encoder.encode(value)))}?=`;
+}
+
+/** The RFC 2822 message Gmail's API takes, base64url-encoded. Exported for tests. */
+export function rawMessage(email: OutgoingEmail): string {
+  // A header line break would let a subject inject a second recipient (Bcc:).
+  const subject = email.subject.replace(/[\r\n]+/g, " ").trim();
+  // The address too: it is user-editable on the draft card.
+  const to = email.to.replace(/[\r\n]+/g, "").trim();
+  const message = [
+    `To: ${to}`,
+    `Subject: ${encodeHeader(subject)}`,
+    "MIME-Version: 1.0",
+    "Content-Type: text/plain; charset=UTF-8",
+    "Content-Transfer-Encoding: 8bit",
+    "",
+    email.body.replace(/\r?\n/g, "\r\n"),
+  ].join("\r\n");
+  return toBase64Url(encoder.encode(message));
+}
+
+/** Send as the connected user; returns Gmail's message id. */
+export async function sendEmail(token: string, email: OutgoingEmail, fetchFn: FetchFn = fetch): Promise<string> {
+  const response = await fetchFn(GMAIL_SEND_URL, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ raw: rawMessage(email) }),
+  });
+  const json = (await response.json().catch(() => ({}))) as { id?: string; error?: { message?: string } };
+  if (!response.ok || !json.id) {
+    throw new GoogleCalendarError(
+      response.status === 403
+        ? "Gmail sending isn't allowed yet — reconnect Google in Settings and tick the Gmail permission."
+        : `Gmail refused the email (${response.status}${json.error?.message ? `: ${json.error.message}` : ""}).`,
       response.status,
     );
   }

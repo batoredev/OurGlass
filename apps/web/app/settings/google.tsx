@@ -14,7 +14,7 @@ import { refreshData } from "../../lib/session";
 const CALENDAR_ACTION = "add_to_google_calendar";
 
 const RESULT: Readonly<Record<string, string>> = {
-  connected: "Google Calendar is connected. New meetings will be added to it.",
+  connected: "Google is connected. New meetings go to your calendar, and email drafts can be sent.",
   denied: "Connecting was cancelled at Google.",
   expired: "That connect link expired — press Connect again.",
   not_configured: "Google Calendar isn't set up on the server yet.",
@@ -121,6 +121,23 @@ export function GoogleCalendarSetting() {
             </button>
           )}
         </div>
+        {status?.connected && (
+          <div className="row">
+            <div>
+              <div className="row-title">Sending email</div>
+              <div className="row-subtitle">
+                {status.canSendEmail
+                  ? "Allowed. Every email is a draft you check and send yourself — OurGlass never sends one on its own."
+                  : "Not allowed yet — this connection was made before email. Reconnect and tick the Gmail permission."}
+              </div>
+            </div>
+            {!status.canSendEmail && (
+              <button type="button" className="primary-button" disabled={busy} onClick={() => void connect()}>
+                Reconnect
+              </button>
+            )}
+          </div>
+        )}
         {status?.connected && autoAdd !== null && (
           <label className="row setting-toggle">
             <div>

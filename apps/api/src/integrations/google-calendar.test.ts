@@ -94,3 +94,30 @@ describe("insertEvent", () => {
     expect(Date.parse(sent!.end.dateTime) - Date.parse(sent!.start.dateTime)).toBe(DEFAULT_MEETING_MINUTES * 60_000);
   });
 });
+
+describe("Gmail message", () => {
+  const decode = (raw: string) => {
+    const b64 = raw.replace(/-/g, "+").replace(/_/g, "/");
+    return new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)));
+  };
+
+  it("cannot be given an extra recipient through a line break in the subject", async () => {
+    const { rawMessage } = await import("./google-calendar.js");
+    const text = decode(rawMessage({ to: "moorthy@example.com", subject: "Hi\r\nBcc: spy@evil.example", body: "Hello" }));
+    expect(text.split("\r\n").filter((line) => /^bcc:/i.test(line))).toEqual([]);
+    expect(text).toContain("To: moorthy@example.com\r\n");
+  });
+
+  it("encodes a non-ASCII subject and keeps the body as UTF-8", async () => {
+    const { rawMessage } = await import("./google-calendar.js");
+    const text = decode(rawMessage({ to: "a@b.co", subject: "Réunion à 7", body: "Merci — à bientôt" }));
+    expect(text).toMatch(/Subject: =\?UTF-8\?B\?[A-Za-z0-9+/=]+\?=/);
+    expect(text).toContain("charset=UTF-8");
+  });
+
+  it("knows whether a connection may send", async () => {
+    const { canSendEmail, CALENDAR_SCOPE, GMAIL_SEND_SCOPE } = await import("./google-calendar.js");
+    expect(canSendEmail(`openid ${CALENDAR_SCOPE}`)).toBe(false);
+    expect(canSendEmail(`openid ${CALENDAR_SCOPE} ${GMAIL_SEND_SCOPE}`)).toBe(true);
+  });
+});

@@ -87,6 +87,14 @@ describe("an action needs a body, from whichever field carries it", () => {
     );
   });
 
+  it("accepts an email draft", () => {
+    // The same trap eventTitle fell into: a new action-body field missing from
+    // satisfiedBy turns every "email Moorthy…" into "What should the reminder say?".
+    expect(
+      blockingFields(wrap({ ...base, kind: "action", emailDraft: { subject: "Meeting moved", body: "Hi Moorthy," } })),
+    ).toEqual([]);
+  });
+
   it("does NOT let an unrelated field satisfy the requirement", () => {
     // The mechanism must stay narrow. `memoryBody` is not a thing to DO, so an
     // action carrying only a memory is still missing its body — otherwise

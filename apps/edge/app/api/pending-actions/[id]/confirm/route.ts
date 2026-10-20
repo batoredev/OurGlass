@@ -23,11 +23,36 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (refused) return refused;
 
   const { id } = await params;
-  const outcome = await releasePendingAction(
+  // Optional edits from an email draft card: { to, subject, body }.
+  let edits: { to?: string; subject?: string; body?: string } | undefined;
+  try {
+    const body = (await request.json()) as Record<string, unknown> | null;
+    if (body && typeof body === "object") {
+      const pick = (key: string) => (typeof body[key] === "string" ? (body[key] as string) : undefined);
+      const candidate = { to: pick("to"), subject: pick("subject"), body: pick("body") };
+      if (candidate.to !== undefined || candidate.subject !== undefined || candidate.body !== undefined) {
+        edits = Object.fromEntries(Object.entries(candidate).filter(([, v]) => v !== undefined));
+      }
+    }
+  } catch {
+    // An empty body is a plain confirmation.
+  }
+  let outcome: Awaited<ReturnType<typeof releasePendingAction>>;
+  try {
+    outcome = await releasePendingAction(
     // Google config, because a held action may be add_to_google_calendar.
     { db, registry: buildToolRegistry({ google: googleConfigFromEnv(process.env) }) },
     id,
+    edits,
   );
+  } catch (error: unknown) {
+    // Google refused at send/insert time. The turn rolled back, so the
+    // action is still pending and can be sent again; say why, not "500".
+    if (error instanceof Error && error.name === "GoogleCalendarError") {
+      return NextResponse.json({ reason: "external", errors: [{ code: "google", message: error.message }] }, { status: 502 });
+    }
+    throw error;
+  }
 
   if (outcome.ok) return NextResponse.json({ turnId: outcome.turnId });
   const status = outcome.reason === "not_found" ? 404 : outcome.reason === "not_pending" ? 409 : 422;

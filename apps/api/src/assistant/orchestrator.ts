@@ -88,6 +88,22 @@ export interface TurnResponse {
   readonly committed: readonly string[];
   /** true when the template fallback produced `reply` (§5.2). */
   readonly degraded: boolean;
+  /**
+   * §34 — emails drafted this turn and held for the user to send. The chat
+   * shows each as an editable card; Send releases the pending action.
+   */
+  readonly drafts?: readonly EmailDraftHeld[];
+}
+
+/** One held email, as the chat card needs it. */
+export interface EmailDraftHeld {
+  readonly pendingActionId: string;
+  readonly personId: string | null;
+  readonly toName: string;
+  /** "" when OurGlass has no address for the person yet — the card asks. */
+  readonly to: string;
+  readonly subject: string;
+  readonly body: string;
 }
 
 /**
@@ -285,21 +301,24 @@ export async function runTurn(req: TurnRequest, deps: OrchestratorDeps): Promise
   }
   const planned: readonly PlannedIntent[] = resolved.map((entry) => {
     const hold = holds.get(entry.index);
-    return hold ? { ...entry, questions: [confirmationQuestion(hold)] } : entry;
+    return hold ? { ...entry, questions: [confirmationQuestion(hold, entry)] } : entry;
   });
 
+  const drafts: EmailDraftHeld[] = [];
   if (holds.size > 0) {
     await deps.db.withTransaction(async (tx) => {
       for (const entry of resolved) {
         const hold = holds.get(entry.index);
         if (!hold) continue;
-        await permissions.createPendingAction(tx, {
+        const pending = await permissions.createPendingAction(tx, {
           calls: entry.calls,
           riskLevel: hold.risk,
           summary: summarizeHeld(entry),
           ttlSeconds: PENDING_ACTION_TTL_SECONDS,
           sourceMessageId: userMessage.id,
         });
+        const draft = heldEmailDraft(pending.id, entry);
+        if (draft) drafts.push(draft);
       }
     });
   }
@@ -489,6 +508,7 @@ export async function runTurn(req: TurnRequest, deps: OrchestratorDeps): Promise
     asked: questions,
     committed: committedTools,
     degraded,
+    drafts,
   };
 }
 
@@ -724,10 +744,37 @@ interface NewPerson {
   readonly createdByIntent: number;
 }
 
+/**
+ * Drop a BODILESS action that only shadows an email draft in the same turn.
+ *
+ * Gemini Flash-Lite, given "email Moorthy that … and ask him to bring the
+ * budget", sometimes returns the draft AND a bare action (recipient, time, no
+ * body) — live 2026-10-20 — and the bare one surfaced as "What should the
+ * reminder say?" under a perfectly good draft. An action with no body names
+ * nothing to do; next to a draft to the same person it is the draft again.
+ */
+export function withoutShadowedActions(intents: readonly ExtractedIntent[]): readonly ExtractedIntent[] {
+  const drafted = new Set(
+    intents
+      .filter((intent) => intent.emailDraft)
+      .map((intent) => (intent.recipient ?? intent.relatedEntity)?.name.trim().toLowerCase() ?? ""),
+  );
+  if (drafted.size === 0) return intents;
+  return intents.filter((intent) => {
+    if (intent.kind !== "action" || intent.emailDraft) return true;
+    const hasBody =
+      intent.reminderBody || intent.condition || intent.entityTypeDefinition || intent.entityRecord || intent.eventTitle;
+    if (hasBody) return true;
+    const who = (intent.recipient ?? intent.relatedEntity)?.name.trim().toLowerCase() ?? "";
+    return !(who === "" || drafted.has(who));
+  });
+}
+
 async function planIntents(
-  intents: readonly ExtractedIntent[],
+  extracted: readonly ExtractedIntent[],
   ctx: PlanContext,
 ): Promise<readonly PlannedIntent[]> {
+  const intents = withoutShadowedActions(extracted);
   const issues = validateIntentCompleteness({ intents });
   const planned: PlannedIntent[] = [];
   // Intent index -> the commitment UUID it creates. This is what the
@@ -766,7 +813,7 @@ async function planOneIntent(
   // exactly the over-asking spec §27 exists to prevent.
   const own = issues.filter((issue) => issue.intentIndex === index);
   for (const issue of own.filter((candidate) => candidate.severity === "blocking")) {
-    questions.push(questionForMissingField(issue));
+    questions.push(questionForMissingField(issue, intent));
   }
   const hasAdvisoryOwnerGap = own.some(
     (issue) => issue.severity === "advisory" && issue.missingField === "owner",
@@ -878,9 +925,11 @@ async function planOneIntent(
           ? await planDefineEntityType(intent, ctx)
           : intent.entityRecord
             ? await planCreateEntityRecord(intent, ctx)
-            : intent.eventTitle
-              ? await planEvent(intent, ctx)
-              : planReminder(intent, ctx, commitmentIdByIntent);
+            : intent.emailDraft
+              ? await planEmail(intent, ctx, index)
+              : intent.eventTitle
+                ? await planEvent(intent, ctx)
+                : planReminder(intent, ctx, commitmentIdByIntent);
       questions.push(...plan.questions);
       calls.push(...plan.calls);
       facts.push(...plan.facts);
@@ -1475,10 +1524,35 @@ async function planCorrection(intent: ExtractedIntent, ctx: PlanContext): Promis
  * What the user is told about a held intent. Says WHY, because "waiting for
  * approval" with no reason reads as the assistant being obstructive.
  */
-function confirmationQuestion(hold: Extract<GateDecision, { decision: "confirm" }>): string {
+function confirmationQuestion(
+  hold: Extract<GateDecision, { decision: "confirm" }>,
+  entry: { readonly facts: readonly CommittedFact[] },
+): string {
+  // An email is held BY DESIGN, every time (HIGH_IMPACT): the draft card is
+  // the approval, so say that rather than pointing at the Permissions page.
+  const email = entry.facts.find((fact) => fact.kind === "email_drafted");
+  if (email && email.kind === "email_drafted") {
+    return `Here's a draft to ${email.toName} — check it below and press Send.`;
+  }
   return hold.reason === "user_requires_confirmation"
     ? "You asked me to check before doing that, so it's waiting for your approval on the Permissions page."
     : "That acts outside OurGlass, so it's waiting for your approval on the Permissions page.";
+}
+
+/** The chat card for a held send_email, from the planner's own call input. */
+function heldEmailDraft(pendingActionId: string, entry: PlannedIntent): EmailDraftHeld | null {
+  const call = entry.calls.find((candidate) => candidate.name === "send_email");
+  const fact = entry.facts.find((candidate) => candidate.kind === "email_drafted");
+  if (!call || !fact || fact.kind !== "email_drafted") return null;
+  const input = call.input as { person_id?: string | null; to?: string; subject?: string; body?: string };
+  return {
+    pendingActionId,
+    personId: input.person_id ?? null,
+    toName: fact.toName,
+    to: input.to ?? "",
+    subject: input.subject ?? "",
+    body: input.body ?? "",
+  };
 }
 
 /**
@@ -1826,6 +1900,42 @@ async function planEvent(intent: ExtractedIntent, ctx: PlanContext): Promise<Int
       ctx.calendarSync === "not_connected"
         ? ["It's in OurGlass only — connect Google Calendar in Settings to add meetings there too."]
         : [],
+  };
+}
+
+/**
+ * §34 — an email to draft. Interpret wrote the subject and body from the
+ * user's words; Resolve finds the person (creating them if the name is new)
+ * and their address. send_email is HIGH_IMPACT, so the gate HOLDS this intent
+ * every time: nothing is sent until the user presses Send on the draft card.
+ * A person with no address still gets a draft — the card asks for it once.
+ */
+async function planEmail(intent: ExtractedIntent, ctx: PlanContext, index: number): Promise<IntentPlan> {
+  const draft = intent.emailDraft;
+  const mention = intent.recipient ?? intent.relatedEntity;
+  if (!draft || draft.body.trim() === "") {
+    return { calls: [], facts: [], questions: ["What should the email say?"] };
+  }
+  if (!mention) return { calls: [], facts: [], questions: ["Who should the email go to?"] };
+
+  const party = await resolveParty(mention, ctx, { createFor: index });
+  if (party.question || party.id === null) {
+    return { calls: [], facts: [], questions: [party.question ?? `Who is ${mention.name}?`], dependsOn: party.dependsOn };
+  }
+  const known = party.creates.length > 0 ? null : await people.resolvePerson(ctx.tx, party.id);
+  const toName = party.displayName ?? mention.name;
+  const subject = draft.subject.trim() || `Message for ${toName}`;
+  return {
+    calls: [
+      ...party.creates,
+      {
+        name: "send_email",
+        input: { person_id: party.id, to: known?.email ?? "", subject, body: draft.body.trim() },
+      },
+    ],
+    facts: [{ kind: "email_drafted", toName, subject }],
+    questions: [],
+    dependsOn: party.dependsOn,
   };
 }
 
@@ -2238,7 +2348,16 @@ function questionForCompletionMiss(
   return `I don't have anything ${who}about ${intent.objectText} — want me to record it as done anyway?`;
 }
 
-function questionForMissingField(issue: IntentCompletenessIssue): string {
+/** Did the user ask to email someone? Used only to word a question. */
+const EMAIL_REQUEST = /\b(e-?mail|mail|write to|drop .* a (line|note))\b/i;
+
+function questionForMissingField(issue: IntentCompletenessIssue, intent?: ExtractedIntent): string {
+  // The model missed the draft entirely (Flash-Lite does, sometimes): ask for
+  // the email's content, not a reminder's — the user never mentioned one.
+  if (issue.missingField === "reminderBody" && intent && EMAIL_REQUEST.test(intent.sourceText)) {
+    const who = (intent.recipient ?? intent.relatedEntity)?.name;
+    return who ? `What should the email to ${who} say?` : "Who should I email, and what should it say?";
+  }
   switch (issue.missingField) {
     case "objectText":
       return "What exactly needs doing?";

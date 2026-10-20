@@ -86,6 +86,11 @@ export const RISK_BY_TOOL: Readonly<Record<string, RiskLevel>> = {
   // §34 — leaves OurGlass and cannot be undone from here. Confirmed by
   // default; "always allow" in Settings lets meetings go straight through.
   add_to_google_calendar: "EXTERNAL_ACTION",
+  // A remembered address — internal, undone by restoring the previous one.
+  set_person_email: "REVERSIBLE_WRITE",
+  // CANNOT BE UNSENT. HIGH_IMPACT so the policy confirms every single email
+  // and refuses a standing "allow" (owner decision 2026-09-24).
+  send_email: "HIGH_IMPACT_ACTION",
 
   forget_memory: "IMPORTANT_STATE_CHANGE",
   correct_relationship: "IMPORTANT_STATE_CHANGE",

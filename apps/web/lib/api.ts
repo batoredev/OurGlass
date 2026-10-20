@@ -313,6 +313,22 @@ export interface GoogleStatus {
   readonly configured: boolean;
   readonly connected: boolean;
   readonly email: string | null;
+  /** The connection includes Gmail's send permission. */
+  readonly canSendEmail: boolean;
+}
+
+/** A held email (GET /api/email-drafts, or a turn's `drafts`). */
+export interface EmailDraft {
+  readonly pendingActionId: string;
+  readonly personId: string | null;
+  readonly toName: string;
+  readonly to: string;
+  readonly subject: string;
+  readonly body: string;
+}
+
+export async function fetchEmailDrafts(): Promise<readonly EmailDraft[]> {
+  return (await get<{ drafts: EmailDraft[] }>("/api/email-drafts")).drafts;
 }
 
 export async function fetchGoogleStatus(): Promise<GoogleStatus> {

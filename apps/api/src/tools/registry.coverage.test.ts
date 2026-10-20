@@ -112,6 +112,9 @@ describe("tool registry coverage", () => {
     // A tick on Today's checklist (migration 015). A commitment's tick is
     // complete_commitment, which the chat reaches; this one is a click.
     set_checklist_mark: "Today checklist only — a tick is a click",
+    // Typed into an email draft card the first time a person is emailed, and
+    // applied when that draft is sent (permissions/release.ts).
+    set_person_email: "email draft card only — added when a draft is sent",
   };
 
   it("never lets the conversational planner emit a document tool (PHASE-6-DESIGN §1)", () => {

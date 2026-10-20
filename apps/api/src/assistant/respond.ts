@@ -255,6 +255,8 @@ function describeFact(fact: CommittedFact): string {
       return `Added ${joinLabels(fact.labels)} to ${fact.displayName}.`;
     case "entity_record_created":
       return `Logged to ${fact.displayName}.`;
+    case "email_drafted":
+      return `Email to ${fact.toName}: “${fact.subject}”.`;
     case "event_scheduled":
       return fact.googleCalendar
         ? `Scheduled: ${fact.title}, ${fact.startsAtLocal} — also on your Google Calendar.`

@@ -136,3 +136,37 @@ export async function connectGoogle(): Promise<ControlResult> {
 export async function disconnectGoogle(): Promise<ControlResult> {
   return send("/api/google", { method: "DELETE" });
 }
+
+// ---------------------------------------------------------------------------
+// Email drafts (§34). Send IS the confirmation of a held send_email.
+// ---------------------------------------------------------------------------
+
+/** Send a held draft with the user's edits. Errors keep the draft, so they can be fixed. */
+export async function sendDraft(
+  id: string,
+  edits: { to: string; subject: string; body: string },
+): Promise<ControlResult> {
+  let response: Response;
+  try {
+    response = await apiFetch(`/api/pending-actions/${encodeURIComponent(id)}/confirm`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(edits),
+    });
+  } catch (error: unknown) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+  }
+  if (response.ok) return { ok: true, message: null };
+  const body = (await response.json().catch(() => null)) as { reason?: string; errors?: { message: string }[] } | null;
+  if (body?.reason === "not_pending") {
+    return { ok: false, message: "This draft was already sent, cancelled, or has expired." };
+  }
+  return {
+    ok: false,
+    message: body?.errors?.map((e) => e.message).join(" ") || `Couldn't send (${response.status}).`,
+  };
+}
+
+export function cancelDraft(id: string): Promise<ControlResult> {
+  return declinePendingAction(id);
+}

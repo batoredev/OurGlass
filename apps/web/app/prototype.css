@@ -918,3 +918,15 @@ button.checklist-item:hover { transform: translate(-1px, -1px); box-shadow: 5px 
 button.checklist-item.done:hover { box-shadow: 3px 3px 0 var(--ink); }
 button.checklist-item:disabled { cursor: progress; opacity: .7; }
 .checklist > li { list-style: none; }
+
+/* Email draft card (§34): the confirmation IS the card. */
+.email-card { width: min(100%, 640px); background: var(--blue-soft); }
+.email-card-note { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 4px 9px; border: 1px solid var(--ink); border-radius: 20px; background: var(--yellow); }
+.email-card-body { display: grid; gap: 12px; padding: 16px 20px; }
+.email-field { display: grid; gap: 5px; }
+.email-field > span { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.email-field input, .email-field textarea { width: 100%; border: 2px solid var(--ink); border-radius: 10px; background: var(--surface-strong); padding: 10px 12px; font-size: 15px; font-weight: 500; color: var(--ink); resize: vertical; }
+.email-field textarea { line-height: 1.5; min-height: 150px; }
+.email-card-error { margin: 0; font-weight: 700; color: var(--danger); }
+.email-card .card-action[type="submit"] { background: var(--ink); color: white; }
+.email-card .card-action:disabled { opacity: .55; cursor: progress; }

@@ -4,7 +4,7 @@
  */
 import { NextResponse } from "next/server";
 import { googleAccounts } from "@ourglass/db";
-import { decryptToken, googleConfigFromEnv, revoke } from "@ourglass/api/integrations";
+import { canSendEmail, decryptToken, googleConfigFromEnv, revoke } from "@ourglass/api/integrations";
 import { authorize } from "../_auth";
 import { rejectCrossSite } from "../_http";
 import { db, read } from "../_lib";
@@ -20,6 +20,8 @@ export async function GET(request: Request) {
     configured: googleConfigFromEnv(process.env) !== null,
     connected: account !== null,
     email: account?.email ?? null,
+    // Granted at consent; an older connection predates the Gmail permission.
+    canSendEmail: account ? canSendEmail(account.scope) : false,
     connectedAt: account?.connected_at ?? null,
   });
 }

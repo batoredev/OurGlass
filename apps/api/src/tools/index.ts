@@ -32,6 +32,7 @@ import { linkDocumentTool, saveDocumentTool } from "./document-tools.js";
 import { createThoughtTool, moveThoughtTool, removeThoughtTool } from "./thought-tools.js";
 import { createAddToGoogleCalendarTool } from "./google-calendar-tool.js";
 import { setChecklistMarkTool } from "./checklist-tools.js";
+import { createSendEmailTool, setPersonEmailTool } from "./email-tools.js";
 import type { GoogleOAuthConfig } from "../integrations/google-calendar.js";
 
 /**
@@ -107,6 +108,9 @@ export function buildToolRegistry(options: ToolRegistryOptions = {}): ToolRegist
   registry.register(setChecklistMarkTool);
   // §34. The first EXTERNAL_ACTION: held for confirmation unless allowed.
   registry.register(createAddToGoogleCalendarTool(options.google ?? null));
+  // §34 email: HIGH_IMPACT, so always held as a draft the user sends.
+  registry.register(createSendEmailTool(options.google ?? null));
+  registry.register(setPersonEmailTool);
   // Phase 7a (§35) — the CONTROL PLANE. Registered so they run through the
   // same validate/commit/log/undo path, and never emitted by a planner: the
   // orchestrator's gate throws if one ever is (PHASE-7-PERMISSIONS-DESIGN §1).

@@ -32,6 +32,8 @@ export interface Person {
   organization_id: string | null;
   merged_into_id: string | null;
   notes: string | null;
+  /** Migration 016. Null until the user says it, or types it into a draft. */
+  email: string | null;
   t_valid: Date;
   t_invalid: Date | null;
   t_created: Date;
@@ -279,4 +281,16 @@ export async function invalidatePerson(
       WHERE id = $1`,
     [id, at ?? null],
   );
+}
+
+/** Set (or clear, on undo) a person's email address. Returns the previous one. */
+export async function setEmail(tx: Queryable, id: string, email: string | null): Promise<string | null> {
+  const { rows } = await tx.query<{ previous: string | null }>(
+    `UPDATE people p SET email = $2
+       FROM (SELECT email AS previous FROM people WHERE id = $1) old
+      WHERE p.id = $1
+      RETURNING old.previous`,
+    [id, email],
+  );
+  return rows[0]?.previous ?? null;
 }

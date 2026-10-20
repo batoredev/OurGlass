@@ -62,6 +62,7 @@ const FULLY_POPULATED: ExtractedIntent = {
   },
   entityRecord: { typeKey: "gym_session", values: { minutes: "45" } },
   eventTitle: "the Hult review",
+  emailDraft: { subject: "Meeting moved", body: "Hi Moorthy, it moved to 7. Thanks," },
 };
 
 function schemaProperties(): string[] {
@@ -76,6 +77,13 @@ describe("the three declarations agree", () => {
     // INTENT_KEYS makes this fail — which is the whole point, because in
     // production that discard is silent.
     expect(isExtraction({ intents: [FULLY_POPULATED] })).toBe(true);
+  });
+
+  it("isExtraction REJECTS a malformed email draft rather than passing it through", () => {
+    expect(isExtraction({ intents: [{ ...FULLY_POPULATED, emailDraft: { subject: "x" } }] })).toBe(false);
+    expect(
+      isExtraction({ intents: [{ ...FULLY_POPULATED, emailDraft: { subject: "x", body: "y", bcc: "z" } }] }),
+    ).toBe(false);
   });
 
   it("the JSON schema declares a property for every field on the interface", () => {

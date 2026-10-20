@@ -37,9 +37,16 @@ describe("gateIntentCalls", () => {
   });
 
   it("fails closed on an unclassified tool rather than assuming it is safe", () => {
-    expect(() => gateIntentCalls([{ name: "send_email", input: {} }], none)).toThrow(
+    // Was "send_email" until email shipped (2026-10-20); any unclassified name will do.
+    expect(() => gateIntentCalls([{ name: "transfer_money", input: {} }], none)).toThrow(
       UnclassifiedToolError,
     );
+  });
+
+  it("holds every email — even under a standing allow (owner decision 2026-09-24)", () => {
+    const send = [{ name: "send_email", input: {} }];
+    expect(gateIntentCalls(send, none)).toMatchObject({ decision: "confirm", risk: "HIGH_IMPACT_ACTION" });
+    expect(gateIntentCalls(send, new Map([["send_email", "allow" as const]]))).toMatchObject({ decision: "confirm" });
   });
 
   it("allows an empty call list", () => {
