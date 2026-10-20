@@ -21,6 +21,9 @@ const ALLOWED: Readonly<Record<string, string>> = {
   "api/src/reminders/poller.ts": "scheduled INTERNAL tools only — see the name check below",
   "api/src/permissions/release.ts": "releasing or declining a held action IS the user's approval",
   "edge/app/api/permissions/route.ts": "setting or revoking a grant — control-plane tools only",
+  // The Thoughts board: the user's own notes, each move a REVERSIBLE_WRITE
+  // the gate would pass anyway, with arguments from the page — never a model.
+  "edge/app/api/thoughts/route.ts": "the Thoughts board — create/move/remove_thought only",
   // Phase 6. Two REVERSIBLE_WRITE tools the gate would pass immediately
   // anyway, with arguments built by code — never chosen by a model (see the
   // name check below and PHASE-6-DESIGN §1).

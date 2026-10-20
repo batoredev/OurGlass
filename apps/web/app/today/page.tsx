@@ -7,6 +7,7 @@
  * are different KINDS of attention: one needs action now, the other needs a
  * decision about when.
  */
+import Link from "next/link";
 import { AsyncPage } from "../async-page";
 import { fetchDirectory, fetchToday, type Commitment, type Today } from "../../lib/api";
 import { Icon, StatusPill } from "../icons";
@@ -43,7 +44,11 @@ async function renderToday() {
     </div>
   );
 
+  const done = today.checklist.filter((item) => item.done).length;
+  const KIND_LABEL = { commitment: "Commitment", meeting: "Meeting", reminder: "Reminder" } as const;
+
   const nothing =
+    today.checklist.length === 0 &&
     today.overdue.length === 0 &&
     today.dueLater.length === 0 &&
     today.undated.length === 0 &&
@@ -69,9 +74,45 @@ async function renderToday() {
         </div>
       </header>
 
+      {today.checklist.length > 0 && (
+        <section className="section" aria-labelledby="checklist-title">
+          <div className="checklist-head">
+            <h2 className="section-title" id="checklist-title">
+              Today&rsquo;s checklist
+            </h2>
+            <span className="checklist-count">
+              {done} done · {today.checklist.length - done} to do
+            </span>
+          </div>
+          <ul className="checklist">
+            {today.checklist.map((item) => (
+              <li key={`${item.kind}-${item.id}`} className={`checklist-item ${item.done ? "done" : "todo"}`}>
+                <span className="checklist-box" aria-hidden="true">
+                  {item.done ? <Icon name="check" /> : null}
+                </span>
+                <span className="checklist-body">
+                  <span className="checklist-title">{item.title}</span>
+                  <span className="checklist-meta">
+                    {KIND_LABEL[item.kind]} ·{" "}
+                    {new Date(item.at).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}
+                    {item.detail ? ` · ${item.detail}` : ""}
+                  </span>
+                </span>
+                <span className="checklist-state">{item.done ? "Done" : "To do"}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {today.events.length > 0 && (
         <>
-          <div className="section-title">Schedule</div>
+          <div className="checklist-head">
+            <div className="section-title">Schedule</div>
+            <Link className="text-button" href="/meetings">
+              All meetings →
+            </Link>
+          </div>
           <div className="timeline">
             {today.events.map((event) => (
               <div className="timeline-item" key={event.id}>

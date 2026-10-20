@@ -51,6 +51,9 @@ describe("truncateAll", () => {
         "entity_type_fields",
         "entity_types",
         "events",
+        // Migration 014.
+        "google_accounts",
+        "thoughts",
         // Phase 4, migration 010.
         "memories",
         "messages",

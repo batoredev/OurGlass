@@ -29,6 +29,7 @@ import {
 import {
   commitments,
   entityRecords,
+  googleAccounts,
   memories,
   messages,
   people,
@@ -114,6 +115,12 @@ export interface OrchestratorDeps extends ExecutorDeps {
    * wired — rather than an error.
    */
   readonly embedder?: QueryEmbedder | undefined;
+  /**
+   * Whether the server has Google OAuth credentials (GOOGLE_CLIENT_ID etc.).
+   * With them AND a connected account, a scheduled meeting also plans
+   * add_to_google_calendar. Optional: absent means "not set up".
+   */
+  readonly googleCalendarConfigured?: boolean | undefined;
 }
 
 /**
@@ -254,6 +261,11 @@ export async function runTurn(req: TurnRequest, deps: OrchestratorDeps): Promise
       // Fresh per turn: a person "planned" in one turn and never committed
       // must not leak into the next.
       newPeople: new Map(),
+      calendarSync: !deps.googleCalendarConfigured
+        ? "not_configured"
+        : (await googleAccounts.get(tx))
+          ? "on"
+          : "not_connected",
     }),
     grants: await loadGrants(tx),
   }));
@@ -697,6 +709,11 @@ interface PlanContext {
    * create two Karthiks — the duplicate §23 exists to prevent.
    */
   readonly newPeople: Map<string, NewPerson>;
+  /**
+   * Where a scheduled meeting can go besides OurGlass (§34): "on" plans
+   * add_to_google_calendar; the other two explain, once, why it did not.
+   */
+  readonly calendarSync: "on" | "not_connected" | "not_configured";
 }
 
 /** A person Resolve decided to create, and the intent whose calls create them. */
@@ -1772,21 +1789,39 @@ async function planEvent(intent: ExtractedIntent, ctx: PlanContext): Promise<Int
     };
   }
 
+  // The id is decided HERE, in Resolve, like every UUID in this system: the
+  // Google call names the event it copies, and both calls commit in one turn.
+  const eventId = randomUUID();
+  const toGoogle = ctx.calendarSync === "on";
   return {
     questions: [],
     calls: [
       {
         name: "create_event",
-        input: { title, starts_at: time.at, ends_at: null, location: null, notes: null },
+        input: { id: eventId, title, starts_at: time.at, ends_at: null, location: null, notes: null },
       },
+      ...(toGoogle
+        ? [
+            {
+              name: "add_to_google_calendar",
+              input: { event_id: eventId, title, starts_at: time.at, ends_at: null, time_zone: ctx.timezone },
+            },
+          ]
+        : []),
     ],
     facts: [
       {
         kind: "event_scheduled",
         title,
         startsAtLocal: formatLocal(time.at, ctx.timezone, timePrecision(time)),
+        ...(toGoogle ? { googleCalendar: true } : {}),
       },
     ],
+    // Said, not silently skipped: the user asked for their calendar.
+    declined:
+      ctx.calendarSync === "not_connected"
+        ? ["It's in OurGlass only — connect Google Calendar in Settings to add meetings there too."]
+        : [],
   };
 }
 

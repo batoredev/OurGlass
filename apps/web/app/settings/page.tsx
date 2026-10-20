@@ -16,6 +16,7 @@ import { fetchPermissions, type PendingAction, type Permissions } from "../../li
 import { PendingActionButtons, RevokeButton, SetPermissionForm } from "../permissions/controls";
 import { LoadFailure, PageHeader } from "../surface";
 import { SignOutButton } from "./sign-out";
+import { GoogleCalendarSetting } from "./google";
 
 function isOpen(action: PendingAction): boolean {
   return action.status === "pending" && new Date(action.expires_at).getTime() > Date.now();
@@ -106,14 +107,16 @@ async function renderSettings() {
         </div>
       </section>
 
+      <GoogleCalendarSetting />
+
       <section className="section">
-        <h2 className="section-title">Connected services</h2>
+        <h2 className="section-title">Other services</h2>
         <div className="rule-list">
           <div className="row">
             <div>
-              <div className="row-title">Gmail, Calendar and Drive</div>
+              <div className="row-title">Gmail and Drive</div>
               <div className="row-subtitle">
-                Not connected yet. When they are, each will appear above as a rule you control, and
+                Not connected yet. Like Calendar, each will appear above as a rule you control, and
                 every action that leaves OurGlass will ask before it acts.
               </div>
             </div>
@@ -124,6 +127,12 @@ async function renderSettings() {
       <section className="section">
         <h2 className="section-title">Inspect</h2>
         <div className="rule-list">
+          <Link className="row" href="/memory">
+            <div>
+              <div className="row-title">Memories</div>
+              <div className="row-subtitle">What OurGlass believes about you and your people</div>
+            </div>
+          </Link>
           <Link className="row" href="/activity">
             <div>
               <div className="row-title">Activity</div>

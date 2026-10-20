@@ -15,6 +15,9 @@ import { Icon } from "./icons";
 export const SURFACES = [
   { href: "/", icon: "chat", label: "Chat" },
   { href: "/today", icon: "today", label: "Today" },
+  // Under Today: indented in the sidebar, because it is part of the day.
+  { href: "/meetings", icon: "meetings", label: "Meetings", sub: true },
+  { href: "/thoughts", icon: "thoughts", label: "Thoughts" },
   { href: "/commitments", icon: "commitments", label: "Commitments" },
   { href: "/people", icon: "people", label: "People" },
   { href: "/projects", icon: "projects", label: "Projects" },
@@ -26,7 +29,9 @@ const MOBILE = [
   { href: "/", icon: "chat", label: "Chat" },
   { href: "/today", icon: "today", label: "Today" },
   { href: "/commitments", icon: "commitments", label: "Owed" },
-  { href: "/memory", icon: "memories", label: "Memory" },
+  // Thoughts over Memory on the five-slot bar: Memory stays reachable from
+  // Settings → Inspect, and Meetings from the Today page.
+  { href: "/thoughts", icon: "thoughts", label: "Thoughts" },
   // "Settings", not "More": the tab goes straight to settings, and a label
   // promising a menu that is not there misleads everyone, sighted or not.
   { href: "/settings", icon: "more", label: "Settings" },
@@ -64,7 +69,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {SURFACES.map((surface) => (
             <Link
               key={surface.href}
-              className={`nav-item ${isActive(pathname, surface.href) ? "active" : ""}`}
+              className={`nav-item ${"sub" in surface && surface.sub ? "nav-sub" : ""} ${isActive(pathname, surface.href) ? "active" : ""}`}
               href={surface.href}
             >
               <Icon name={surface.icon} />

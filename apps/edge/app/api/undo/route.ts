@@ -50,6 +50,11 @@ export async function POST(request: Request) {
   if (typeof body.turnId !== "string") {
     return NextResponse.json({ error: "turnId must be a string" }, { status: 400 });
   }
+  // A malformed id reached Postgres as a uuid cast and came back a 500 (found
+  // live, 2026-10-20: an empty turnId). Refused here, before the database.
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.turnId)) {
+    return NextResponse.json({ error: "turnId must be a turn's UUID" }, { status: 400 });
+  }
 
   try {
     return NextResponse.json(await undoTurn(body.turnId, { db, registry: buildToolRegistry() }));

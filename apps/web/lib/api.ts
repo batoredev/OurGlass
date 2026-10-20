@@ -101,7 +101,20 @@ export interface TodayEvent {
   readonly starts_at: string;
 }
 
+/** One line of Today's checklist (GET /api/today). */
+export interface ChecklistItem {
+  readonly kind: "commitment" | "meeting" | "reminder";
+  readonly id: string;
+  readonly title: string;
+  /** Who owes it, or "On Google Calendar" — whatever helps read the line. */
+  readonly detail: string | null;
+  readonly at: string;
+  readonly done: boolean;
+  readonly status: string | null;
+}
+
 export interface Today {
+  readonly checklist: readonly ChecklistItem[];
   readonly overdue: readonly Commitment[];
   readonly dueLater: readonly Commitment[];
   readonly undated: readonly Commitment[];
@@ -263,4 +276,45 @@ export async function fetchToday(): Promise<Today> {
  */
 export async function fetchPermissions(): Promise<Permissions> {
   return get<Permissions>("/api/permissions");
+}
+
+// ---------------------------------------------------------------------------
+// Meetings, Thoughts, Google Calendar
+// ---------------------------------------------------------------------------
+
+export interface Meeting {
+  readonly id: string;
+  readonly title: string;
+  readonly starts_at: string;
+  readonly ends_at: string | null;
+  readonly location: string | null;
+  readonly on_google_calendar: boolean;
+}
+
+export async function fetchMeetings(): Promise<{ readonly timeZone: string; readonly meetings: readonly Meeting[] }> {
+  return get<{ timeZone: string; meetings: Meeting[] }>("/api/meetings");
+}
+
+export type ThoughtPriority = "high" | "mid" | "low";
+
+export interface Thought {
+  readonly id: string;
+  readonly body: string;
+  readonly priority: ThoughtPriority;
+  readonly created_at: string;
+}
+
+export async function fetchThoughts(): Promise<readonly Thought[]> {
+  return (await get<{ thoughts: Thought[] }>("/api/thoughts")).thoughts;
+}
+
+export interface GoogleStatus {
+  /** The server has OAuth credentials. */
+  readonly configured: boolean;
+  readonly connected: boolean;
+  readonly email: string | null;
+}
+
+export async function fetchGoogleStatus(): Promise<GoogleStatus> {
+  return get<GoogleStatus>("/api/google");
 }

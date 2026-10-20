@@ -76,6 +76,14 @@ export const RISK_BY_TOOL: Readonly<Record<string, RiskLevel>> = {
   // invalidation; neither leaves the system nor acts on the file's content.
   save_document: "REVERSIBLE_WRITE",
   link_document: "REVERSIBLE_WRITE",
+  // The Thoughts board: the user's own notes, each change undoable.
+  create_thought: "REVERSIBLE_WRITE",
+  move_thought: "REVERSIBLE_WRITE",
+  remove_thought: "REVERSIBLE_WRITE",
+
+  // §34 — leaves OurGlass and cannot be undone from here. Confirmed by
+  // default; "always allow" in Settings lets meetings go straight through.
+  add_to_google_calendar: "EXTERNAL_ACTION",
 
   forget_memory: "IMPORTANT_STATE_CHANGE",
   correct_relationship: "IMPORTANT_STATE_CHANGE",

@@ -218,3 +218,14 @@ export async function revalidateReminder(
 ): Promise<void> {
   await tx.query(`UPDATE reminders SET t_invalid = NULL WHERE id = $1`, [id]);
 }
+
+/** Current reminders due in [from, to), fired or not — Today's checklist. */
+export async function listBetween(tx: Queryable, from: Date, to: Date): Promise<Reminder[]> {
+  const { rows } = await tx.query<Reminder>(
+    `SELECT * FROM reminders
+      WHERE t_invalid IS NULL AND fire_at >= $1::timestamptz AND fire_at < $2::timestamptz
+      ORDER BY fire_at`,
+    [from, to],
+  );
+  return rows;
+}

@@ -55,6 +55,10 @@
     "./ingest": {
       "types": "./dist/ingest/index.d.ts",
       "default": "./dist/ingest/index.js"
+    },
+    "./integrations": {
+      "types": "./dist/integrations/google-calendar.d.ts",
+      "default": "./dist/integrations/google-calendar.js"
     }
   }
 }

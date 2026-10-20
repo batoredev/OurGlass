@@ -131,6 +131,8 @@ export interface EventScheduledFact {
   readonly title: string;
   /** Already formatted in the user's local timezone. */
   readonly startsAtLocal: string;
+  /** Also put on the user's Google Calendar this turn (§34). */
+  readonly googleCalendar?: boolean;
 }
 
 export type CommittedFact =

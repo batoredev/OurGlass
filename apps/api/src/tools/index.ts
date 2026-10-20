@@ -29,6 +29,9 @@ import {
   rememberTool,
 } from "./memory-tools.js";
 import { linkDocumentTool, saveDocumentTool } from "./document-tools.js";
+import { createThoughtTool, moveThoughtTool, removeThoughtTool } from "./thought-tools.js";
+import { createAddToGoogleCalendarTool } from "./google-calendar-tool.js";
+import type { GoogleOAuthConfig } from "../integrations/google-calendar.js";
 
 /**
  * EVERY tool the orchestrator can emit must appear here.
@@ -43,7 +46,16 @@ import { linkDocumentTool, saveDocumentTool } from "./document-tools.js";
  * `registry.test.ts` asserts this list against the orchestrator planner names
  * so the next addition cannot repeat it.
  */
-export function buildToolRegistry(): ToolRegistry {
+export interface ToolRegistryOptions {
+  /**
+   * Google Calendar OAuth config, from the environment at the route. Absent,
+   * add_to_google_calendar is still REGISTERED (so planning and undo see the
+   * same tool set everywhere) and refuses at validation with "not set up".
+   */
+  readonly google?: GoogleOAuthConfig | null;
+}
+
+export function buildToolRegistry(options: ToolRegistryOptions = {}): ToolRegistry {
   const registry = new ToolRegistry();
   registry.register(createCommitmentTool);
   registry.register(createReminderTool);
@@ -85,6 +97,13 @@ export function buildToolRegistry(): ToolRegistry {
   // turn (src/ingest/ingest.ts).
   registry.register(saveDocumentTool);
   registry.register(linkDocumentTool);
+  // The Thoughts board (migration 014): driven from the Thoughts page through
+  // /api/thoughts, like the control plane — validated, logged, undoable.
+  registry.register(createThoughtTool);
+  registry.register(moveThoughtTool);
+  registry.register(removeThoughtTool);
+  // §34. The first EXTERNAL_ACTION: held for confirmation unless allowed.
+  registry.register(createAddToGoogleCalendarTool(options.google ?? null));
   // Phase 7a (§35) — the CONTROL PLANE. Registered so they run through the
   // same validate/commit/log/undo path, and never emitted by a planner: the
   // orchestrator's gate throws if one ever is (PHASE-7-PERMISSIONS-DESIGN §1).

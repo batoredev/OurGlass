@@ -521,12 +521,14 @@ export const EXTRACTION_FIXTURES: readonly ExtractionFixture[] = [
     expected: { intents: [intent("action", "Remind me at 5 to ask Barkha", "CONFIRMED", { relatedEntity: person("Barkha"), reminderBody: "ask Barkha", time: deterministic("at 5") })] },
   },
   {
-    // NEGATIVE. An EXTERNAL calendar write is still execution, still declined
-    // until §35's permission model exists.
-    id: "negative-calendar-is-external",
-    forbids: ["eventTitle"],
+    // RECLASSIFIED 2026-10-20, as this fixture's own note anticipated: it was
+    // execution "until §35's permission model exists". It exists, and a new
+    // calendar event now goes through it — scheduled in OurGlass, copied to
+    // Google Calendar by add_to_google_calendar, held for confirmation unless
+    // allowed. So asking for one is an action with an eventTitle.
+    id: "calendar-event-is-scheduled",
     utterance: "Create a calendar event for the Hult review tomorrow.",
-    expected: { intents: [intent("execution", "Create a calendar event for the Hult review tomorrow", "CONFIRMED", { relatedEntity: org("Hult"), objectText: "a calendar event for the Hult review", time: deterministic("tomorrow") })] },
+    expected: { intents: [intent("action", "Create a calendar event for the Hult review tomorrow", "CONFIRMED", { relatedEntity: org("Hult"), eventTitle: "the Hult review", time: deterministic("tomorrow") })] },
   },
 
   // ---------------------------------------------------------------------------

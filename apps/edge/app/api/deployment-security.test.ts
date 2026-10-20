@@ -137,7 +137,7 @@ describe("POST /api/undo obeys the access guard before anything else", () => {
     authMock.mockResolvedValueOnce(Response.json({ error: "Not signed in." }, { status: 401 }));
     const { POST } = await import("./undo/route");
 
-    const response = await POST(body("some-turn-id"));
+    const response = await POST(body("22222222-2222-4222-8222-222222222222"));
 
     expect(response.status).toBe(401);
     // The status code alone would pass even if the undo had already run and
@@ -149,10 +149,10 @@ describe("POST /api/undo obeys the access guard before anything else", () => {
     undoTurnMock.mockResolvedValueOnce({ undone: true });
     const { POST } = await import("./undo/route");
 
-    const response = await POST(body("some-turn-id"));
+    const response = await POST(body("22222222-2222-4222-8222-222222222222"));
 
     expect(response.status).toBe(200);
-    expect(undoTurnMock).toHaveBeenCalledWith("some-turn-id", expect.anything());
+    expect(undoTurnMock).toHaveBeenCalledWith("22222222-2222-4222-8222-222222222222", expect.anything());
   });
 
   it("rejects a non-string turnId before touching the database", async () => {

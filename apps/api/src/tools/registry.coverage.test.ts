@@ -103,6 +103,12 @@ describe("tool registry coverage", () => {
     // ingest.test.ts scans the same way this file scans the orchestrator.
     save_document: "ingest pipeline only — the planner never sees a file",
     link_document: "ingest pipeline only — the planner never sees a file",
+    // The Thoughts board (migration 014), driven from its page through
+    // /api/thoughts. DECLARED GAP: "add a thought: …" in chat needs a
+    // thought field in the extraction contract, not yet built.
+    create_thought: "Thoughts page only — no chat path yet",
+    move_thought: "Thoughts page only — a move is a drag, not a sentence",
+    remove_thought: "Thoughts page only — no chat path yet",
   };
 
   it("never lets the conversational planner emit a document tool (PHASE-6-DESIGN §1)", () => {

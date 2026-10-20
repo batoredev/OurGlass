@@ -59,10 +59,14 @@ the field and the category always agree:
   Give each field one of: text, number, bool, date, enum, person_ref. Set enumOptions ONLY for enum, and
   only with options the user actually named.
 - entityRecord (action): the user logs one instance of a kind they already track ("log a 45 minute gym session").
-- eventTitle (action): the user schedules a meeting or appointment ("schedule Arun at 5 tomorrow"). Put the
-  time in the time field as always. NOT for a reminder — "remind me at 5" is reminderBody.
-An action is something to do INSIDE the assistant (a reminder, a rule, a new kind of thing to track).
-An external action — email, calendar, Drive — stays execution.
+- eventTitle (action): the user schedules a meeting, call or appointment, however phrased ("schedule a
+  meeting with Moorthy at 6 pm" -> eventTitle "Meeting with Moorthy"; "book a call with Dev tomorrow at 3";
+  "put the dentist on my calendar at 4"). OurGlass schedules it itself and copies it to the user's calendar,
+  so this is ALWAYS an action, never execution. Put the time in the time field as always. NOT for a
+  reminder — "remind me at 5" is reminderBody.
+An action is something to do INSIDE the assistant (a reminder, a meeting, a rule, a new kind of thing to
+track). Execution is only for acting elsewhere: sending an email, sharing a Drive file, or changing or
+deleting an event that already exists on a calendar.
 Do not invent commitments, people, dates, or context.`;
 
 const ENTITY_SCHEMA = {
@@ -204,7 +208,15 @@ const INTENT_SCHEMA = {
     condition: CONDITION_SCHEMA,
     entityTypeDefinition: ENTITY_TYPE_DEFINITION_SCHEMA,
     entityRecord: ENTITY_RECORD_SCHEMA,
-    eventTitle: { type: "string" },
+    // Described in the schema, like objectText: a structured-output model
+    // weighs per-field descriptions, and "schedule a meeting with Moorthy at
+    // 6 pm" was declined as execution before this (2026-10-20).
+    eventTitle: {
+      type: "string",
+      description:
+        "Title of a meeting, call or appointment the user is scheduling, e.g. \"Meeting with Moorthy\". " +
+        "Scheduling is always an action intent, never execution.",
+    },
   },
   required: ["kind", "inferenceLevel", "sourceText"],
 } as const;

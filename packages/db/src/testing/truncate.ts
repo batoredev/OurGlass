@@ -54,6 +54,9 @@ export const TRUNCATABLE_TABLES = [
   // reference documents — dependents first, as above.
   "document_links",
   "documents",
+  // Migration 014. Neither references another table.
+  "thoughts",
+  "google_accounts",
   "reminders",
   "events",
   "messages",

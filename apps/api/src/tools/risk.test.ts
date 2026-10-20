@@ -100,12 +100,13 @@ describe("the classification itself, where it is non-obvious", () => {
     expect(riskFor("evaluate_workflow")).toBe("REVERSIBLE_WRITE");
   });
 
-  it("has no EXTERNAL_ACTION yet, and that is honest", () => {
-    // Nothing in this registry leaves the system. Gmail, Calendar and Drive
-    // arrive in Phase 7 (§34) and will be the first.
+  it("has exactly one action that leaves the system: Google Calendar (§34)", () => {
+    // The first, and so far only, tool that reaches an outside service. It
+    // must be EXTERNAL_ACTION — held for confirmation unless the user allows
+    // it — and nothing else may quietly join it.
     const external = Object.entries(RISK_BY_TOOL).filter(
       ([, level]) => level === "EXTERNAL_ACTION" || level === "HIGH_IMPACT_ACTION",
     );
-    expect(external).toEqual([]);
+    expect(external).toEqual([["add_to_google_calendar", "EXTERNAL_ACTION"]]);
   });
 });

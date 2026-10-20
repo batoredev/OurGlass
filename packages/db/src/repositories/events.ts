@@ -24,6 +24,8 @@ export interface Event {
   location: string | null;
   project_id: string | null;
   notes: string | null;
+  /** The Google Calendar copy (migration 014); null when not synced. */
+  google_event_id: string | null;
   t_valid: Date;
   t_invalid: Date | null;
   t_created: Date;
@@ -127,6 +129,23 @@ export async function listUpcoming(tx: Queryable, from: Date, limit = 50): Promi
     [from, limit],
   );
   return rows;
+}
+
+/** Current events starting in [from, to) — the Meetings surface and Today's checklist. */
+export async function listBetween(tx: Queryable, from: Date, to: Date, limit = 200): Promise<Event[]> {
+  const { rows } = await tx.query<Event>(
+    `SELECT * FROM events_current
+      WHERE starts_at IS NOT NULL AND starts_at >= $1::timestamptz AND starts_at < $2::timestamptz
+      ORDER BY starts_at
+      LIMIT $3`,
+    [from, to, limit],
+  );
+  return rows;
+}
+
+/** Record (or clear, on undo) the Google Calendar copy of an event. */
+export async function setGoogleEventId(tx: Queryable, id: string, googleEventId: string | null): Promise<void> {
+  await tx.query(`UPDATE events SET google_event_id = $2 WHERE id = $1`, [id, googleEventId]);
 }
 
 /** INVALIDATE, NEVER DELETE. Idempotent on an already-invalid row. */

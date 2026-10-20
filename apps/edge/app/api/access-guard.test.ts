@@ -16,6 +16,10 @@ const API = dirname(fileURLToPath(import.meta.url));
 const EXEMPT: Readonly<Record<string, string>> = {
   "health/route.ts": "serves no data; a monitor must reach it without a secret",
   "session/route.ts": "the door itself — it is how a browser gets past the guard",
+  // Reached by Google's redirect, which can carry no access token. The OAuth
+  // `state` — HMAC-signed by POST /api/google/connect, which IS guarded — is
+  // what proves the flow started with an authorised user (google-calendar.ts).
+  "google/callback/route.ts": "Google's redirect; authorised by the signed OAuth state",
 };
 
 function routeFiles(dir: string): string[] {

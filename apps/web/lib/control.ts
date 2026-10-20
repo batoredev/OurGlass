@@ -73,3 +73,61 @@ export function declinePendingAction(id: string): Promise<ControlResult> {
     body: "{}",
   });
 }
+
+// ---------------------------------------------------------------------------
+// The Thoughts board and the Google Calendar connection. Same rule as above:
+// each write runs a tool through the executor (or, for Google, an OAuth step),
+// never a write this file performs itself.
+// ---------------------------------------------------------------------------
+
+/** A write that also returns the turn it made, so the page can offer Undo. */
+async function sendForTurn(path: string, init: RequestInit): Promise<ControlResult & { turnId: string | null }> {
+  let response: Response;
+  try {
+    response = await apiFetch(path, { ...init, headers: { "content-type": "application/json" } });
+  } catch (error: unknown) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error), turnId: null };
+  }
+  const body = (await response.json().catch(() => null)) as {
+    turnId?: string;
+    error?: string;
+    errors?: { message: string }[];
+  } | null;
+  if (response.ok) return { ok: true, message: null, turnId: body?.turnId ?? null };
+  return {
+    ok: false,
+    message: body?.errors?.map((e) => e.message).join(" ") ?? body?.error ?? `Request failed (${response.status}).`,
+    turnId: null,
+  };
+}
+
+export function createThought(body: string, priority: string) {
+  return sendForTurn("/api/thoughts", { method: "POST", body: JSON.stringify({ body, priority }) });
+}
+
+export function moveThought(id: string, priority: string) {
+  return sendForTurn("/api/thoughts", { method: "PATCH", body: JSON.stringify({ id, priority }) });
+}
+
+export function removeThought(id: string) {
+  return sendForTurn(`/api/thoughts?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function undoTurn(turnId: string) {
+  return sendForTurn("/api/undo", { method: "POST", body: JSON.stringify({ turnId }) });
+}
+
+/** Ask the API for Google's consent URL and send the browser there. */
+export async function connectGoogle(): Promise<ControlResult> {
+  const response = await apiFetch("/api/google/connect", { method: "POST" }).catch(() => null);
+  const body = (await response?.json().catch(() => null)) as { url?: string; error?: string } | null;
+  if (response?.ok && body?.url) {
+    window.location.assign(body.url);
+    return { ok: true, message: null };
+  }
+  return { ok: false, message: body?.error ?? "Couldn't start connecting Google Calendar." };
+}
+
+export async function disconnectGoogle(): Promise<ControlResult> {
+  return send("/api/google", { method: "DELETE" });
+}

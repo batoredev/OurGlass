@@ -33,6 +33,7 @@ import {
 } from "@ourglass/api/ai";
 import { VoyageClient } from "@ourglass/api/embeddings";
 import { buildToolRegistry } from "@ourglass/api/tools";
+import { googleConfigFromEnv } from "@ourglass/api/integrations";
 import { authorize } from "../_auth";
 import { rejectCrossSite } from "../_http";
 import { rejectOverLimit, turnLimits } from "../_rate-limit";
@@ -122,12 +123,14 @@ export async function POST(request: Request) {
     throw error;
   }
 
+  const google = googleConfigFromEnv(process.env);
   try {
     const result = await runTurn(
       { utterance: body.utterance, userId: await bootstrapUserId() },
       {
         db,
-        registry: buildToolRegistry(),
+        registry: buildToolRegistry({ google }),
+        googleCalendarConfigured: google !== null,
         extractor: new RoutedExtractor(router, requestId),
         responder: new RoutedResponder(router, requestId),
         // Optional semantic recall. Without a key, recall is lexical-only —

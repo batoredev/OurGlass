@@ -256,7 +256,9 @@ function describeFact(fact: CommittedFact): string {
     case "entity_record_created":
       return `Logged to ${fact.displayName}.`;
     case "event_scheduled":
-      return `Scheduled: ${fact.title}, ${fact.startsAtLocal}.`;
+      return fact.googleCalendar
+        ? `Scheduled: ${fact.title}, ${fact.startsAtLocal} — also on your Google Calendar.`
+        : `Scheduled: ${fact.title}, ${fact.startsAtLocal}.`;
     default:
       return assertNever(fact);
   }

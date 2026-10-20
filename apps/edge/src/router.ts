@@ -30,12 +30,17 @@ import * as today from "../app/api/today/route";
 import * as transcribe from "../app/api/transcribe/route";
 import * as turn from "../app/api/turn/route";
 import * as undo from "../app/api/undo/route";
+import * as google from "../app/api/google/route";
+import * as googleCallback from "../app/api/google/callback/route";
+import * as googleConnect from "../app/api/google/connect/route";
+import * as meetings from "../app/api/meetings/route";
+import * as thoughts from "../app/api/thoughts/route";
 import { isAllowedOrigin } from "../app/api/_http";
 import { routePath } from "./route-path";
 
 type Params = Record<string, string>;
 type Handler = (request: Request, context: { params: Promise<Params> }) => Promise<Response> | Response;
-type RouteModule = Partial<Record<"GET" | "POST" | "DELETE", Handler>>;
+type RouteModule = Partial<Record<"GET" | "POST" | "PATCH" | "DELETE", Handler>>;
 
 interface Route {
   readonly pattern: RegExp;
@@ -72,9 +77,14 @@ const ROUTES: readonly Route[] = [
   route("/transcribe", transcribe),
   route("/turn", turn),
   route("/undo", undo),
+  route("/google/connect", googleConnect),
+  route("/google/callback", googleCallback),
+  route("/google", google),
+  route("/meetings", meetings),
+  route("/thoughts", thoughts),
 ];
 
-const ALLOWED_METHODS = "GET, POST, DELETE, OPTIONS";
+const ALLOWED_METHODS = "GET, POST, PATCH, DELETE, OPTIONS";
 // `apikey` and `x-client-info` are sent by Supabase's own client libraries;
 // listed so a future switch to supabase-js does not fail preflight.
 const ALLOWED_HEADERS = "authorization, content-type, apikey, x-client-info";
@@ -128,7 +138,7 @@ export async function handle(request: Request): Promise<Response> {
   for (const candidate of ROUTES) {
     const match = candidate.pattern.exec(path);
     if (!match) continue;
-    const handler = candidate.module[request.method as "GET" | "POST" | "DELETE"];
+    const handler = candidate.module[request.method as "GET" | "POST" | "PATCH" | "DELETE"];
     if (!handler) {
       return withResponseHeaders(
         Response.json({ error: "Method not allowed." }, { status: 405 }),

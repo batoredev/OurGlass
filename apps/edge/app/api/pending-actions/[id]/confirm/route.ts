@@ -8,6 +8,7 @@
 import { NextResponse } from "next/server";
 import { releasePendingAction } from "@ourglass/api/permissions";
 import { buildToolRegistry } from "@ourglass/api/tools";
+import { googleConfigFromEnv } from "@ourglass/api/integrations";
 import { rejectCrossSite } from "../../../_http";
 import { authorize } from "../../../_auth";
 import { db } from "../../../_lib";
@@ -22,7 +23,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (refused) return refused;
 
   const { id } = await params;
-  const outcome = await releasePendingAction({ db, registry: buildToolRegistry() }, id);
+  const outcome = await releasePendingAction(
+    // Google config, because a held action may be add_to_google_calendar.
+    { db, registry: buildToolRegistry({ google: googleConfigFromEnv(process.env) }) },
+    id,
+  );
 
   if (outcome.ok) return NextResponse.json({ turnId: outcome.turnId });
   const status = outcome.reason === "not_found" ? 404 : outcome.reason === "not_pending" ? 409 : 422;
