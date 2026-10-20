@@ -903,3 +903,11 @@ main:focus { outline: none; }
   .checklist-item { grid-template-columns: 26px 1fr; }
   .checklist-state { display: none; }
 }
+
+/* "Add meetings without asking" — a real checkbox, drawn as a switch. */
+.setting-toggle { cursor: pointer; }
+.toggle-input { appearance: none; width: 52px; height: 30px; flex: none; border: 2px solid var(--ink); border-radius: 30px; background: var(--surface-strong); position: relative; cursor: pointer; transition: background .15s; }
+.toggle-input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--ink); transition: transform .15s; }
+.toggle-input:checked { background: var(--mint); }
+.toggle-input:checked::after { transform: translateX(22px); }
+.toggle-input:disabled { opacity: .5; cursor: progress; }

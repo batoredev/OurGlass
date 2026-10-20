@@ -6,8 +6,12 @@
  * ?google=<result> (apps/edge/app/api/google/callback), shown once.
  */
 import { useEffect, useState } from "react";
-import { fetchGoogleStatus, type GoogleStatus } from "../../lib/api";
-import { connectGoogle, disconnectGoogle } from "../../lib/control";
+import { fetchGoogleStatus, fetchPermissions, type GoogleStatus } from "../../lib/api";
+import { connectGoogle, disconnectGoogle, revokePermission, setPermission } from "../../lib/control";
+import { refreshData } from "../../lib/session";
+
+/** The tool that copies a meeting to Google; its grant is the "without asking" switch. */
+const CALENDAR_ACTION = "add_to_google_calendar";
 
 const RESULT: Readonly<Record<string, string>> = {
   connected: "Google Calendar is connected. New meetings will be added to it.",
@@ -21,6 +25,10 @@ export function GoogleCalendarSetting() {
   const [status, setStatus] = useState<GoogleStatus | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Whether meetings go to Google without a confirmation step — the standing
+  // "allow" grant for CALENDAR_ACTION, shown here in plain words because the
+  // generic Standing rules list names raw tools, and the wrong one got picked.
+  const [autoAdd, setAutoAdd] = useState<boolean | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -34,6 +42,11 @@ export function GoogleCalendarSetting() {
       .catch((error: unknown) => {
         if (live) setMessage(error instanceof Error ? error.message : String(error));
       });
+    fetchPermissions()
+      .then((permissions) => {
+        if (live) setAutoAdd(permissions.grants.some((g) => g.action_type === CALENDAR_ACTION && g.decision === "allow"));
+      })
+      .catch(() => undefined);
     if (result) window.history.replaceState(null, "", window.location.pathname);
     return () => {
       live = false;
@@ -48,6 +61,20 @@ export function GoogleCalendarSetting() {
       setBusy(false);
     }
     // On success the browser is already leaving for Google.
+  }
+
+  async function toggleAutoAdd(next: boolean) {
+    setBusy(true);
+    const result = next ? await setPermission(CALENDAR_ACTION, "allow") : await revokePermission(CALENDAR_ACTION);
+    setBusy(false);
+    if (!result.ok) {
+      setMessage(result.message);
+      return;
+    }
+    setAutoAdd(next);
+    setMessage(next ? "Meetings will now go straight to Google Calendar." : "Meetings will wait for your approval before going to Google.");
+    // The Standing rules list on this page shows the same grant.
+    refreshData();
   }
 
   async function disconnect() {
@@ -94,6 +121,25 @@ export function GoogleCalendarSetting() {
             </button>
           )}
         </div>
+        {status?.connected && autoAdd !== null && (
+          <label className="row setting-toggle">
+            <div>
+              <div className="row-title">Add meetings without asking</div>
+              <div className="row-subtitle">
+                {autoAdd
+                  ? "On: \"schedule a meeting…\" goes straight to Google Calendar."
+                  : "Off: each meeting waits for your approval above before it reaches Google."}
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              className="toggle-input"
+              checked={autoAdd}
+              disabled={busy}
+              onChange={(event) => void toggleAutoAdd(event.target.checked)}
+            />
+          </label>
+        )}
       </div>
       {message && (
         <p className="setting-sub" role="status">
