@@ -11,7 +11,14 @@ links. Read in this order: `CLAUDE.md` → this file → `docs/REMAINING-EXECUTI
 - Built and verified: everything through Phase 5, the §35 permission model, multi-provider AI
   (Claude / Gemini / local Qwen), alerting to a chat webhook, voice dictation (Phase 8), and
   **file uploads (Phase 6)** — see `PHASE-6-DESIGN.md` §9a for what was verified and how.
-- Not started: **Phase 7** (Gmail, Calendar, Drive) — blocked on the owner's Google Cloud project.
+- **Hosting changed on 2026-10-19:** the API and reminders now run as Supabase Edge Functions
+  (`apps/edge`, Deno) and the site is a static export on Cloudflare Pages; the Cloudflare Worker
+  is gone. Read `DEPLOYMENT-DESIGN.md` before touching deployment.
+- **Phase 7, partly built** (arjunamar, 2026-10-19/20): Google Calendar sync, and email drafted in
+  chat and sent from Gmail after a per-message confirmation. Drive is not started. Not
+  re-verified live in the session that wrote this.
+- On 2026-10-21 a force-push to `main` dropped eight commits; they were merged back, not pushed
+  over. Until branch protection exists (`YOUR-ACTIONS.md` item 3), never force-push `main`.
 
 ## The work left, in order
 
@@ -72,17 +79,11 @@ for the extractors.
 
 Also noted, not a bug: undo never deletes stored bytes and there is no delete path.
 
-### 1a. The Worker build fails on Linux (found 2026-10-20) — blocks deploying
-`pnpm --filter @ourglass/web run build:worker` fails on Linux, on `main` before the
-2026-10-20 dependency updates as well as after them: `Could not resolve "pg-cloudflare"` from
-`pg/lib/stream.js`. Next's output tracing copies only `pg-cloudflare`'s `default` export
-(`dist/empty.js`) into `.open-next`, while the Worker bundler resolves its `workerd` export
-(`dist/index.js`), which was never copied. It was recorded as passing on the owner's machine on
-2026-09-24 and 2026-09-26. CI's Deploy job runs on Linux and has never reached this step (it
-skips until the Cloudflare secrets exist), so turning on automatic deploys (`YOUR-ACTIONS.md`
-item 14) would fail here. Likely fix, to verify: trace `pg-cloudflare`'s `dist/` and `esm/` via
-`outputFileTracingIncludes` in `next.config.ts`, confirm with `wrangler deploy --dry-run`, and
-add a CI step that runs `build:worker` so it cannot regress unseen again.
+### 1a. ~~The Worker build fails on Linux~~ — obsolete
+The Worker it described was replaced by Supabase Edge Functions + Cloudflare Pages on 2026-10-19.
+On 2026-10-21 the replacement was checked locally: the `api` and `reminders` bundles ran under
+Deno 2.1.4 against a migrated database (auth, every read route, CORS, a due reminder fired
+once), and the static site built and served. Nothing has been checked on a deployed project.
 
 ### 2. Finish the knowledge-graph refresh
 Standing rule: `/graphify --update` after every feature. The last run stopped after detection
