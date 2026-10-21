@@ -1426,11 +1426,13 @@ suite("runTurn (integration)", () => {
     );
 
     // §24: "Do not automatically choose." Nothing is written, and the
-    // question names BOTH sides so the user can act on it.
+    // question names BOTH sides so the user can act on it. Meetings never
+    // overlap (owner, 2026-10-20), so it asks for another time rather than
+    // offering to keep both.
     expect(result.committed).toEqual([]);
     expect(result.asked).toHaveLength(1);
     expect(result.asked[0]).toContain("Hult review");
-    expect(calls[0]?.questions[0]).toContain("Move it or keep both?");
+    expect(calls[0]?.questions[0]).toContain("pick another time for Arun");
 
     // The second event must NOT exist. A conflict that still books is worse
     // than no detection at all.
