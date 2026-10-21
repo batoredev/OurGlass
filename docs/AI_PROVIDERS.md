@@ -12,8 +12,8 @@ rules: [AI_FALLBACK.md](AI_FALLBACK.md).
 
 | Provider | Transport | Interpret model | Respond model | Verified against the live service? |
 |---|---|---|---|---|
-| **Claude** (primary) | `@anthropic-ai/sdk` 0.124.0 | `claude-sonnet-5` | `claude-haiku-4-5-20251001` | **Model ids: yes** — `pnpm check:models` passed on 2026-09-17. **Extraction quality: no** — `pnpm test:live` has never run. |
-| **Gemini** (second) | `@google/genai` 2.22.0 | `gemini-3.5-flash` | `gemini-3.5-flash` | **Both stages: yes** — a real extraction AND a real reply on 2026-09-18. **Quality: not measured** (`pnpm eval:ai` has not run). |
+| **Claude** (primary) | `@anthropic-ai/sdk` 0.135.0 | `claude-sonnet-5` | `claude-haiku-4-5-20251001` | **Model ids: yes** — `pnpm check:models` passed on 2026-09-17. **Extraction quality: no** — `pnpm test:live` has never run. |
+| **Gemini** (second) | `@google/genai` 2.30.0 | `gemini-3.5-flash` | `gemini-3.5-flash` | **Both stages: yes** — a real extraction AND a real reply on 2026-09-18. **Quality: not measured** (`pnpm eval:ai` has not run). |
 | **Qwen** (local) | `fetch` → Ollama `/api/chat` | `qwen3:8b` | same model | **Yes, and the only provider whose quality is measured** — 2026-09-22, Ollama 0.34.2 on an RTX 3050 Laptop (4 GB). Three defects found on first contact and fixed (thinking, schema, field order). Interpret median 30s, p90 46s; Respond ~3s. All 99 fixtures: 34 full matches, 81 intent kinds right, ~54 carrying wrong-write risk — see [`AI_EVALS.md`](AI_EVALS.md). Well below what these prompts are written for; use it offline or without a key, not for real data |
 
 Every provider's adapter is unit-tested with an injected fake client: request shape,

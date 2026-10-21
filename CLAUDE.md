@@ -189,11 +189,14 @@ Full rules: `.claude/rules/wat.md`
 
 ## Project
 
+**Resuming in a fresh session? Read `docs/HANDOFF.md` first** — the current state, the ordered
+work left (starting with the Phase 6 security-review fixes), and the owner's working rules.
+
 **Product:** Batore Personal Assistant — an internal-use conversational AI assistant. Full
 spec in `docs/SPEC.md`, execution plan in `docs/EXECUTION-PLAN.md`, locked decisions and
 research findings in `docs/DECISIONS.md`, phase checklist in `docs/PHASES.md`.
 
-**Stack:** TypeScript end-to-end, pnpm monorepo. `apps/web` (Next.js 16.3.4), `apps/api`
+**Stack:** TypeScript end-to-end, pnpm monorepo. `apps/web` (Next.js 16.4.2), `apps/api`
 (the assistant, tool layer and poller as a LIBRARY, imported by the web app; `pnpm dev` there
 runs the reminder poller, not a server), `packages/shared` (shared types), `packages/db`
 (schema/migrations, Phase 1),

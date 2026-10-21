@@ -11,21 +11,21 @@
     "test:integration": "vitest run --config vitest.integration.config.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "0.124.0",
-    "@google/genai": "2.22.0",
+    "@anthropic-ai/sdk": "0.135.0",
+    "@google/genai": "2.30.0",
     "@ourglass/db": "workspace:*",
     "@ourglass/shared": "workspace:*",
-    "chrono-node": "2.10.1",
+    "chrono-node": "2.10.3",
     "fflate": "0.8.3",
-    "pg": "^8.16.3",
-    "unpdf": "1.8.1"
+    "pg": "^8.23.1",
+    "unpdf": "1.9.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/pg": "^8.11.0",
-    "tsx": "^4.19.0",
+    "tsx": "^4.23.15",
     "typescript": "6.0.3",
-    "vitest": "4.1.11"
+    "vitest": "4.1.12"
   },
   "exports": {
     "./assistant": {

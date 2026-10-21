@@ -22,7 +22,7 @@ schema, the tool layer, or CI config.
 | Alert destination | **Chat webhook** (Slack or Discord) — decided 2026-09-24 | Owner's choice: no new account; alerts arrive where the team already chats. Both payload formats are supported |
 | Spend cap on `/api/turn` | **10 turns per minute, 200 per day** — decided 2026-09-24 | Owner's cost budget, replacing the 20/500 placeholders. `TURN_LIMIT_PER_MINUTE` / `TURN_LIMIT_PER_DAY` still override |
 | A file is data, never an instruction (Phase 6) | File content reaches exactly ONE model call, the **Read** stage, whose output schema is descriptive only; never Interpret, never Respond. The upload reply is a template; acting on a file is the user's next message — 2026-09-26 | Structural, not a prompt: a schema with no action field cannot return an action. Mutation-verified twice (`PHASE-6-DESIGN.md` §9a) |
-| File parsers (Phase 6) | `unpdf` 1.8.1 (pdf.js serverless) and `fflate` 0.8.3, both MIT; Word/Excel read by our own bounded XML walk — 2026-09-26 | Both verified at the source and in workerd. mammoth/SheetJS rejected: neither bounds decompressed size (zip bombs), and SheetJS's npm release is stale with advisories |
+| File parsers (Phase 6) | `unpdf` (pdf.js serverless; 1.8.1 when chosen, 1.9.0 since 2026-10-20) and `fflate` 0.8.3, both MIT; Word/Excel read by our own bounded XML walk — 2026-09-26 | Both verified at the source and in workerd at the versions chosen; unpdf 1.9.0 passes the extractor tests in Node and has not been re-run in workerd. mammoth/SheetJS rejected: neither bounds decompressed size (zip bombs), and SheetJS's npm release is stale with advisories |
 | Association (Phase 6) | Exact name match against EXISTING rows only, unambiguous within kind; the note's names CONFIRMED, the file's INFERRED; never creates a row — 2026-09-26 | The spec's two-Aruns rule: a wrong link is worse than a missing one. Links to commitments deferred (fuzzy text) |
 | Hosting | **Supabase Edge Functions for the API + reminders; Cloudflare Pages for a static frontend** — decided 2026-10-19, replacing Cloudflare Workers | Owner's choice after the first Workers deploy failed: the OpenNext adapter's bundle, built on Windows, crashed on every request (`Dynamic require of "/.next/server/middleware-manifest.json"`), and the adapter documents Windows support as limited. The route files moved unchanged to `apps/edge` and run in Deno behind a `next/server` shim; pages load data in the browser; reminders are `pg_cron` → the `reminders` function. Trade-offs accepted: the access token lives in browser storage (a cross-site cookie would not be sent), and uploads download rather than open inline. Full design: `docs/DEPLOYMENT-DESIGN.md` |
 | Email power (Phase 7) | **Send, after confirming each one** — decided 2026-09-24 | Owner's choice over draft-only. Every send goes through the existing `pending_actions` hold-and-confirm path, never a standing grant: sending cannot be undone, so confirmation is per message by construction |
@@ -120,6 +120,11 @@ confirmed it:
   proposes patch/minor security fixes on the pinned line without re-litigating the major
   bump every week. Revisit the ignores when the plan's "TS 7 as a measured spike" and
   "Vitest 5" follow-ups actually happen.
+- **`@types/node` follows the runtime, so its majors are ignored too (2026-10-20).**
+  Dependabot keeps proposing `@types/node` 26 (most recently #12 and #16). The runtime is
+  Node 24 (`engines`, every workflow's `node-version`), and 26.x fails the api build
+  (`Uint8Array<ArrayBufferLike>` is not assignable to `BufferSource`). It stays `^24` and
+  moves in the same change that moves the runtime.
 
 ## Phase 1 decisions (Mission 1 four-lens review — full design in `docs/PHASE-1-DESIGN.md`)
 

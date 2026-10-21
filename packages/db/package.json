@@ -15,13 +15,13 @@
   },
   "dependencies": {
     "@ourglass/shared": "workspace:*",
-    "pg": "^8.16.3",
+    "pg": "^8.23.1",
     "node-pg-migrate": "9.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/pg": "^8.11.0",
     "typescript": "6.0.3",
-    "vitest": "4.1.11"
+    "vitest": "4.1.12"
   }
 }
