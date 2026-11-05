@@ -26,6 +26,11 @@ export interface ObjectStore {
   put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
   /** Null when there is no such object. THROWS `StorageError` otherwise. */
   get(key: string): Promise<StoredObject | null>;
+  /**
+   * Removes the bytes for good. Idempotent: an object already gone is success.
+   * THROWS `StorageError` when storage refuses or does not answer.
+   */
+  delete(key: string): Promise<void>;
 }
 
 /** Carries an HTTP status and never the key, the URL's secrets, or the response body. */
@@ -99,6 +104,10 @@ export class SupabaseObjectStore implements ObjectStore {
         ...init,
         headers: { ...this.auth, ...(init.headers as Record<string, string> | undefined) },
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        // The secret key is a master key. A redirect would carry it to
+        // wherever the response points (Phase 6 security review), so none is
+        // followed: Supabase Storage answers object requests directly.
+        redirect: "error",
       });
     } catch (error: unknown) {
       const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
@@ -173,6 +182,25 @@ export class SupabaseObjectStore implements ObjectStore {
       contentType: response.headers.get("content-type") ?? "application/octet-stream",
     };
   }
+
+  /**
+   * The request supabase/storage-js's `remove` sends (verified 2026-11-05):
+   * DELETE object/{bucket} with `{ "prefixes": [key] }`. A key that is already
+   * gone, or a bucket that never existed, leaves nothing to delete.
+   */
+  async delete(key: string): Promise<void> {
+    const response = await this.request(`object/${encodeURIComponent(this.bucket)}`, {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ prefixes: [key] }),
+    });
+    if (response.ok) return;
+    if (response.status === 404 || (await SupabaseObjectStore.isMissingBucket(response))) return;
+    if (response.status === 401 || response.status === 403) {
+      throw new StorageError("File storage rejected the key — check SUPABASE_SECRET_KEY", response.status);
+    }
+    throw new StorageError("File storage refused the delete", response.status);
+  }
 }
 
 /** Tests and local runs without storage. Holds everything in memory. */
@@ -186,6 +214,10 @@ export class MemoryObjectStore implements ObjectStore {
 
   async get(key: string): Promise<StoredObject | null> {
     return this.objects.get(key) ?? null;
+  }
+
+  async delete(key: string): Promise<void> {
+    this.objects.delete(key);
   }
 }
 

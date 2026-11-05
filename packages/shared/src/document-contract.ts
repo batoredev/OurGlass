@@ -135,6 +135,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** A high surrogate with no low one after it, or a low one with no high one before it. */
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
 /**
  * Collapse whitespace, drop control characters, clip.
  *
@@ -146,9 +149,16 @@ export function cleanText(value: string, max: number): string {
   const cleaned = value
     // eslint-disable-next-line no-control-regex -- stripping them is the point
     .replace(/[\u0000-\u001f\u007f-\u009f\u200E\u200F\u202A-\u202E\u2066-\u2069]/g, " ")
+    // A lone surrogate is unstorable in jsonb (Phase 6 security review).
+    .replace(LONE_SURROGATE, "\uFFFD")
     .replace(/\s+/g, " ")
     .trim();
-  return cleaned.length <= max ? cleaned : `${cleaned.slice(0, max - 1).trimEnd()}…`;
+  if (cleaned.length <= max) return cleaned;
+  let cut = cleaned.slice(0, max - 1);
+  // Never between the halves of a pair: that would make a lone surrogate.
+  const last = cut.charCodeAt(cut.length - 1);
+  if (last >= 0xd800 && last <= 0xdbff) cut = cut.slice(0, -1);
+  return `${cut.trimEnd()}…`;
 }
 
 function names(value: unknown): string[] | null {

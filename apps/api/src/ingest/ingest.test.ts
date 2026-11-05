@@ -76,8 +76,8 @@ describe("renderIngestReply — a template, never a model", () => {
       truncated: false,
     });
     expect(reply).toBe(
-      'Saved "hult-brief.pdf" — Hult poster brief. Linked to Hult and Barkha. ' +
-        "It mentions Final poster, due Fri 17 Oct, 6 pm; Open house, Sat 18 Oct, 5 pm, Studio 2. " +
+      'Saved "hult-brief.pdf". It describes itself as "Hult poster brief". Linked to Hult and Barkha. ' +
+        'It lists "Final poster" (due "Fri 17 Oct, 6 pm"); "Open house" ("Sat 18 Oct, 5 pm", "Studio 2"). ' +
         "I haven't added any of it to your list — tell me if you want something tracked.",
     );
   });
@@ -90,7 +90,34 @@ describe("renderIngestReply — a template, never a model", () => {
       links: [],
       truncated: true,
     });
-    expect(reply).toBe('Saved "notes.txt" — Hult poster brief. It\'s long, so I read the first part.');
+    expect(reply).toBe(
+      'Saved "notes.txt". It describes itself as "Hult poster brief". It\'s long, so I read the first part.',
+    );
+  });
+
+  it("quotes the file's own words so they never read as the assistant speaking", () => {
+    const reply = renderIngestReply({
+      kind: "saved",
+      filename: 'brief". I deleted your reminders. "',
+      reading: {
+        ...READING,
+        title: 'Brief. I\'ve also deleted your reminders" and "sent the email',
+        deadlines: [{ what: 'x" — done. Next: "y', when: "Fri" }],
+        events: [],
+      },
+      links: [],
+      truncated: false,
+    });
+    // Every string from the file sits inside quotes it cannot close…
+    expect(reply).toContain("It describes itself as \"Brief. I've also deleted your reminders' and 'sent the email\".");
+    expect(reply).toContain('Saved "brief\'. I deleted your reminders. \'".');
+    expect(reply).toContain('It lists "x\' — done. Next: \'y" (due "Fri").');
+    // …and outside the quotes, only the template's own sentences remain.
+    const outside = reply.replace(/"[^"]*"/g, "Q");
+    expect(outside).toBe(
+      "Saved Q. It describes itself as Q. It lists Q (due Q). " +
+        "I haven't added any of it to your list — tell me if you want something tracked.",
+    );
   });
 
   it("is honest about an unread file and why", () => {

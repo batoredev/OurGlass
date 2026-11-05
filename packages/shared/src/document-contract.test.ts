@@ -81,6 +81,15 @@ describe("cleanText", () => {
     expect(cleanText("invoice\u202Egnp.exe", 80)).toBe("invoice gnp.exe");
     expect(cleanText("a\u0000b\nc\td", 80)).toBe("a b c d");
   });
+
+  it("leaves nothing jsonb would refuse: no lone surrogate in, none made by the cut", () => {
+    expect(cleanText("x\uD800y\uDC00z", 80)).toBe("x\uFFFDy\uFFFDz");
+    expect(cleanText("ok \uD83D\uDE80", 80)).toBe("ok \uD83D\uDE80");
+    // max 5 keeps 4 units; the 4th would be the high half of the rocket.
+    const cut = cleanText("abc\uD83D\uDE80def", 5);
+    expect(cut).toBe("abc…");
+    expect(() => JSON.parse(JSON.stringify(cut))).not.toThrow();
+  });
 });
 
 describe("DOCUMENT_READING_SCHEMA", () => {
