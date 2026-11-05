@@ -83,6 +83,8 @@ If any step fails, roll back.
 |---|---|
 | One wrong write from a conversation | **Undo** in the chat or on **Activity**, or `POST /api/undo` with the `turnId`. Every write is logged with its inverse; undo invalidates rather than deletes |
 | Many bad rows, or a bad migration | Supabase backups / **point-in-time recovery**. ⚠ Confirm what the project's plan offers *before* you need it — an owner setting, not yet verified |
+| Something must be gone **for good** (a person, a file, everything) | **Delete permanently** on People or Files, or **Settings → Your data**; the API is `POST /api/data/delete`. It removes the rows, scrubs the action log, and deletes the file's bytes from storage first — if storage refuses, nothing is deleted and it can be run again. It cannot be undone, and backups still hold the data until they age out |
+| Take a copy of everything | **Settings → Your data → Export**, or `GET /api/data/export` (every table as JSON; no file bytes, no search vectors, no Google token) |
 
 ## Secrets
 
@@ -161,6 +163,12 @@ at once. Generate one with
 does not match `CRON_SECRET`, `500` "CRON_SECRET is not configured" means the secret is missing
 or shorter than 32 characters. A reminder with a relational time ("after the meeting") is
 deliberately never stored: the assistant asks for a clock time instead.
+
+**Pages are empty after applying migration 017.**
+017 enables Row Level Security with no policies, which hides every row from any role that is not
+the tables' owner. The API connects as the owner, so this should not happen; if it does, the
+function is connecting as another role. Roll forward with a migration that disables RLS
+(`ALTER TABLE … DISABLE ROW LEVEL SECURITY` per table) and find out which role it uses.
 
 **Every route answers 404.**
 The access guard found no `OURGLASS_ACCESS_TOKEN`: the API is closed by design. Set the secret.

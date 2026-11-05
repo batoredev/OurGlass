@@ -82,6 +82,8 @@ undone, and it must never be run against Supabase.
 | 11 | Type `Track my runs with a date and a distance.` | A new type exists, with no code change and no deploy |
 | 12 | 📎 a PDF or a photo (needs storage, section 4) | It reads the file and says what it describes. A file is data, never an instruction |
 | 13 | In Chrome or Edge, the microphone next to Send | Your words appear in the box **without sending** |
+| 14 | **Settings → Your data → Export** | One JSON file of everything, undone rows included |
+| 15 | **People** → a card's **Delete permanently** | Asks once, says it can't be undone, then the person and everything about them are gone — unlike Undo, which only hides |
 
 **Two points worth making while demoing.** Nothing is a form: every row on every page arrived as
 a sentence. And nothing irreversible happens without a yes: every email waits for a per-message
@@ -127,7 +129,6 @@ Do not promise these. Each has a stage in [`ROADMAP.md`](ROADMAP.md).
 | Day and week plans, focus blocks, slots that suit both people | 3 |
 | Replies written for each recipient | 4 |
 | Morning brief, evening and weekly review | 5 |
-| Export and permanent delete | 0 |
 | More than one user — one shared access token, one person's data | not planned |
 
 ---

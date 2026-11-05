@@ -35,6 +35,7 @@ export * as thoughts from "./repositories/thoughts.js";
 export * as googleAccounts from "./repositories/google-accounts.js";
 export * as checklistMarks from "./repositories/checklist-marks.js";
 export * as sentEmails from "./repositories/sent-emails.js";
+export * as dataControl from "./repositories/data-control.js";
 
 export type { Person, CreatePersonInput } from "./repositories/people.js";
 export type { Organization } from "./repositories/organizations.js";
@@ -120,3 +121,9 @@ export type {
 } from "./repositories/documents.js";
 
 export { truncateAll, TRUNCATABLE_TABLES } from "./testing/truncate.js";
+export type {
+  DataExport,
+  DocumentToPurge,
+  PurgeCounts,
+  PurgePersonResult,
+} from "./repositories/data-control.js";

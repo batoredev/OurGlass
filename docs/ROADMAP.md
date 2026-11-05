@@ -54,7 +54,8 @@ dynamic trackers; inspection pages; multi-provider AI with a measured fallback c
 permission model; file uploads read as data, never instructions; voice dictation; alerting;
 Meetings that never overlap, a tickable Today checklist, a Thoughts board; Google Calendar add
 and Gmail send after a per-message confirmation; hosting on Supabase Edge Functions + Cloudflare
-Pages (deployed by hand 2026-10-19); the landscape editorial look; `pnpm db:seed-demo`.
+Pages (deployed by hand 2026-10-19); the landscape editorial look; `pnpm db:seed-demo`;
+**Stage 0** — the Phase 6 security fixes, Row Level Security, export and permanent delete.
 
 **Not verified:** answer quality on any hosted model (only local Qwen is measured,
 [`AI_EVALS.md`](AI_EVALS.md)); the Google Calendar round trip and a real Gmail send (need the
@@ -68,6 +69,9 @@ the OAuth client exists. Each stage is its own pull request.
 ### Stage 0 — Safe to hold this data
 
 *Why first: everything after it stores more about more people.*
+
+**Status: built 2026-11-05** (on the branch of PR #26). The owner applies migration 017 to
+Supabase ([`YOUR-ACTIONS.md`](YOUR-ACTIONS.md) item 4).
 
 - The eight Phase 6 security-review findings and three test gaps
   ([`HANDOFF.md`](HANDOFF.md) → *Stage 0 detail*): linear scanners instead of quadratic regexes, extract
@@ -163,7 +167,7 @@ planned) · — not planned, with the reason.
 | Capability | Status |
 |---|---|
 | Create, edit, complete, organise tasks (commitments, from conversation) | ✅ |
-| Delete permanently | S0 (undo already invalidates) |
+| Delete permanently | ✅ a person, a file, or everything (undo still only invalidates) |
 | Subtasks / checklists | ✅ Today checklist · subtasks S3 |
 | Deadlines · reminders | ✅ |
 | Priorities | ✅ Thoughts board · commitments S3 |
@@ -215,7 +219,7 @@ planned) · — not planned, with the reason.
 |---|---|
 | Facts, preferences, commitments, notes, with provenance | ✅ |
 | Natural-language search · corrections · inspection | ✅ |
-| Export · permanent delete | S0 |
+| Export · permanent delete | ✅ |
 | Important dates · decisions · routines · saved instructions · patterns · summaries per person | S2 |
 
 ### 8. Workflow automation
@@ -233,7 +237,7 @@ planned) · — not planned, with the reason.
 | Capability | Status |
 |---|---|
 | Upload and read PDF, Word, Excel, text, images · duplicates detected · metadata | ✅ |
-| Access control on stored files | ✅ sandboxed download · RLS S0 |
+| Access control on stored files | ✅ sandboxed download · Row Level Security |
 | Search document contents (lexical, no model) | S2 |
 | Draft reports | S5 |
 | Drive search, folders, versions, templates, spreadsheets, presentations, archive, OCR of scans | L |
@@ -258,7 +262,8 @@ planned) · — not planned, with the reason.
 | Capability | Status |
 |---|---|
 | Approval for sensitive actions · audit log · permissions explained | ✅ |
-| Delete personal data · retention preferences · privacy settings · sensitive memories kept out of prompts | S0 (sensitive flag S2) |
+| Delete personal data (a person, a file, everything) · export | ✅ |
+| Retention preferences · privacy settings · sensitive memories kept out of prompts | S2 |
 | Suspicious email and link flags | S1 |
 | Account security alerts · emergency access | L |
 | Software updates · password managers · exposed-data searches | — outside the product (and the last would mean looking people up) |
@@ -297,7 +302,7 @@ planned) · — not planned, with the reason.
 
 | Stage | Needs from the owner |
 |---|---|
-| 0 | Apply the RLS migration to Supabase before deploying the code that ships with it |
+| 0 | Apply migration 017 (Row Level Security) to Supabase — no code depends on it |
 | 1 | The Google OAuth client; re-consent for `gmail.readonly`; approval for paid eval runs |
 | 2–3 | Nothing beyond review |
 | 4–5 | A decision on the email digest's sender and quiet hours |

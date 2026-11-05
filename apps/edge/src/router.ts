@@ -37,6 +37,8 @@ import * as meetings from "../app/api/meetings/route";
 import * as thoughts from "../app/api/thoughts/route";
 import * as todayCheck from "../app/api/today/check/route";
 import * as emailDrafts from "../app/api/email-drafts/route";
+import * as dataExport from "../app/api/data/export/route";
+import * as dataDelete from "../app/api/data/delete/route";
 import { isAllowedOrigin } from "../app/api/_http";
 import { routePath } from "./route-path";
 
@@ -61,6 +63,8 @@ function route(path: string, module: unknown): Route {
 
 const ROUTES: readonly Route[] = [
   route("/activity", activity),
+  route("/data/export", dataExport),
+  route("/data/delete", dataDelete),
   route("/commitments", commitments),
   route("/documents/[id]/file", documentFile),
   route("/documents", documents),

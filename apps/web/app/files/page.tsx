@@ -4,10 +4,12 @@
  * Files — what was sent, what it says, what it belongs to (spec §32, §33).
  *
  * An INSPECTION surface, like Memory: the description is the Read stage's,
- * shown as quoted data, and nothing here writes. Acting on a file is done in
- * conversation, in the user's own words (docs/PHASE-6-DESIGN.md §1).
+ * shown as quoted data. Acting on a file is done in conversation, in the
+ * user's own words (docs/PHASE-6-DESIGN.md §1). The one write here is
+ * "Delete permanently" (ROADMAP Stage 0), which removes the file for good.
  */
 import { AsyncPage } from "../async-page";
+import { DeletePermanently } from "../delete-permanently";
 import { DownloadLink } from "./download-link";
 import { fetchDocuments, type SavedDocument } from "../../lib/api";
 import { EmptyState, LoadFailure, PageHeader } from "../surface";
@@ -102,6 +104,12 @@ async function renderFiles() {
                     </span>
                   ))}
                 </div>
+                <DeletePermanently
+                  scope="document"
+                  id={doc.id}
+                  name={doc.filename}
+                  consequence="Its stored copy, its text and the messages about it go too."
+                />
               </div>
               <div className="memory-date">
                 {new Date(doc.t_created).toLocaleDateString(undefined, { month: "short", day: "numeric" })}

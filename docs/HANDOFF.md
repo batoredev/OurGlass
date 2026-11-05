@@ -27,8 +27,8 @@ conversations**. Everything it needs is in this file and the docs it links. Read
 
 ## The work left, in order
 
-**Build the ROADMAP stages in order, each as its own pull request with tests:** 0 (safe to hold
-this data) → 1 (conversation context, then calendar and email reading) → 2 (the person model and
+**Build the ROADMAP stages in order, each as its own pull request with tests.** Stage 0 (safe to
+hold this data) was built 2026-11-05; next is 1 (conversation context, then calendar and email reading) → 2 (the person model and
 meeting briefs) → 3 (the personal scheduler) → 4 (replies per recipient) → 5 (the proactive
 loop). The Google halves of Stage 1 wait for the owner's OAuth client.
 
@@ -36,7 +36,8 @@ loop). The Google halves of Stage 1 wait for the owner's OAuth client.
 
 An independent read-only review (`security-cso`) of commit `7d294fd` returned **"trust boundary
 holds with caveats"** — no path from file content to any write beyond the document row and its
-links; no Critical or High. These are its findings, none fixed yet:
+links; no Critical or High. **All fixed 2026-11-05** (commit `61a7047`), each with a test shown to
+fail on the old code; RLS is migration 017. Kept here as the record of what was found:
 
 **MEDIUM, confirmed — quadratic regexes hang a request on tiny crafted files.**
 `apps/api/src/ingest/extract.ts` (`normalizeText`, ~lines 33–35) and `apps/api/src/ingest/ooxml.ts`
