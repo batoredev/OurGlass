@@ -47,12 +47,28 @@ export function apiBase(): string {
   return (process.env["NEXT_PUBLIC_API_URL"] ?? "").replace(/\/+$/, "");
 }
 
-/** `fetch` against the API, with the access token attached when there is one. */
-export function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+/**
+ * `fetch` against the API, with the access token attached when there is one.
+ *
+ * A 401 from any call but sign-in itself means this browser is not signed in
+ * (no token, or one that was rotated), so it goes to /login rather than leaving
+ * every page to say so. The token is dropped first: it no longer works. Sign-in
+ * keeps its 401 so the form can say the token was wrong. A server in demo mode
+ * never answers 401, so it is never redirected.
+ */
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   const token = getToken();
   if (token) headers.set("authorization", `Bearer ${token}`);
-  return fetch(`${apiBase()}${path}`, { ...init, headers, cache: "no-store" });
+  const response = await fetch(`${apiBase()}${path}`, { ...init, headers, cache: "no-store" });
+  if (response.status === 401 && path !== "/api/session") redirectToSignIn();
+  return response;
+}
+
+function redirectToSignIn(): void {
+  if (typeof window === "undefined" || window.location.pathname === "/login") return;
+  clearToken();
+  window.location.replace("/login");
 }
 
 /** Ask every page on screen to reload its data (replaces `router.refresh()`). */
