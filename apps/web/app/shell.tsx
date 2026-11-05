@@ -46,7 +46,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   // The sign-in page is its own world: no navigation to surfaces you cannot
   // read yet.
-  if (pathname === "/login") return <main className="main">{children}</main>;
+  if (pathname === "/login") return <main className="main main-full">{children}</main>;
 
   return (
     <div className="app-shell">
@@ -63,7 +63,9 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span className="mark" aria-hidden="true">
             O
           </span>
-          <span>OURGLASS</span>
+          <span>
+            ourglass<span className="wordmark-dot" aria-hidden="true">.</span>
+          </span>
         </Link>
         <nav className="primary-nav">
           {SURFACES.map((surface) => (

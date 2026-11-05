@@ -19,6 +19,8 @@ import { useDictation } from "./use-dictation";
 import { apiFetch } from "../lib/session";
 import { fetchEmailDrafts, type EmailDraft } from "../lib/api";
 import { EmailDraftCard } from "./email-draft";
+import Link from "next/link";
+import { Landscape } from "./landscape";
 
 /** What /api/documents returns for an upload — IngestResponse in @ourglass/api/ingest. */
 interface UploadResult {
@@ -319,18 +321,28 @@ export function Conversation() {
         aria-live={loaded ? "polite" : "off"}
       >
         {empty && (
-          <div className="greeting">
-            <div>
-              <div className="hello-kicker">Your world, in context</div>
-              <h2>{now ? greeting(now) : "Hello."}</h2>
-              <p>Tell me what is happening.</p>
+          <div className="greeting landscape-panel">
+            <Landscape className="landscape-art" />
+            <div className="hello-kicker">Your world, in context</div>
+            <h2>{now ? greeting(now) : "Hello."}</h2>
+            <p>Tell me what is happening — who owes what, what is coming up, who you are meeting.</p>
+            <div className="hero-actions">
+              <Link className="hero-pill" href="/today">
+                See today <span aria-hidden="true">↗</span>
+              </Link>
+              <Link className="hero-link" href="/commitments">
+                Open commitments <span aria-hidden="true">→</span>
+              </Link>
             </div>
-            <div className="chat-illustration" aria-hidden="true">
-              <span className="sun-disc" />
-              <span className="time-arch" />
-              <span className="memory-dot one" />
-              <span className="memory-dot two" />
-              <span className="memory-dot three" />
+            <div className="hero-meta">
+              <span className="hero-place">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z" fill="currentColor" />
+                  <circle cx="12" cy="10" r="2.4" fill="var(--blue-deep)" />
+                </svg>
+                {now ? Intl.DateTimeFormat().resolvedOptions().timeZone.replace(/_/g, " ") : ""}
+              </span>
+              <span>Tell me below <span aria-hidden="true">↓</span></span>
             </div>
           </div>
         )}
