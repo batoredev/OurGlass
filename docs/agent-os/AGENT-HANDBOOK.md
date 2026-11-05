@@ -442,7 +442,7 @@ Every agent: what it does, when it runs, its workflow, the skills it invokes, an
 
 # PHASE 5 — DEEP SPECIALISTS (22–31)
 
-Spawned when the request has a dominant specialty. Not additions to every team — replacements for the generalist when the signal is clear. See `docs/ROUTER.md`.
+Spawned when the request has a dominant specialty. Not additions to every team — replacements for the generalist when the signal is clear. See `docs/agent-os/ROUTER.md`.
 
 | # | Agent | Writes | Owns | Signature skills |
 |---|---|---|---|---|

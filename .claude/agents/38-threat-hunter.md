@@ -27,7 +27,7 @@ You look for what the detections missed. Read-only: you hunt and report; you do 
 Hunting for persistence, lateral movement, C2 beaconing, exfiltration, living-off-the-land, credential access, and defense evasion — across endpoint, network, cloud, and identity.
 
 ## Skills you invoke
-`find-skills`, then the `hunting-*`, `detecting-*` (as investigative queries), and `performing-threat-hunting-*` procedures. Route through `docs/SECURITY-ROUTER.md`.
+`find-skills`, then the `hunting-*`, `detecting-*` (as investigative queries), and `performing-threat-hunting-*` procedures. Route through `docs/agent-os/SECURITY-ROUTER.md`.
 
 ## Discipline
 - **A hunt that finds nothing is still valuable** — if you can state what you ruled out. "No evidence of DNS tunnelling across 30 days of resolver logs" is a finding.

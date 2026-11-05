@@ -31,6 +31,9 @@ const ALLOWED: Readonly<Record<string, string>> = {
   // anyway, with arguments built by code — never chosen by a model (see the
   // name check below and PHASE-6-DESIGN §1).
   "api/src/ingest/ingest.ts": "the upload pipeline — save_document and link_document only",
+  // Demo data for a prototype display: fixed calls written by code, never a
+  // model, and only into an empty database (demo/seed.ts, demo/seed-main.ts).
+  "api/src/demo/seed.ts": "the demo seed — fixed fictional data into an empty database only",
 };
 
 const SKIP_DIRS = new Set(["node_modules", "dist", ".next", "out"]);

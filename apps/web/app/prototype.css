@@ -930,3 +930,15 @@ button.checklist-item:disabled { cursor: progress; opacity: .7; }
 .email-card-error { margin: 0; font-weight: 700; color: var(--danger); }
 .email-card .card-action[type="submit"] { background: var(--ink); color: white; }
 .email-card .card-action:disabled { opacity: .55; cursor: progress; }
+
+/* Permanent delete (ROADMAP Stage 0): Files, People and Settings → Your data. */
+.delete-link { display: inline-block; margin-top: 10px; color: var(--danger); font-size: 13px; }
+.danger-button { min-height: 40px; padding: 0 16px; border-radius: 9px; cursor: pointer; font-weight: 600; font-size: 13px; background: var(--danger); color: #fff; border: 1px solid var(--danger); }
+.danger-button:disabled { opacity: 0.45; cursor: not-allowed; }
+.delete-confirm { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--danger); border-radius: 10px; font-size: 13px; line-height: 1.45; }
+.delete-confirm p { margin: 0 0 8px; }
+.delete-confirm-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.delete-error { color: var(--danger); }
+.delete-phrase { display: grid; gap: 6px; margin-top: 12px; font-size: 13px; }
+.delete-phrase input { min-height: 40px; max-width: 260px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface-strong); color: var(--ink); font: inherit; }
+.row.delete-everything { align-items: start; }

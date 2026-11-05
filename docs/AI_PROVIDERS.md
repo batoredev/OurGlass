@@ -1,6 +1,6 @@
 # AI providers
 
-The three model providers, how each is configured, how to run the local one, and what to do
+The six model providers, how each is configured, how to run the local one, and what to do
 when one misbehaves. Architecture context: [AI_ARCHITECTURE.md](AI_ARCHITECTURE.md). Failure
 rules: [AI_FALLBACK.md](AI_FALLBACK.md).
 
@@ -13,8 +13,17 @@ rules: [AI_FALLBACK.md](AI_FALLBACK.md).
 | Provider | Transport | Interpret model | Respond model | Verified against the live service? |
 |---|---|---|---|---|
 | **Claude** (primary) | `@anthropic-ai/sdk` 0.135.0 | `claude-sonnet-5` | `claude-haiku-4-5-20251001` | **Model ids: yes** — `pnpm check:models` passed on 2026-09-17. **Extraction quality: no** — `pnpm test:live` has never run. |
-| **Gemini** (second) | `@google/genai` 2.30.0 | `gemini-3.5-flash` | `gemini-3.5-flash` | **Both stages: yes** — a real extraction AND a real reply on 2026-09-18. **Quality: not measured** (`pnpm eval:ai` has not run). |
+| **Gemini** (second) | `@google/genai` 2.32.0 | `gemini-3.5-flash` | `gemini-3.5-flash` | **Both stages: yes** — a real extraction AND a real reply on 2026-09-18. **Quality: not measured** (`pnpm eval:ai` has not run). |
 | **Qwen** (local) | `fetch` → Ollama `/api/chat` | `qwen3:8b` | same model | **Yes, and the only provider whose quality is measured** — 2026-09-22, Ollama 0.34.2 on an RTX 3050 Laptop (4 GB). Three defects found on first contact and fixed (thinking, schema, field order). Interpret median 30s, p90 46s; Respond ~3s. All 99 fixtures: 34 full matches, 81 intent kinds right, ~54 carrying wrong-write risk — see [`AI_EVALS.md`](AI_EVALS.md). Well below what these prompts are written for; use it offline or without a key, not for real data |
+| **Groq** (free backup) | `fetch` → OpenAI-compatible `/chat/completions` | `openai/gpt-oss-120b` | same model | **Model id: yes** — listed by `GET /models` with a real key on 2026-10-20. **Quality: not measured.** |
+| **Cerebras** (free backup) | same adapter (`openai-compat.ts`) | `gpt-oss-120b` | same model | **Not verified here.** |
+| **OpenRouter** (free backup) | same adapter | `nvidia/nemotron-3-super-120b-a12b:free` | same model | **First live call 2026-10-20** (the `openrouter/free` auto-router it replaced timed out at 20 s). **Quality: not measured.** |
+
+> ⚠ **Privacy: the free tiers may train on what is sent to them.** Groq, Cerebras and OpenRouter
+> free models are fine for testing with the fictional cast; real messages about real people go to
+> them only if the owner accepts each provider's data terms. The deployed project ran Interpret on
+> Groq first in October 2026 — that is an open owner decision, recorded in
+> [`DECISIONS.md`](DECISIONS.md) (2026-11-05).
 
 Every provider's adapter is unit-tested with an injected fake client: request shape,
 normalisation into the shared `Extraction`, failure mapping, and the never-throws Respond
@@ -48,7 +57,7 @@ provider is configured does `/api/turn` fail — with a 500 that names the missi
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `AI_PROVIDER_ORDER` | `claude,gemini` (+`qwen` if `OLLAMA_BASE_URL` is set) | Priority order. Unknown names are dropped, duplicates removed; an empty result falls back to the default |
+| `AI_PROVIDER_ORDER` | `claude,gemini,groq,cerebras,openrouter` (+`qwen` if `OLLAMA_BASE_URL` is set) | Priority order. Unknown names are dropped, duplicates removed; an empty result falls back to the default |
 | `AI_INTERPRET_ORDER` | = `AI_PROVIDER_ORDER` | Per-stage override for Interpret |
 | `AI_RESPOND_ORDER` | = `AI_PROVIDER_ORDER` | Per-stage override for Respond (e.g. local Qwen for privacy) |
 | `AI_REQUEST_TIMEOUT_MS` | `20000` (bounds 1000–120000) | How long the router waits for one attempt. Out-of-range or non-numeric values fall back to the default, never to 0 |
@@ -62,6 +71,9 @@ provider is configured does `/api/turn` fail — with a 500 that names the missi
 | `GEMINI_INTERPRET_MODEL` / `GEMINI_RESPONSE_MODEL` | `gemini-3.5-flash` | Verified callable 2026-09-18 |
 | `OLLAMA_BASE_URL` | — (provider default `http://localhost:11434`) | **Setting it is the opt-in** that adds Qwen to the default order |
 | `OLLAMA_MODEL` | `qwen3:8b` | One model serves both stages |
+| `GROQ_API_KEY` / `GROQ_MODEL` | — / `openai/gpt-oss-120b` | Enables Groq |
+| `CEREBRAS_API_KEY` / `CEREBRAS_MODEL` | — / `gpt-oss-120b` | Enables Cerebras |
+| `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` | — / `nvidia/nemotron-3-super-120b-a12b:free` | Enables OpenRouter |
 
 Configuration is read per request, so a rotated key takes effect without a redeploy.
 `describeProviders(env)` reports which providers an environment would use — names and
@@ -190,6 +202,20 @@ AI_MAX_RETRIES=0                # a retry doubles a minute-long wait
 internet needs authentication in front of it; Ollama itself has none.
 
 ---
+
+## Groq, Cerebras and OpenRouter (free backups)
+
+- **One adapter for all three:** `OpenAICompatProvider` (`apps/api/src/ai/openai-compat.ts`)
+  over plain `fetch` to each service's OpenAI-compatible chat-completions endpoint, with the
+  shared extraction schema as a structured output.
+- **Reasoning models.** `gpt-oss` and every free OpenRouter model with structured outputs reason
+  before answering, from the same token budget as the answer (the failure Gemini Flash showed on
+  Respond). The adapter asks for low effort and keeps the reasoning out of the reply.
+- **Catalogs churn.** Llama 3.3 70B disappeared from Groq (`model_not_found`) before 2026-10-20.
+  Override `*_MODEL` when a default goes. `pnpm check:models` covers Claude and Gemini only;
+  for these three, a real request through the app is the check.
+- **Deployed:** `supabase secrets set GROQ_API_KEY=…` (and so on). A missing key skips that
+  provider.
 
 ## Troubleshooting
 

@@ -1,201 +1,164 @@
 # Your checklist
 
-Everything here needs a person: an account, money, a credential, admin rights, or a pair of
-eyes. Tick items off by editing this file. Rewritten 2026-09-24; the previous version was out
-of date (it still listed Supabase setup, which is done, and an old dev-server port).
+Everything here needs a person: an account, money, a credential, admin rights, a decision, or a
+pair of eyes. Tick items off by editing this file. Rewritten 2026-11-05 for the Supabase +
+Cloudflare Pages hosting (the Cloudflare Workers steps it used to hold no longer apply).
 
 **Who does what:** 👤 you · 🔑 whoever owns the `batoredev` GitHub account (you have write
 access, not admin) · 💰 costs money · 🤖 hand back to me
 
-**Already done — don't redo:** Supabase project with pgvector, all 12 migrations applied, a
-working local `.env`, Ollama with `qwen3:8b` so the app runs with no key, everything on GitHub
-with CI green.
+**Already done — don't redo:** a Supabase project with pgvector and every migration applied; the
+API and reminders deployed by hand as Supabase Edge Functions and the site on Cloudflare Pages
+(`https://ourglass.pages.dev`, 2026-10-19); CI green on `main`. The deployed API answered
+`/api/health` with `"db":true` on 2026-11-05; signing in and sending a message there has not been
+re-checked since 2026-10-20 (item 9).
 
-**Fastest route to a live URL:** items 1, 2, 4, 8, 9, 10, 11, 12. Item 3 can run in parallel.
+**What each stage of the plan needs from you:** [`ROADMAP.md`](ROADMAP.md) → *Owner inputs*.
 
 ---
 
-## Part 1 — Security (today, about 15 minutes)
+## Part 1 — Security (about 20 minutes)
 
-- [ ] **1. Revoke the Ollama API key you pasted into the chat** 👤
-  1. Sign in at <https://ollama.com> and open your account settings → Keys.
-  2. Delete the key you pasted.
-  - **Done when:** it no longer appears in the list.
+- [ ] **1. Revoke the Ollama API key you pasted into a chat** 👤
+  <https://ollama.com> → account settings → Keys → delete it. **Done when** it is gone from the
+  list.
 
 - [ ] **2. Rotate the Anthropic API key** 👤
   It reached a tracked file three times. It was never committed, but treat it as leaked.
-  1. Open <https://console.anthropic.com/settings/keys>.
-  2. Create a new key and copy it.
-  3. Delete the old key.
-  4. In the repo root, open `.env` and set `ANTHROPIC_API_KEY=<the new key>`.
-  5. Never put a key in `.env.example` (it is committed and the repo is public) or in a chat.
-  - **Done when:** the old key shows as deleted and `.env` holds the new one.
+  1. <https://console.anthropic.com/settings/keys> → create a new key → delete the old one.
+  2. Put the new one in your local `.env` and in the deployed API:
+     `supabase secrets set ANTHROPIC_API_KEY=<new key>`.
+  3. Never put a key in `.env.example` (committed, and the repo is public) or in a chat.
 
 - [ ] **3. Protect the repository** 🔑 *(send these steps to the `batoredev` owner)*
-  1. GitHub → the `OurGlass` repo → **Settings → Branches** → add a rule for `main` that
-     requires these status checks to pass: `typecheck / lint / test / build` and
-     `integration (Postgres + pgvector)`.
-  2. **Settings → Code security** → turn on **secret scanning** and **push protection**.
-  3. Same page → turn on **Dependabot alerts**.
-  - **Done when:** a pull request into `main` shows both checks as required.
+  1. GitHub → `OurGlass` → **Settings → Branches** → a rule for `main` that requires the
+     `typecheck / lint / test / build` and `integration (Postgres + pgvector)` checks and
+     **blocks force-pushes**. A force-push to `main` already dropped eight commits once
+     (2026-10-21; they were merged back).
+  2. **Settings → Code security** → **secret scanning**, **push protection**, **Dependabot
+     alerts** on.
+  - **Done when** a pull request into `main` shows both checks as required.
 
-## Part 2 — Give the app a real model (about 10 minutes)
+- [ ] **4. Turn on Row Level Security in Supabase** 👤
+  Migration `017_row_level_security` (Stage 0) enables it on every table, makes every view run
+  with the caller's rights, and revokes the Data API roles' grants. No code depends on it, so it
+  can be applied as soon as the pull request merges:
+  1. `pnpm db:migrate` against the **direct** connection ([`RUNBOOK.md`](RUNBOOK.md)).
+  2. Run the smoke check. Pages should show your data exactly as before: the app connects as the
+     tables' owner, which RLS does not restrict. If pages come back **empty**, the API connects as
+     some other role — tell me, and I write the one-line compensating migration.
+  3. Dashboard → **Advisors → Security Advisor**: the RLS warnings should be gone.
 
-- [ ] **4. Add Anthropic credit** 👤💰
-  Local Qwen gets 34 of 99 test sentences fully right. Claude is the model the app was built
-  for, and it has never been measured.
-  1. <https://console.anthropic.com> → **Settings → Billing** → add credit. A small amount is
-     enough to start.
-  2. In `.env`, change `AI_PROVIDER_ORDER=qwen` to `AI_PROVIDER_ORDER=claude,gemini,qwen`.
-  3. Stop and restart `pnpm dev`.
-  4. Send any message.
-  - **Done when:** replies arrive in a few seconds rather than about 30, and none says
-    "I couldn't process that".
+## Part 2 — Models and your data (decisions, about 10 minutes)
 
-- [ ] **5. Approve the paid measurement** 👤 → 🤖
+- [ ] **5. Decide which models may see real data** 👤
+  The deployed project was set to try **Groq first** (October 2026). Groq, Cerebras and
+  OpenRouter free tiers may use what you send to train their models. Either accept their terms,
+  or put Claude/Gemini first: `supabase secrets set AI_PROVIDER_ORDER=claude,gemini,groq,cerebras,openrouter`.
+  Tell me which, and I record it in `DECISIONS.md`.
+
+- [ ] **6. Add Anthropic credit** 👤💰
+  Claude is the model the prompts were written for, and its answer quality has never been
+  measured. <https://console.anthropic.com> → **Settings → Billing**. A small amount is enough
+  to start.
+
+- [ ] **7. Approve the paid measurement** 👤 → 🤖
   Tell me "run the Claude eval". It is about 99 Claude calls; the project rules require your
-  go-ahead before spending. I record the results in `docs/AI_EVALS.md`.
+  go-ahead before spending. I record the results in `docs/AI_EVALS.md`. The SDK upgrade waiting
+  in Dependabot #23 is confirmed the same way.
 
-## Part 3 — Try it yourself (about 30 minutes)
+## Part 3 — Try it (about 30 minutes)
 
-- [ ] **6. Use the app locally** 👤
-  Tests cannot judge whether a reply sounds right. Only a person can.
-  1. In a terminal at the repo root: `pnpm dev`
-  2. Open <http://localhost:3000>. No sign-in is needed locally.
-  3. Send these one at a time:
-     - `Barkha needs to give me the article by 6. Remind me at 5 to ask her.`
-     - `What does Barkha owe me?`
-     - `Track my reading with a book title and pages read.`
-     - `Barkha sent me the article.`
-  4. After each, check the reply is short, correct, and says who owes what to whom.
-  5. Press **Undo** on one turn and check it disappears from **Commitments**.
-  6. Open **Today, Commitments, People, Memories** and **Settings**.
-  - **Done when:** you have told me anything that reads wrong or looks broken.
+- [ ] **8. Run the demo locally** 👤
+  Follow [`DEMO-GUIDE.md`](DEMO-GUIDE.md): `pnpm db:seed-demo` gives you a ready-made week, and
+  section 2 is a ten-minute script. Tests cannot judge whether a reply *sounds* right; tell me
+  anything that reads wrong or looks broken.
 
-- [ ] **7. Try dictation** 👤
-  1. Open <http://localhost:3000> in **Chrome or Edge**. Firefox shows no microphone; that is
-     expected, because it has no speech API.
-  2. Click the **microphone** next to Send and allow microphone access.
-  3. Say: "Remind me tomorrow at nine to call the printer."
-  4. The words should appear in the message box **without sending**. Then press Send.
-  - **Done when:** the text appears correctly. Nobody has tried this with a real microphone yet.
+- [ ] **9. Check the deployed app** 👤
+  Sign in at `https://ourglass.pages.dev/login` with your access token, send one message, open
+  **Today** and **Commitments**. Then the reminder check in [`RUNBOOK.md`](RUNBOOK.md) → *Smoke
+  check*, step 4. **Done when** a reply arrives and the cron job shows `succeeded`.
 
-## Part 4 — Put it on the internet (about an hour)
+- [ ] **10. Try dictation** 👤
+  In Chrome or Edge (Firefox has no speech API), the microphone next to Send: say "Remind me
+  tomorrow at nine to call the printer." The words should appear **without sending**. Nobody has
+  tried this with a real microphone yet.
 
-- [ ] **8. Create a Cloudflare account and log in** 👤
-  1. Sign up at <https://dash.cloudflare.com>. The free plan is enough; the app fits its limit.
-  2. In a terminal: `cd apps/web`, then `npx wrangler login`, and approve in the browser.
-  3. Check: `npx wrangler whoami` shows your account.
+## Part 4 — Make deploys repeatable (about 30 minutes)
 
-- [ ] **9. Create the production database** 👤
-  Your current Supabase project holds test and demo data, so use a clean one for production.
-  1. Supabase dashboard → **New project** (e.g. `ourglass-prod`). Save the database password.
-  2. **Database → Extensions** → search `vector` → enable it.
-  3. **Project Settings → Database → Connection string** → copy the **direct** connection
-     (port **5432**, host `db.<ref>.supabase.co`). Not the 6543 pooler — it breaks this app
-     intermittently.
-  4. From the repo root, in PowerShell:
-     ```powershell
-     $env:DATABASE_URL="postgresql://postgres:PASSWORD@db.REF.supabase.co:5432/postgres"; pnpm db:migrate; Remove-Item Env:DATABASE_URL
-     ```
-  - **Done when:** the output ends `applied 12 migration(s)`.
+- [ ] **11. Turn on backups** 👤💰
+  Supabase → **Database → Backups**; turn on **point-in-time recovery** if your plan offers it.
+  **Done when** you know how far back you could restore. Without backups, a bad write or
+  migration cannot be recovered.
 
-- [ ] **10. Turn on backups** 👤💰
-  1. In the production project: **Database → Backups**.
-  2. Turn on **point-in-time recovery** if your plan offers it (it may need a paid plan).
-  - **Done when:** you know how far back you could restore. Without backups, a bad write or
-    migration cannot be recovered.
+- [ ] **12. Deploy credentials for the Deploy workflow** 🔑
+  For a personal-account repository, only the owner can add Actions secrets.
+  1. Supabase → **Account → Access Tokens** → generate a token.
+  2. GitHub repo → **Settings → Secrets and variables → Actions** → secret
+     `SUPABASE_ACCESS_TOKEN`.
+  3. **Variables** tab → `SUPABASE_PROJECT_REF` (production) and `SUPABASE_STAGING_PROJECT_REF`.
+     ⚠ Pushes to `main` deploy whatever `SUPABASE_STAGING_PROJECT_REF` names. With only one
+     project, leave it unset (deploy production by a manual run) or accept that every merge
+     deploys production.
+  - **Done when** the next push's **Deploy** run shows steps running instead of skipped.
 
-- [ ] **11. Set the production secrets** 👤
-  Run these in `apps/web`. Each one asks you to paste a value. If it offers to create the
-  Worker, answer yes.
-  1. Generate the sign-in token (your password to the live app) and save it in a password
-     manager:
-     ```
-     node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
-     ```
-  2. `npx wrangler secret put OURGLASS_ACCESS_TOKEN` → paste the token.
-  3. `npx wrangler secret put DATABASE_URL` → paste the production connection string.
-  4. `npx wrangler secret put ANTHROPIC_API_KEY` → paste the key.
-  5. Optional: `GEMINI_API_KEY` as a backup model, `VOYAGE_API_KEY` for memory search,
-     `SUPABASE_URL` + `SUPABASE_SECRET_KEY` for file uploads (item 19c).
-  - The live app cannot reach the Ollama on your laptop, so it **needs item 4**.
+- [ ] **13. Turn on the uptime and post-deploy checks** 🔑
+  **Variables** tab → `PRODUCTION_URL` = `https://<project-ref>.supabase.co/functions/v1` (no
+  `/api/health`; the check adds it), and `STAGING_URL` if you have staging. The **Uptime**
+  workflow then checks every 15 minutes.
 
-- [ ] **12. Deploy and check** 👤
-  1. From the repo root: `pnpm --filter @ourglass/web run deploy`
-  2. Note the address printed at the end: `https://ourglass.<your-subdomain>.workers.dev`
-  3. Open `<address>/api/health`. It must show `"db":true`.
-  4. Open `<address>/login`, paste the token from item 11, and sign in.
-  5. Send one message and check the reply.
-  6. In `apps/web`, run `npx wrangler tail`. Within two minutes a `scheduled` event should
-     appear — that is the reminder timer running.
-  - **If anything fails:** `docs/RUNBOOK.md` → *Roll back*.
+- [ ] **14. Rebuild the site on every push** 👤 *(optional)*
+  Cloudflare → **Workers & Pages → ourglass** → connect the GitHub repository with the settings
+  in [`DEPLOYMENT-DESIGN.md`](DEPLOYMENT-DESIGN.md) (`NEXT_PUBLIC_API_URL`, `NODE_VERSION=24`).
+  Until then the site changes only when someone uploads it by hand — the new look and the
+  sign-in fix are not live until it is rebuilt.
 
-- [ ] **13. Staging** 👤 *(optional, but do it before item 14)*
-  Automatic deploys go to staging first, so set it up before turning them on.
-  1. Create another Supabase project (e.g. `ourglass-staging`) and repeat item 9 for it.
-  2. Repeat item 11 with `--env staging` on every command, and a **different** access token.
-  3. `pnpm --filter @ourglass/web run deploy:staging`
-  4. Check `https://ourglass-staging.<your-subdomain>.workers.dev/api/health`.
+- [ ] **15. Staging** 👤 *(optional)*
+  A second Supabase project, migrated, with its own secrets and a **different** access token;
+  then item 12's staging variable.
 
-- [ ] **14. Turn on automatic deploys** 🔑
-  For a repository owned by a personal account, only the owner can add Actions secrets.
-  1. Cloudflare → **My Profile → API Tokens → Create Token** → the **Edit Cloudflare Workers**
-     template → copy the token.
-  2. Cloudflare → **Workers & Pages** → copy the **Account ID** shown on the right.
-  3. GitHub repo → **Settings → Secrets and variables → Actions** → **New repository secret**:
-     `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
-  4. **Variables** tab → add `PRODUCTION_URL` (and `STAGING_URL` if you did item 13). These
-     switch on the post-deploy check and the 15-minute uptime check.
-  - **Done when:** the next push's **Deploy** run shows steps running instead of skipped.
-    Pushes deploy staging; production stays a manual run of the Deploy workflow.
+## Part 5 — Google (unblocks Stage 1)
 
-## Part 5 — Decisions only you can make (reply to me)
+- [ ] **16. A Google Cloud project and OAuth client** 👤
+  Start early: Google's consent-screen review takes days to weeks.
+  1. <https://console.cloud.google.com> → new project → enable the **Google Calendar API** and
+     the **Gmail API**.
+  2. **OAuth consent screen** → External → scopes `…/auth/calendar.events`,
+     `…/auth/gmail.send`, and `…/auth/gmail.readonly` (reading, decided 2026-11-05); add yourself
+     as a test user. In testing mode Google expires the grant every 7 days — reconnect in
+     Settings.
+  3. **Credentials → OAuth client ID → Web application**, redirect URI
+     `https://<project-ref>.supabase.co/functions/v1/api/google/callback`.
+  4. `supabase secrets set GOOGLE_CLIENT_ID=… GOOGLE_CLIENT_SECRET=… GOOGLE_REDIRECT_URI=…`
+     (the same three in `.env` locally, with a localhost redirect URI).
+  - **Done when** Settings → Google shows *connected*. Then tell me, and I verify the calendar
+    round trip and a real send.
 
-- [x] **15. Cost budget per message** → **10 per minute, 200 per day** (answered 2026-09-24,
-      now the defaults).
-- [x] **16. Where uploaded files live** → **Supabase Storage** (answered 2026-09-24). Phase 6
-      builds on it.
-- [ ] **17. A Google Cloud project** for Gmail, Calendar and Drive (Phase 7). Start early:
-      Google's consent-screen review takes days to weeks. Email power is decided: **send, after
-      confirming each one** (2026-09-24). The Google Cloud project itself is still yours to create.
-- [ ] **18. Will there be a second customer?** Only a yes makes the multi-customer work
-      (6–9 sessions) worth doing.
-- [ ] **19. Terms of service and a privacy policy** before anyone outside your team uses it.
-      The app stores commitments and facts about real people.
+## Part 6 — Decisions only you can make (reply to me)
 
-## Part 6 — Optional
+- [x] **Cost budget per message** → 10 per minute, 200 per day (2026-09-24).
+- [x] **Where uploaded files live** → Supabase Storage (2026-09-24).
+- [x] **Email power** → send, after confirming each one (2026-09-24).
+- [x] **Scope and the nine defaults** → the 13 categories and the defaults recorded in
+      `DECISIONS.md` (2026-11-05).
+- [ ] **17. Will there be a second customer?** Only a yes makes multi-user work worth doing.
+- [ ] **18. Terms of service and a privacy policy** before anyone outside your team uses it. The
+      app stores commitments and facts about real people.
+- [ ] **19. The daily digest (Stage 5):** which address it is sent from, and your quiet hours.
 
-- [ ] **19b. Alert webhook** (decided: a chat webhook) — so outages reach you instead of waiting to be noticed.
-  1. Slack: create an app → **Incoming Webhooks** → add to a channel → copy the URL. Discord: channel
-     settings → **Integrations → Webhooks → New Webhook** → copy the URL.
-  2. Locally: `ALERT_WEBHOOK_URL=<url>` in `.env`. Deployed, in `apps/web`:
-     `npx wrangler secret put ALERT_WEBHOOK_URL` (and again with `--env staging` if you use staging).
-  - You get one message when reminders stop firing or every AI model fails — never the user's words.
-- [ ] **19c. Turn on file uploads** (decided: Supabase Storage) — the 📎 button in the chat.
-  1. Supabase dashboard → **Project Settings → API Keys** → copy a **secret key**
-     (`sb_secret_…`; the legacy `service_role` key also works). The project URL is on the same
-     page: `https://<project-ref>.supabase.co`.
-  2. Locally, in `.env`: `SUPABASE_URL=https://<project-ref>.supabase.co` and
-     `SUPABASE_SECRET_KEY=sb_secret_…`. Deployed, in `apps/web`:
-     `npx wrangler secret put SUPABASE_URL` and `npx wrangler secret put SUPABASE_SECRET_KEY`.
-  3. Nothing to create: the private `documents` bucket makes itself on the first upload.
-  - ⚠ The secret key bypasses every access rule in your database. It stays on the server; the
-    app never sends it to a browser. Treat it like the database password.
-  - **Images** are read only by Claude or Gemini (item 4); your local Qwen reads text, Word,
-    Excel and PDF files. Cost: about $0.04 per long document and $0.015 per image on Claude.
-  - ⚠ **Deployed PDFs need Cloudflare Workers Paid** ($5/month): reading a PDF takes more than
-    the free plan's 10 ms of CPU per request. The app bundle is 2.61 MB of the free plan's
-    3 MB limit, so that fits either way.
-- [ ] **20. Voyage API key** (<https://dash.voyageai.com>) → `VOYAGE_API_KEY=` in `.env`. Lets
-      memory search find paraphrases, not only exact words.
-- [ ] **21. Reconnect the Claude Code connectors.** The GitHub one fails to connect
-      ("Authorization header is badly formatted"); Supabase and Vercel need authorising via
-      `/mcp`. Nothing depends on them.
+## Part 7 — Optional
 
----
-
-## What I'm doing meanwhile — no action from you
-
-The accessibility audit, a stricter content security policy, and alerting once the app is
-deployed. Progress is tracked in `docs/REMAINING-EXECUTION-PLAN.md`.
+- [ ] **20. Alert webhook** (decided: a chat webhook). Slack **Incoming Webhooks** or a Discord
+  channel webhook → `ALERT_WEBHOOK_URL` in `.env`, and `supabase secrets set ALERT_WEBHOOK_URL=…`.
+  One message when reminders stop firing or every AI model fails — never your words.
+- [ ] **21. File uploads** (the 📎 button). Supabase → **Project Settings → API Keys** → a secret
+  key (`sb_secret_…`).
+  - Locally: `SUPABASE_URL=https://<project-ref>.supabase.co` and `SUPABASE_SECRET_KEY=…`.
+  - Deployed: `supabase secrets set STORAGE_URL=… STORAGE_SECRET_KEY=…` — **not** `SUPABASE_*`,
+    which `supabase secrets set` silently skips.
+  - The private `documents` bucket creates itself on the first upload. ⚠ The secret key
+    bypasses every access rule: it stays on the server, like the database password.
+  - Images are read only by Claude or Gemini. Cost on Claude: about $0.04 per long document and
+    $0.015 per image.
+- [ ] **22. Voyage API key** (<https://dash.voyageai.com>) → `VOYAGE_API_KEY`. Memory search then
+  finds paraphrases, not only exact words.

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * A page that failed to render — Track P2 of docs/REMAINING-EXECUTION-PLAN.md.
+ * A page that failed to render — Track P2 of docs/archive/REMAINING-EXECUTION-PLAN.md.
  *
  * Without this, a server error showed Next's default page: framework detail
  * for anyone curious, nothing useful for the user. The shell (nav, sidebar)

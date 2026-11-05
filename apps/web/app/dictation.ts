@@ -1,6 +1,6 @@
 /**
  * Dictation, the parts that are not React — Stage 15 (spec §1's "eventually",
- * scoped by docs/REMAINING-EXECUTION-PLAN.md to speech INTO THE COMPOSER).
+ * scoped by docs/archive/REMAINING-EXECUTION-PLAN.md to speech INTO THE COMPOSER).
  *
  * The browser's own SpeechRecognition, not a hosted transcription API: it costs
  * nothing, adds no backend, and sends no audio anywhere this app controls. The

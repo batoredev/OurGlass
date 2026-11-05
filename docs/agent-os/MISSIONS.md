@@ -144,7 +144,7 @@ a11y reviews continuously, not at the end.
 
 ## Mission 4c — Showcase-grade interface (4 teammates)
 
-Landing pages, marketing, hero surfaces. **Not admin tools** — high visual variance on a daily-use console makes it worse. Full diagnosis in `docs/SHOWCASE-FRONTEND.md`.
+Landing pages, marketing, hero surfaces. **Not admin tools** — high visual variance on a daily-use console makes it worse. Full diagnosis in `docs/agent-os/SHOWCASE-FRONTEND.md`.
 
 ```text
 Create an agent team to bring [surface] to showcase quality.

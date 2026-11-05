@@ -1,32 +1,43 @@
 # Handoff — continuing in a fresh (cloud) Claude Code session
 
-Written 2026-10-18 at the end of the local session that built Phases 6 and 8 and alerting. A new
-session has **none of that conversation**. Everything it needs is in this file and the docs it
-links. Read in this order: `CLAUDE.md` → this file → `docs/REMAINING-EXECUTION-PLAN.md` →
-`docs/PHASE-6-DESIGN.md` → `docs/YOUR-ACTIONS.md` (the owner's checklist).
+First written 2026-10-18; revised 2026-11-05. A new session has **none of the earlier
+conversations**. Everything it needs is in this file and the docs it links. Read in this order:
+`CLAUDE.md` → this file → [`ROADMAP.md`](ROADMAP.md) (the plan of record) →
+[`DECISIONS.md`](DECISIONS.md) (the 2026-11-05 rows first) → [`YOUR-ACTIONS.md`](YOUR-ACTIONS.md)
+(the owner's checklist). Every doc is indexed in [`README.md`](README.md).
 
-## Where things stand
+## Where things stand (2026-11-05)
 
 - `main` is green in CI (typecheck, lint, unit, integration against Postgres, CodeQL).
-- Built and verified: everything through Phase 5, the §35 permission model, multi-provider AI
-  (Claude / Gemini / local Qwen), alerting to a chat webhook, voice dictation (Phase 8), and
-  **file uploads (Phase 6)** — see `PHASE-6-DESIGN.md` §9a for what was verified and how.
-- **Hosting changed on 2026-10-19:** the API and reminders now run as Supabase Edge Functions
-  (`apps/edge`, Deno) and the site is a static export on Cloudflare Pages; the Cloudflare Worker
-  is gone. Read `DEPLOYMENT-DESIGN.md` before touching deployment.
-- **Phase 7, partly built** (arjunamar, 2026-10-19/20): Google Calendar sync, and email drafted in
-  chat and sent from Gmail after a per-message confirmation. Drive is not started. Not
-  re-verified live in the session that wrote this.
+- **Built and verified:** see ROADMAP → *Where it stands*. In short: conversation → structured
+  state, memory with provenance, uploads, dictation, the §35 permission model, six model
+  providers, Calendar add and Gmail send behind a per-message confirmation, the landscape look,
+  and `pnpm db:seed-demo`.
+- **Hosting** (2026-10-19): the API and reminders are Supabase Edge Functions (`apps/edge`,
+  Deno); the site is a static export on Cloudflare Pages. Read
+  [`DEPLOYMENT-DESIGN.md`](DEPLOYMENT-DESIGN.md) before touching deployment, and
+  [`RUNBOOK.md`](RUNBOOK.md) to operate it. The Deploy workflow skips until the owner adds the
+  Supabase credentials.
+- **Docs reorganised** (2026-11-05): earlier plans in `docs/archive/`, the agent-team operating
+  system in `docs/agent-os/`, design references in `docs/reference/`.
+- **Held:** Dependabot #23 (`@anthropic-ai/sdk` 1.x) waits for a paid live check
+  (`DECISIONS.md`).
 - On 2026-10-21 a force-push to `main` dropped eight commits; they were merged back, not pushed
   over. Until branch protection exists (`YOUR-ACTIONS.md` item 3), never force-push `main`.
 
 ## The work left, in order
 
-### 1. Fix the Phase 6 security review findings (start here)
+**Build the ROADMAP stages in order, each as its own pull request with tests.** Stage 0 (safe to
+hold this data) was built 2026-11-05; next is 1 (conversation context, then calendar and email reading) → 2 (the person model and
+meeting briefs) → 3 (the personal scheduler) → 4 (replies per recipient) → 5 (the proactive
+loop). The Google halves of Stage 1 wait for the owner's OAuth client.
+
+### Stage 0 detail — the Phase 6 security review findings
 
 An independent read-only review (`security-cso`) of commit `7d294fd` returned **"trust boundary
 holds with caveats"** — no path from file content to any write beyond the document row and its
-links; no Critical or High. These are its findings, none fixed yet:
+links; no Critical or High. **All fixed 2026-11-05** (commit `61a7047`), each with a test shown to
+fail on the old code; RLS is migration 017. Kept here as the record of what was found:
 
 **MEDIUM, confirmed — quadratic regexes hang a request on tiny crafted files.**
 `apps/api/src/ingest/extract.ts` (`normalizeText`, ~lines 33–35) and `apps/api/src/ingest/ooxml.ts`
@@ -77,36 +88,20 @@ model — today nothing does (the orchestrator's `listRecent` reads only timesta
 "what did that brief say?" feature would make stored bodies an injection path; (c) no timing tests
 for the extractors.
 
-Also noted, not a bug: undo never deletes stored bytes and there is no delete path.
+Also noted, not a bug: undo never deletes stored bytes and there is no delete path — Stage 0's
+permanent delete closes it.
 
-### 1a. ~~The Worker build fails on Linux~~ — obsolete
-The Worker it described was replaced by Supabase Edge Functions + Cloudflare Pages on 2026-10-19.
-On 2026-10-21 the replacement was checked locally: the `api` and `reminders` bundles ran under
-Deno 2.1.4 against a migrated database (auth, every read route, CORS, a due reminder fired
-once), and the static site built and served. Nothing has been checked on a deployed project.
+### Standing items, alongside the stages
 
-### 2. Finish the knowledge-graph refresh
-Standing rule: `/graphify --update` after every feature. The last run stopped after detection
-(84 changed files: 75 code, 9 docs). `.graphifyignore` keeps `apps/api/test-fixtures/` out — one
-fixture is a deliberate prompt-injection document. Commit `graphify-out/` (except what
-`.gitignore` excludes).
-
-### 3. Nonce-based CSP (P2 hardening)
-`apps/web/lib/security-headers.ts` still allows `'unsafe-inline'` scripts.
-
-### 4. Stage 16 — full recheck
-The model-quality half has never run. Live evals on Qwen take hours; on Claude/Gemini they cost
-money (ask first, see below).
-
-### 5. Phase 7 — Gmail, then Calendar, then Drive (`REMAINING-EXECUTION-PLAN.md` Stage 14)
-Blocked on the owner's Google Cloud project (`YOUR-ACTIONS.md` item 17). Owner decision: email is
-**send, after confirming each one** — every send goes through the existing `pending_actions`
-hold-and-confirm path, never a standing grant. Permission model: `docs/PHASE-7-PERMISSIONS-DESIGN.md`.
-One mission per surface.
-
-### 6. Polish owner checklist items 1–14
-The owner deferred this until the app was finished ("up to 14 it is working somewhat, we have to
-improve, let's do that after finishing the entire app").
+- **Knowledge graph.** Standing rule: `/graphify --update` after every feature. The last run
+  stopped after detection. `.graphifyignore` keeps `apps/api/test-fixtures/` out — one fixture
+  is a deliberate prompt-injection document.
+- **Nonce-based CSP** (P2 hardening): `apps/web/lib/security-headers.ts` still allows
+  `'unsafe-inline'` scripts.
+- **The model-quality recheck** has never run on a hosted model. Live evals on Claude/Gemini
+  cost money (ask first); Qwen is free but runs only on the owner's laptop.
+- **Owner checklist polish.** The owner deferred items 1–14 of the old checklist until the app
+  was finished.
 
 ## Working rules carried over (these lived in local memory, not the repo)
 
@@ -120,9 +115,10 @@ improve, let's do that after finishing the entire app").
   touch the owner's own trackers (`reading`, `gym_sessions`) in test scripts.
 - `ANTHROPIC_API_KEY` never goes in a workflow a fork PR can trigger.
 - **Ask owner decisions as questions mid-execution and keep building** — don't stall waiting.
-- The owner pre-approved routine commands, commits and pushes to `main` of `batoredev/OurGlass`.
-  That does not waive the rules above, and no destructive reset of their Supabase data without
-  saying so first.
+- The owner pre-approved routine commands and commits. **Changes land on `main` through a
+  branch and a pull request** (owner default 2026-11-05), never a force-push. None of this
+  waives the rules above, and no destructive reset of their Supabase data without saying so
+  first.
 - Verify before claiming done; report what was NOT verified as plainly as what was.
 
 ## Running things in a fresh environment
@@ -130,13 +126,18 @@ improve, let's do that after finishing the entire app").
 - `pnpm install`, then `pnpm typecheck && pnpm lint && pnpm test` — no database or keys needed.
 - **Integration tests need Postgres + pgvector.** CI provides it. Without Docker, use PGlite
   (WASM Postgres, includes pgvector) over its socket server:
-  `npm i @electric-sql/pglite@0.5.8 @electric-sql/pglite-socket@0.2.11` in a scratch directory,
-  then start `new PGLiteSocketServer({ db: await PGlite.create({ extensions: { vector } }), port,
-  host: "127.0.0.1", maxConnections: 20 })` — **`maxConnections` defaults to 1**, which resets the
-  app's pool. Migrate with `node packages/db/scripts/migrate.mjs` and `DATABASE_URL` set
+  `npm i @electric-sql/pglite@0.5.8 @electric-sql/pglite-socket@0.2.11
+  @electric-sql/pglite-pgvector` in a scratch directory (the `vector` extension is its own
+  package), then start `new PGLiteSocketServer({ db: await PGlite.create({ extensions: { vector }
+  }), port, host: "127.0.0.1", maxConnections: 20 })` — **`maxConnections` defaults to 1**, which
+  resets the app's pool. Migrate with `node packages/db/scripts/migrate.mjs` and `DATABASE_URL` set
   explicitly (not `pnpm db:migrate`, which loads `.env`). Result last time: 105/107 — the two
   double-undo tests in `create-commitment.integration.test.ts` hit a PGlite constraint
   divergence; real Postgres (CI) passes them.
+- **Node ≥ 24** is required (CI uses 24). A container with an older Node can download the
+  official Node 24 tarball into a scratch directory and put its `bin/` first on `PATH`.
+- **A demo database:** `pnpm db:migrate`, then `pnpm db:seed-demo` (empty local databases only),
+  then `pnpm dev` — [`DEMO-GUIDE.md`](DEMO-GUIDE.md).
 - There is no Ollama in the cloud, so nothing can run a live model for free there.
 
 ## Gotchas this codebase has already paid for

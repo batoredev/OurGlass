@@ -8,6 +8,7 @@
  */
 import { AsyncPage } from "../async-page";
 import { fetchCommitments, fetchDirectory } from "../../lib/api";
+import { DeletePermanently } from "../delete-permanently";
 import { Avatar } from "../icons";
 import { EmptyState, LoadFailure, PageHeader } from "../surface";
 
@@ -68,6 +69,12 @@ async function renderPeople() {
                     ? "No open commitments"
                     : `${open} open commitment${open === 1 ? "" : "s"}`}
                 </div>
+                <DeletePermanently
+                  scope="person"
+                  id={person.id}
+                  name={person.display_name}
+                  consequence="Every commitment between you, and every memory, reminder and link about them, goes too."
+                />
               </div>
             );
           })}

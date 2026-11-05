@@ -1,149 +1,148 @@
 # Demo guide
 
-A scripted walkthrough of OurGlass: what to type, what should happen, and what is
-deliberately not built yet. Read section 0 before demoing to anyone — it covers the one
-thing that can make the whole demo fail, and it is not the code.
+A scripted walkthrough of OurGlass for a prototype display: how to start it with a ready-made
+week of data, what to type, what should happen, and what is deliberately not built yet. Read
+section 0 first — it covers the one thing that can sink a demo, and it is not the code.
+
+What is built and what is planned: [`ROADMAP.md`](ROADMAP.md).
 
 ---
 
 ## 0. Before you start — the model provider
 
-**The assistant cannot understand a single message without a working model provider.** If
-none is available, every turn answers *"I couldn't process that just now — nothing was
-saved"*, which is honest but is not a demo.
-
-Check it in ten seconds:
+**The assistant cannot understand a message without a working model provider.** With none, every
+turn answers *"I couldn't process that just now — nothing was saved"*: honest, but not a demo.
+The pages, the seeded data and Undo all work without one.
 
 ```sh
-pnpm check:models
+pnpm check:models      # one real request per Claude and Gemini model; free
 ```
-
-That sends one real request per configured model and fails loudly if a model is missing,
-unavailable, or out of quota. It is free.
 
 | Provider | What goes wrong | Fix |
 |---|---|---|
-| **Claude** (primary) | Account out of credit — the API answers `400 … credit balance is too low` | Add credit. This is the most reliable option: Sonnet reads the message, Haiku writes the reply, and both answer in about a second |
-| **Gemini** (fallback) | Free tier has per-minute *and* per-day quotas. Past them: `429 … exceeded your current quota` | Wait for the daily reset, or move the key to a paid tier |
-| **Qwen** (local, optional) | Not installed by default | `ollama pull qwen3:8b`, set `OLLAMA_BASE_URL` — free and quota-free, but slow on CPU |
+| **Claude** (primary) | Out of credit: `400 … credit balance is too low` | Add credit. Sonnet reads, Haiku replies, about a second a turn |
+| **Gemini** | Free-tier per-minute and per-day quotas: `429` | Wait for the reset, or a paid tier. Replies take 10–19 s, so set `AI_RESPOND_TIMEOUT_MS=15000` or they fall back to the template |
+| **Groq, Cerebras, OpenRouter** (free backups) | A model leaves the catalogue | Override `GROQ_MODEL` etc. ⚠ Free tiers may train on what you send: use them with the fictional demo cast, not real data |
+| **Qwen** (local, optional) | Not installed | `ollama pull qwen3:8b`, set `OLLAMA_BASE_URL` — free, private, slow (~30 s a turn) |
 
-**Recommendation for a live demo: have Claude credit available.** Gemini alone works, but
-its free tier throttles under exactly the kind of burst a demo produces, and a 503 from
-Google looks like a broken product.
-
-Full detail: [`AI_PROVIDERS.md`](AI_PROVIDERS.md).
+**For a live audience, have Claude credit.** Free tiers throttle under exactly the burst a demo
+produces. Detail: [`AI_PROVIDERS.md`](AI_PROVIDERS.md).
 
 ---
 
-## 1. Start it
+## 1. Start it with a demo week
 
 ```sh
 pnpm install
 pnpm db:migrate        # once, or after pulling schema changes
-pnpm dev               # http://localhost:3000
+pnpm db:seed-demo      # an EMPTY local database only — see below
+pnpm dev               # site http://localhost:3000, API http://localhost:8787, reminder poller
 ```
 
-`pnpm dev` builds the shared libraries, starts the app on port 3000, and starts the reminder
-poller. Give it about fifteen seconds.
+In the repo-root `.env` (copy `.env.example`): `DATABASE_URL` for the local database,
+`NEXT_PUBLIC_API_URL=http://localhost:8787`, and either `OURGLASS_ACCESS_TOKEN` (32+
+characters — you sign in with it) or, on your own machine only, `ENABLE_DEMO_ENDPOINT=true`.
 
-**Starting from a clean slate.** A demo database carrying earlier experiments looks
-confusing — old failures and half-finished sentences are the first thing a visitor reads.
-To wipe everything and start empty:
+**`pnpm db:seed-demo`** writes one week for the fictional cast in a single turn, costs nothing
+(no model is called), and can be undone from **Activity**:
 
-```sh
-pnpm db:reset          # DESTRUCTIVE: drops every table, re-runs all migrations
-```
+| | Seeded |
+|---|---|
+| People | Barkha, Dev, Meera, Arun |
+| Owed to you | Barkha: the article, due in 4 hours · Meera: the poster draft, in 3 days |
+| Owed by you | The venue quote to Dev, tomorrow · Feedback on the backend plan to Arun, **a day overdue** |
+| Reminder | "Ask Barkha for the article", an hour before it is due |
+| Meetings | Hult poster review tomorrow · Coffee with Meera the day after (30 min each) |
+| Thoughts | Three, one per priority |
+| Memories | "Arun works on the backend", "Meera prefers morning meetings" |
 
-That deletes all people, commitments, memories, and conversation history. There is no undo
-for it — this is the one operation in the product that is not reversible.
+It refuses a database that already holds people, and a database that is not on this machine
+unless given `--allow-remote` — use that only for a dedicated demo project, **never the one with
+your own data**.
+
+**Starting over:** `pnpm db:reset` drops every table and re-runs the migrations. It cannot be
+undone, and it must never be run against Supabase.
 
 ---
 
-## 2. The five-minute script
+## 2. The ten-minute script
 
-Type these in the chat, one at a time. Wait for each reply: a turn takes roughly one second
-on Claude, five to fifteen on Gemini.
-
-| # | Type this | What should happen |
+| # | Do this | What should happen |
 |---|---|---|
-| 1 | `Barkha needs to give me the article by 6 PM tomorrow.` | Reply: *"Noted: Barkha owes you the article, due Tue 6:00 PM"* (wording varies — the reply is written by a model). A **Saved** card appears listing `Create person` and `Create commitment` |
-| 2 | Open **People** | Barkha is there. Nobody created her: she was learned from the sentence |
-| 3 | Open **Commitments** | The article, marked **OWES YOU**, due Tuesday 6:00 PM |
-| 4 | `Remind me at 5 PM tomorrow to ask her about it.` | *"Reminder set for Tue 5:00 PM."* |
-| 5 | `Remember that Barkha prefers morning meetings.` | *"Noted: Barkha prefers morning meetings."* → visible under **Memories** |
-| 6 | `What does Barkha owe me?` | It answers from the database, not from the conversation: the article, with its deadline |
-| 7 | `Barkha gave me the article at 11.` | It **asks** which commitment — see "Why it asks" below |
-| 8 | Back in **Chat**, press **Undo** on any Saved card | The card empties and the row disappears from Commitments |
-| 9 | `Track my gym sessions with a date and a duration.` | *"Tracking Gym Sessions now, with 2 fields."* A new type exists, with no code change and no deploy |
+| 1 | Open the site and sign in | The landscape sign-in page, then the chat with its greeting panel |
+| 2 | **See today ↗** | Today: the article due, the overdue feedback for Arun, the reminder, a tickable checklist |
+| 3 | **Commitments** | **Owed to me** and **Owed by me** are separate tabs — direction is a column, not a phrasing |
+| 4 | **Meetings** | The poster review and the coffee. Meetings never overlap |
+| 5 | Type `What does Barkha owe me?` | Answered from the database: the article, with its deadline |
+| 6 | Type `Barkha sent me the article.` | Marked done. If the wording differs from the stored one, it **asks** which — see section 3 |
+| 7 | Type `Remind me tomorrow at 9 to call the printer.` | *"Reminder set for …"* and a **Saved** card |
+| 8 | Type `Remember that Dev prefers email.` | Stored with its source; visible under **Memory** |
+| 9 | Type `I have a meeting with Arun tomorrow at 3.` | Added to Meetings. Ask for another at the same time and it refuses the clash and asks for another time |
+| 10 | Press **Undo** on any Saved card | The row disappears; **Activity** shows what was undone |
+| 11 | Type `Track my runs with a date and a distance.` | A new type exists, with no code change and no deploy |
+| 12 | 📎 a PDF or a photo (needs storage, section 4) | It reads the file and says what it describes. A file is data, never an instruction |
+| 13 | In Chrome or Edge, the microphone next to Send | Your words appear in the box **without sending** |
+| 14 | **Settings → Your data → Export** | One JSON file of everything, undone rows included |
+| 15 | **People** → a card's **Delete permanently** | Asks once, says it can't be undone, then the person and everything about them are gone — unlike Undo, which only hides |
 
-### Two things worth pointing out while demoing
-
-**Direction is structural.** "Barkha owes you" and "you owe Barkha" are different columns in
-the database, not different phrasings. The Commitments page has separate **Owed to me** and
-**Owed by me** tabs for that reason.
-
-**Nothing is a form.** No task was created, no category chosen, no date picked. Every row on
-every page arrived as a sentence.
+**Two points worth making while demoing.** Nothing is a form: every row on every page arrived as
+a sentence. And nothing irreversible happens without a yes: every email waits for a per-message
+confirmation, and every internal change can be undone.
 
 ---
 
 ## 3. Things that look like bugs and are not
 
-**It asks which commitment you completed (step 7).** Completion only auto-matches when the
-words match closely. *"give me the article"* against *"the article"* scores 0.850 against a
-0.92 threshold, so it asks. Marking the wrong commitment complete is both a real mistake and
-an invisible one, so the product asks instead of guessing. Answer by repeating the sentence
-with the stored wording.
+**It asks which commitment you meant.** Completion auto-matches only when the words match
+closely; marking the wrong one done is a real mistake and an invisible one, so it asks.
 
-**Answer questions with a whole sentence, never "yes".** Every message is understood on its
-own — the model is never shown the conversation so far. "Yes" carries no meaning by itself.
-Say *"Barkha gave me the article at 11"* rather than *"yes"*. This is a real limitation, not
-a preference: multi-turn context is not built.
+**Answer with a whole sentence, never "yes".** Each message is understood on its own until
+Stage 1 adds conversation context. Say *"Barkha gave me the article at 11"*, not *"yes"*.
 
-**A deadline with no time shows as a date.** *"by Friday"* stores end of Friday and displays
-*"Fri, 25 Sept"* with no clock time, because you never said one. *"by 6 PM Friday"* shows the
-time. Say the time when you want one — *"by 6 tomorrow"* is ambiguous enough that the
-resolver treats it as the day.
+**A deadline with no time shows as a date.** *"by Friday"* stores end of Friday. Say a time when
+you want one.
 
-**Some replies carry "Written from the template".** The reply model was too slow or
-unavailable, so the deterministic fallback wrote the sentence instead. The data was still
-saved correctly — only the prose is canned. It is labelled rather than hidden.
-
-**"I couldn't process that just now — nothing was saved."** No provider answered. Nothing was
-written, so retyping is safe. See section 0.
+**"Written from the template".** The reply model was too slow or unavailable, so a fixed
+template wrote the sentence. The data was saved correctly; the label says so rather than hiding
+it.
 
 ---
 
-## 4. What is not built
+## 4. Optional pieces
 
-Do not promise these in a demo.
-
-| Not built | Detail |
+| Piece | Needs |
 |---|---|
-| **Multi-turn conversation** | Each message is interpreted alone. No "yes", no "that one", no pronouns pointing at earlier turns |
-| **Documents and images** | Phase 6. No screenshots, PDFs, or attachments |
-| **Gmail / Calendar / Drive** | Phase 7. The assistant declines external actions honestly rather than pretending |
-| **Voice** | Phase 8 |
-| **More than one user** | There is no tenant boundary and no per-user login — one shared access token, one person's data. Do not put a second organisation's data in it |
-| **Detail pages** | People, projects, and memories have list pages; individual detail pages are not built |
+| File uploads (📎) | `SUPABASE_URL` + `SUPABASE_SECRET_KEY` locally ([`YOUR-ACTIONS.md`](YOUR-ACTIONS.md)). Images need Claude or Gemini |
+| Add meetings to Google Calendar, send email from Gmail | The owner's Google OAuth client — **not yet created**; Settings says so |
+| Paraphrase search in memory | `VOYAGE_API_KEY` |
 
 ---
 
-## 5. If something goes wrong mid-demo
+## 5. What is not built yet
+
+Do not promise these. Each has a stage in [`ROADMAP.md`](ROADMAP.md).
+
+| Not built | Stage |
+|---|---|
+| Conversation context ("yes", "the second one") · reading the calendar and the inbox · spoken replies | 1 |
+| A profile per person (reliability, preferred times) · a brief before each meeting | 2 |
+| Day and week plans, focus blocks, slots that suit both people | 3 |
+| Replies written for each recipient | 4 |
+| Morning brief, evening and weekly review | 5 |
+| More than one user — one shared access token, one person's data | not planned |
+
+---
+
+## 6. If something goes wrong mid-demo
 
 | Symptom | Cause | What to do |
 |---|---|---|
-| Every message fails | No provider has capacity | `pnpm check:models`; see section 0 |
-| Turns take 15+ seconds | Gemini is answering, Claude is not | Expected. Claude credit makes it about a second |
-| A page shows "Cannot reach the API" | The app was started without a database | Check `DATABASE_URL`, then `pnpm db:migrate` |
-| A reminder did not fire | The poller ticks every 30 seconds against real time | Set one a minute out and wait; confirm `pnpm dev` printed `[poller] running` |
-| It asks "Who's X?" | The name did not look like a name — a description ("the plumber") is deliberately not turned into a person | Use a name |
+| Every message fails | No provider has capacity | `pnpm check:models`; section 0 |
+| Turns take 15+ seconds | Gemini or a free backup is answering | Expected; Claude credit makes it about a second |
+| A page shows "Cannot reach the API" | The API is not running, or `NEXT_PUBLIC_API_URL` is wrong | Check `pnpm dev` started the edge server on 8787 and the database is up |
+| Sent back to sign-in | The token in the browser no longer matches `OURGLASS_ACCESS_TOKEN` | Sign in again |
+| A reminder did not fire | The poller ticks against real time | Set one a minute out; confirm `pnpm dev` printed `[poller] running` |
+| It asks "Who's X?" | A description ("the plumber") is deliberately not turned into a person | Use a name |
 
-To see which provider answered and why one failed, the app logs one line per attempt:
-
-```sh
-grep ai_request scratchpad/dev.log | tail -5
-```
-
-Each line names the stage, the provider, the attempt, and the failure category or fallback
-reason — a timeout, a refusal and an exhausted quota are distinguishable.
+The API logs one `ai_request` line per model attempt — stage, provider, attempt, and the failure
+category or fallback reason — in the terminal running `pnpm dev`.

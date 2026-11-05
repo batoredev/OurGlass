@@ -45,11 +45,11 @@ Every agent inherits everything in `.claude/rules/`:
 
 ## 3. Team structure
 
-46 roles in `.claude/agents/` — 33 build/product/design, 11 security practice, numbered in pipeline order. **Do not activate every agent for every project.** The CTO reads `docs/ROUTER.md` and selects the smallest team — 3 to 5 — that can safely complete the task.
+46 roles in `.claude/agents/` — 33 build/product/design, 11 security practice, numbered in pipeline order. **Do not activate every agent for every project.** The CTO reads `docs/agent-os/ROUTER.md` and selects the smallest team — 3 to 5 — that can safely complete the task.
 
 The roster is deliberately deeper than any one mission needs: motion, accessibility, web standards, design engineering, API contracts, E2E automation, mobile QA, and research are separate roles because each carries domain knowledge a generalist does not. Depth in the roster, restraint in the team.
 
-**Security engagements** (pentest, incident response, threat hunting, compliance, cloud/app/AI/OT security) are run by the security practice, agents 34–44, led by `security-lead`. They enforce authorisation, isolation, and OT-safety gates and are spawned deliberately — never as part of an ordinary feature mission. See `docs/SECURITY-ROUTER.md` and `docs/SECURITY-MISSIONS.md`.
+**Security engagements** (pentest, incident response, threat hunting, compliance, cloud/app/AI/OT security) are run by the security practice, agents 34–44, led by `security-lead`. They enforce authorisation, isolation, and OT-safety gates and are spawned deliberately — never as part of an ordinary feature mission. See `docs/agent-os/SECURITY-ROUTER.md` and `docs/agent-os/SECURITY-MISSIONS.md`.
 
 **Capability gaps are researched, never guessed.** When nothing in the roster or the skill set covers a request, `research-analyst` investigates from primary sources first.
 
@@ -189,35 +189,40 @@ Full rules: `.claude/rules/wat.md`
 
 ## Project
 
-**Resuming in a fresh session? Read `docs/HANDOFF.md` first** — the current state, the ordered
-work left (starting with the Phase 6 security-review fixes), and the owner's working rules.
+**Resuming in a fresh session? Read `docs/HANDOFF.md` first** — the current state, the owner's
+working rules and the gotchas. **The plan of record is `docs/ROADMAP.md`** (Stages 0–5, starting
+with the Phase 6 security-review fixes); `docs/README.md` says which docs are current.
 
-**Product:** Batore Personal Assistant — an internal-use conversational AI assistant. Full
-spec in `docs/SPEC.md`, execution plan in `docs/EXECUTION-PLAN.md`, locked decisions and
-research findings in `docs/DECISIONS.md`, phase checklist in `docs/PHASES.md`.
+**Product:** OurGlass, the Batore Personal Assistant — an internal-use conversational AI
+assistant that keeps a structured model of one person's life and the people in it. Original
+brief in `docs/SPEC.md`, locked decisions and research findings in `docs/DECISIONS.md`. The
+earlier plans (`EXECUTION-PLAN`, `PHASES`, `MASTER-` and `REMAINING-EXECUTION-PLAN`) are history
+in `docs/archive/`.
 
-**Stack:** TypeScript end-to-end, pnpm monorepo. `apps/web` (Next.js 16.4.2), `apps/api`
-(the assistant, tool layer and poller as a LIBRARY, imported by the web app; `pnpm dev` there
-runs the reminder poller, not a server), `packages/shared` (shared types), `packages/db`
-(schema/migrations, Phase 1),
-`packages/evals` (extraction eval harness, Phase 2). Postgres 17 + pgvector 0.8.6 via
-`docker-compose.yml`. See `docs/DECISIONS.md` for exact pinned versions and why (several
-depart from "latest" for verified compatibility reasons discovered at install/CI time).
+**Stack:** TypeScript end-to-end, pnpm monorepo, Node ≥ 24. `apps/web` (Next.js 16.4.3, a static
+export on Cloudflare Pages); `apps/edge` (every `/api` route, bundled into the Supabase Edge
+Functions `api` and `reminders`; `pnpm dev` serves it on :8787); `apps/api` (the assistant, tool
+layer and poller as a LIBRARY that `apps/edge` imports; `pnpm dev` there runs the reminder
+poller); `packages/shared` (shared types); `packages/db` (schema, migrations, repositories);
+`packages/evals` (extraction eval harness). Postgres 17 + pgvector 0.8.6 (`docker-compose.yml`
+locally, Supabase deployed). Hosting: `docs/DEPLOYMENT-DESIGN.md`; operations:
+`docs/RUNBOOK.md`. See `docs/DECISIONS.md` for exact pinned versions and why (several depart
+from "latest" for verified compatibility reasons).
 
 **Commands:** `pnpm install`, `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`,
-`pnpm dev` (root scripts, fan out per-package). `docker compose up postgres` for local DB.
+`pnpm dev` (root scripts, fan out per-package), `pnpm db:migrate`, `pnpm db:seed-demo`,
+`pnpm run build:edge`, `pnpm run build:site`. `docker compose up postgres` for a local DB.
 CI mirrors these in `.github/workflows/ci.yml`.
 
-**Default ownership map:** `packages/db/**` → `database-data-engineer` (sole owner per
-`docs/EXECUTION-PLAN.md`'s Mission 4 team). `apps/api/src/assistant/**` (Phase 2+) →
-`ai-agent-engineer`. Rest of `apps/api/**` → `backend-lead`. `apps/web/**` →
-`frontend-lead`, idle until Phase 5. Re-verify against `docs/PHASES.md` before each phase's
-team spawn — the map is real now that the paths exist.
+**Default ownership map:** `packages/db/**` → `database-data-engineer` (sole owner).
+`apps/api/src/assistant/**` → `ai-agent-engineer`. Rest of `apps/api/**` and `apps/edge/**` →
+`backend-lead`. `apps/web/**` → `frontend-lead`. Re-verify against the ROADMAP stage before each
+team spawn.
 
-**Repo notes:** Initialized via the Company Claude OS v2 install pack from `~/.claude-os`.
-Baseline git commit created before agent-team files were added. Remote is
-`github.com/batoredev/OurGlass` (public); we hold WRITE, not ADMIN — see `docs/DECISIONS.md`
-open question 1 for what that blocks.
+**Repo notes:** Initialized via the Company Claude OS v2 install pack from `~/.claude-os`; its
+documentation is in `docs/agent-os/`. Remote is `github.com/batoredev/OurGlass` (public); we hold
+WRITE, not ADMIN — see `docs/DECISIONS.md` open question 1 for what that blocks. Changes reach
+`main` through a branch and a pull request; never force-push `main`.
 
 ## Installed skill ecosystems
 

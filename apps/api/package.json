@@ -8,11 +8,12 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "seed:demo": "tsx --env-file-if-exists=../../.env src/demo/seed-main.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.135.0",
-    "@google/genai": "2.30.0",
+    "@google/genai": "2.32.0",
     "@ourglass/db": "workspace:*",
     "@ourglass/shared": "workspace:*",
     "chrono-node": "2.10.3",
@@ -55,6 +56,10 @@
     "./ingest": {
       "types": "./dist/ingest/index.d.ts",
       "default": "./dist/ingest/index.js"
+    },
+    "./data": {
+      "types": "./dist/data/index.d.ts",
+      "default": "./dist/data/index.js"
     },
     "./integrations": {
       "types": "./dist/integrations/google-calendar.d.ts",

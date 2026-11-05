@@ -48,7 +48,7 @@ function multipart(file: File, note?: string): Request {
 beforeEach(() => {
   vi.clearAllMocks();
   authMock.mockResolvedValue(null);
-  storeFromEnvMock.mockReturnValue({ put: vi.fn(), get: vi.fn() });
+  storeFromEnvMock.mockReturnValue({ put: vi.fn(), get: vi.fn(), delete: vi.fn() });
   countMock.mockResolvedValue(0);
   ingestMock.mockResolvedValue({ outcome: "saved", documentId: "d1", turnId: "t1", reply: "Saved." });
 });
@@ -72,6 +72,32 @@ describe("POST /api/documents", () => {
       upload({ headers: { "content-type": "multipart/form-data; boundary=x", "content-length": String(20 * 1024 * 1024) } }),
     );
     expect(response.status).toBe(413);
+    expect(ingestMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses an oversized body that does not declare its length, after counting only up to the cap", async () => {
+    const chunk = new Uint8Array(1024 * 1024);
+    let sent = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        // 40 MB on offer; the route must stop pulling just past 10 MB.
+        if (sent >= 40) controller.close();
+        else {
+          sent += 1;
+          controller.enqueue(chunk);
+        }
+      },
+    });
+    const request = new Request("http://localhost/api/documents", {
+      method: "POST",
+      headers: { "content-type": "multipart/form-data; boundary=x" },
+      body: stream,
+      duplex: "half",
+    } as RequestInit);
+    expect(request.headers.get("content-length")).toBeNull();
+    const response = await POST(request);
+    expect(response.status).toBe(413);
+    expect(sent).toBeLessThan(14);
     expect(ingestMock).not.toHaveBeenCalled();
   });
 

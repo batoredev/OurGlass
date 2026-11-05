@@ -1,5 +1,8 @@
 # Batore Personal Assistant — Execution Plan
 
+> **Archived 2026-11-05.** Superseded by [`../ROADMAP.md`](../ROADMAP.md); kept as history.
+> Status lines and "next" items below are as they stood when it was last updated.
+
 ## Context
 
 `Batore_Personal_Assistant_Spec.pdf` (38 sections) specifies an internal-use AI personal
@@ -238,7 +241,7 @@ The only work that runs solo is the work that *must* be solo: the auto-committin
 (`/review`, `/qa`, `/ship`, `/land-and-deploy`), which sync and push and would destroy any
 teammate still holding files.
 
-Each feature phase runs as **Mission 4** (`docs/MISSIONS.md`) with 4–5 teammates:
+Each feature phase runs as **Mission 4** (`docs/agent-os/MISSIONS.md`) with 4–5 teammates:
 
 - `database-data-engineer` — **sole owner** of `migrations/**`, `packages/db/**`. Runs `/careful`.
 - `backend-lead` — `apps/api/src/**` minus the AI layer.
@@ -474,7 +477,7 @@ Your side of all of this is collected in **`docs/YOUR-ACTIONS.md`**.
 
 ---
 
-> **Remaining work is sequenced in [MASTER-EXECUTION-PLAN.md](./MASTER-EXECUTION-PLAN.md)** —
+> **Remaining work is sequenced in [MASTER-EXECUTION-PLAN.md](MASTER-EXECUTION-PLAN.md)** —
 > the multi-provider AI layer (Claude to Gemini to Qwen), hybrid retrieval, and Phases 6-8.
 
 ## Outstanding work, by phase
@@ -647,11 +650,11 @@ Run in the lead session, sequentially — no team needed to scaffold a repo.
 
 1. **Write the execution docs into the project** (your request — they live in the repo, not
    only in the plans folder):
-   - `docs/EXECUTION-PLAN.md` — this plan
+   - `docs/archive/EXECUTION-PLAN.md` — this plan
    - `docs/SPEC.md` — the extracted spec text, now readable and diffable instead of locked in
      a PDF
    - `docs/DECISIONS.md` — the locked decisions and the research findings that drove them
-   - `docs/PHASES.md` — the phase checklist with per-feature definition of done
+   - `docs/archive/PHASES.md` — the phase checklist with per-feature definition of done
 2. `git remote add origin https://github.com/batoredev/OurGlass.git`, rename `master` → `main`,
    push and set it as the default branch.
 3. Scaffold the pnpm monorepo — `apps/web`, `apps/api`, `packages/shared`, `packages/db`,

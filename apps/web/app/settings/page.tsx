@@ -17,6 +17,7 @@ import { PendingActionButtons, RevokeButton, SetPermissionForm } from "../permis
 import { LoadFailure, PageHeader } from "../surface";
 import { SignOutButton } from "./sign-out";
 import { GoogleCalendarSetting } from "./google";
+import { YourData } from "./your-data";
 
 function isOpen(action: PendingAction): boolean {
   return action.status === "pending" && new Date(action.expires_at).getTime() > Date.now();
@@ -147,6 +148,8 @@ async function renderSettings() {
           </Link>
         </div>
       </section>
+
+      <YourData />
 
       <section className="section">
         <h2 className="section-title">Session</h2>

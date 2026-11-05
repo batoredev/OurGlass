@@ -43,7 +43,7 @@ If any of these is missing, stop and get it. An agent that cannot see the author
 | Web app / API security specifically | `appsec-engineer` | `offensive-security-engineer` |
 
 ## Skill routing
-The skill library holds ~700 security procedures. You do not memorise them — you **`find-skills`** for the engagement, then direct the specialist to the specific procedure. See `docs/SECURITY-ROUTER.md`.
+The skill library holds ~700 security procedures. You do not memorise them — you **`find-skills`** for the engagement, then direct the specialist to the specific procedure. See `docs/agent-os/SECURITY-ROUTER.md`.
 
 ## Deliverable standard
 A security report is read by people making decisions under pressure. Every finding: what, where, severity (with a scoring model — CVSS/EPSS as appropriate), concrete reproduction, business impact, and remediation. Distinguish confirmed from suspected. Never inflate severity, never bury a critical.

@@ -1,0 +1,333 @@
+/*
+ * The landscape editorial theme — the design suggested on 2026-11-05.
+ *
+ * Loaded AFTER prototype.css, which stays as supplied: this file re-tokens the
+ * palette and type, and replaces the hard-outline, hard-shadow look with an
+ * editorial one — an ultramarine sky with a halftone texture, cream paper,
+ * a warm orange used for decoration, serif display type, small tracked
+ * capitals, and pill-shaped controls. Removing the import in layout.tsx
+ * restores the previous look; nothing here changes markup or behaviour.
+ *
+ * Contrast (WCAG 2.2, 1.4.3), measured for every text pair this file sets:
+ * ink on paper 14.4, muted on any tint ≥ 5.8, ultramarine text on paper 8.0,
+ * cream on the sky 8.0 and on the sidebar 9.7, nav text on the sidebar 8.2.
+ * Orange is 2.9 on cream, so it is never text on cream: it fills decoration
+ * and carries ink text (5.0) only.
+ */
+:root {
+  --paper: #f6ecda;
+  --surface: #f6ecda;
+  --surface-strong: #fffaf0;
+  --ink: #141a3f;
+  --muted: #4f4d63;
+  --muted-on-color: #4f4d63;
+  --faint: #8a8799;
+  --line: rgba(20, 26, 63, .14);
+  --line-strong: rgba(20, 26, 63, .28);
+  --accent: #9c3f17;
+  --accent-soft: #f9dcc8;
+  --sage: #3f6b2c;
+  --sage-soft: #d9e9bf;
+  --amber: #8a5a1c;
+  --amber-soft: #f5d6a3;
+  --blue: #2235b5;
+  --blue-deep: #1c2a99;
+  --blue-soft: #dfe3f6;
+  --coral: #e2672e;
+  --yellow: #f5d6a3;
+  --mint: #d9e9bf;
+  --lavender: #e4ddf3;
+  --cream: #f6ecda;
+  --nav-text: #d3d9f6;
+  --radius: 22px;
+  --shadow: 0 18px 40px -22px rgba(20, 26, 63, .35);
+  --soft-shadow: 0 10px 26px -18px rgba(20, 26, 63, .45);
+  --font: var(--font-text), "DM Sans", system-ui, sans-serif;
+  --display: var(--font-display), "Fraunces", Georgia, serif;
+  --sky: linear-gradient(180deg, #19279a 0%, #2235b5 52%, #2f47c9 100%);
+  --halftone: radial-gradient(rgba(246, 236, 218, .2) 1px, transparent 1.5px);
+}
+
+body { background: var(--paper); color: var(--ink); }
+a { color: inherit; }
+
+/* ---- The sky: one recipe for every ultramarine surface ------------------- */
+.sidebar,
+.landscape-panel,
+.day-header,
+.mobile-tabs {
+  background-color: var(--blue-deep);
+  background-image: var(--halftone), var(--sky);
+  background-size: 7px 7px, 100% 100%;
+}
+
+/* ---- Sidebar ------------------------------------------------------------- */
+.sidebar { color: var(--cream); border: 0; }
+.wordmark { color: var(--cream); display: flex; align-items: baseline; gap: 0; padding: 0 6px; text-decoration: none; font: 600 30px/1 var(--display); letter-spacing: -.02em; text-transform: none; }
+.wordmark .mark { display: none; }
+.wordmark-dot { color: var(--coral); }
+.primary-nav { margin-top: 48px; gap: 4px; }
+.nav-item { min-height: 42px; border-radius: 999px; padding: 0 16px; color: var(--nav-text); font-weight: 600; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; text-decoration: none; transform: none; }
+.nav-item:hover { background: rgba(246, 236, 218, .12); color: var(--cream); }
+.nav-item.active,
+.nav-item:nth-child(n).active,
+.sidebar-foot .nav-item.active { background: var(--cream); color: var(--ink); transform: none; }
+.nav-item.nav-sub { margin-left: 18px; width: calc(100% - 18px); font-size: 11px; }
+.sidebar-foot .nav-item { color: var(--nav-text); }
+.sidebar-foot .nav-item:hover { color: var(--cream); }
+.assistant-state { border: 1px solid rgba(246, 236, 218, .28); border-radius: 999px; color: var(--nav-text); padding: 10px 14px; letter-spacing: .04em; font-size: 11px; }
+.state-dot { background: #9fd36a; }
+.sidebar a:focus-visible,
+.mobile-tabs a:focus-visible,
+.landscape-panel a:focus-visible,
+.landscape-panel button:focus-visible,
+.landscape-panel input:focus-visible { outline-color: var(--cream); }
+
+/* ---- Page frame and type -------------------------------------------------- */
+.main { background-color: var(--paper); background-image: none; }
+h1 { font: 600 clamp(40px, 5vw, 64px)/1 var(--display); letter-spacing: -.025em; text-transform: none; }
+h2, h3 { font-family: var(--display); }
+.eyebrow,
+.hello-kicker { display: inline-block; background: none; transform: none; padding: 0; margin-bottom: 14px; color: var(--blue); font: 600 11px/1.2 var(--font); letter-spacing: .22em; text-transform: uppercase; }
+.page-subtitle { color: var(--muted); font-size: 15px; font-weight: 500; }
+.section-title { font: 600 24px/1.1 var(--display); letter-spacing: -.015em; text-transform: none; }
+
+/* ---- Controls: pills and outline circles ---------------------------------- */
+.primary-button,
+.secondary-button,
+.quiet-button { min-height: 46px; padding: 0 22px; border-radius: 999px; font-weight: 700; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; box-shadow: none; transform: none; }
+.primary-button { background: var(--blue); color: var(--cream); border: 1px solid var(--blue); }
+.primary-button:hover { background: var(--blue-deep); box-shadow: var(--soft-shadow); transform: none; }
+.secondary-button { background: transparent; color: var(--ink); border: 1px solid var(--line-strong); }
+.secondary-button:hover { background: var(--surface-strong); }
+.icon-button { border: 1px solid var(--line-strong); background: transparent; }
+.icon-button:hover { background: var(--surface-strong); }
+.text-button { color: var(--blue); font-weight: 700; letter-spacing: .04em; }
+.meta-tag { border: 1px solid var(--line-strong); color: var(--ink); }
+.toast { background: var(--ink); color: var(--cream); border: 0; box-shadow: var(--shadow); border-radius: 999px; }
+
+/* ---- Cards: cream paper, hairline edges, soft depth ----------------------- */
+.row,
+.timeline,
+.settings-group,
+.context-card,
+.person-card,
+.project-card,
+.project-detail-block,
+.facts,
+.choice,
+.checklist-item,
+.thought-card,
+.board-column,
+.thought-composer,
+.relationship-tree,
+.profile-header,
+.correction-box,
+.subtle-callout,
+.empty-state,
+.bottom-sheet,
+.upload-option,
+.memory-detail-quote,
+.conflict-layout,
+.appointment,
+.project-cover {
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  transform: none;
+}
+.row,
+.timeline,
+.settings-group,
+.facts,
+.choice,
+.checklist-item,
+.thought-card,
+.thought-composer,
+.upload-option { background: var(--surface-strong); }
+.row { border-radius: 20px; }
+.row-title { font-weight: 700; }
+.commitment-row:nth-child(4n+1) { background: var(--surface-strong); }
+.commitment-row:nth-child(4n+2) { background: var(--blue-soft); }
+.commitment-row:nth-child(4n+3) { background: var(--surface-strong); }
+.commitment-row:nth-child(4n+4) { background: var(--accent-soft); }
+.commitment-row > div:nth-child(2) .row-title,
+.person-name,
+.project-title,
+.timeline-title,
+.memory-text,
+.schedule-person,
+.context-card-title,
+.board-column-head h2,
+.sheet-title,
+.project-detail-block h2,
+.appointment h3 { font-family: var(--display); font-weight: 600; text-transform: none; letter-spacing: -.01em; }
+.commitment-row .avatar,
+.person-card .avatar { background: var(--blue); color: var(--cream); border: 0; }
+.relation-label { border: 1px solid var(--line-strong); background: transparent; letter-spacing: .1em; text-transform: uppercase; border-radius: 999px; padding: 3px 8px; }
+.status::before { border: 1px solid var(--ink); }
+.timeline-item { border-bottom: 1px solid var(--line); }
+.timeline-item:last-child { background: transparent; }
+.timeline-time { color: var(--blue); font-family: var(--display); font-weight: 600; }
+.fact { border-bottom: 1px solid var(--line); }
+.fact-label { color: var(--blue); }
+.setting { border-bottom: 1px solid var(--line); }
+.tabs { border-bottom: 1px solid var(--line-strong); }
+.tab { border-radius: 999px 999px 0 0; letter-spacing: .08em; text-transform: uppercase; font-size: 12px; }
+.tab.active { background: var(--blue); color: var(--cream); }
+.search input,
+.correction-input input,
+.email-field input,
+.email-field textarea { border: 1px solid var(--line-strong); border-radius: 18px; box-shadow: none; background: var(--surface-strong); }
+.search input { border-radius: 999px; }
+
+/* People, projects, memories: tints instead of loud fills */
+.person-card { border-radius: 26px; }
+.person-card:nth-child(4n+1) { background: var(--mint); }
+.person-card:nth-child(4n+2) { background: var(--accent-soft); }
+.person-card:nth-child(4n+3) { background: var(--blue-soft); }
+.person-card:nth-child(4n+4) { background: var(--yellow); }
+.person-card::after { border: 0; background: rgba(255, 250, 240, .45); border-radius: 50%; }
+.person-card:hover,
+.person-card:nth-child(even):hover { transform: translateY(-2px); box-shadow: 0 22px 44px -24px rgba(20, 26, 63, .5); }
+.project-card { border-radius: 28px; }
+.project-card:first-child { background: var(--coral); color: var(--ink); }
+.project-card:last-child { background: var(--blue); color: var(--cream); transform: none; }
+.project-card:hover,
+.project-card:last-child:hover { transform: translateY(-2px); box-shadow: 0 22px 44px -24px rgba(20, 26, 63, .5); }
+.memory-row:nth-child(4n+1) { background: var(--yellow); }
+.memory-row:nth-child(4n+2) { background: var(--mint); }
+.memory-row:nth-child(4n+3) { background: var(--lavender); }
+.memory-row:nth-child(4n+4) { background: var(--accent-soft); }
+.memory-text { font-size: 21px; line-height: 1.25; }
+.memory-detail-quote { background: var(--lavender); font-family: var(--display); text-transform: none; }
+
+/* ---- Chat ------------------------------------------------------------------ */
+.chat-head { border-bottom: 1px solid var(--line-strong); }
+.chat-head h1 { font: 600 26px/1 var(--display); text-transform: none; }
+.chat-head .date { color: var(--muted); font-weight: 600; letter-spacing: .14em; text-transform: uppercase; font-size: 11px; }
+.chat-profile { background: var(--coral); color: var(--ink); border: 0; box-shadow: none; }
+.message.user { background: var(--blue); color: var(--cream); border: 0; border-radius: 22px 22px 6px 22px; box-shadow: var(--soft-shadow); }
+.message.assistant { font: 500 21px/1.4 var(--display); }
+.message-label { color: var(--blue); letter-spacing: .2em; text-transform: uppercase; font-size: 10px; }
+.context-card { background: var(--surface-strong); border-radius: 22px; }
+.context-card-head { border-bottom: 1px solid var(--line); }
+.context-card-actions { border-top: 1px solid var(--line); }
+.card-action { border: 1px solid var(--line-strong); border-radius: 999px; letter-spacing: .08em; text-transform: uppercase; }
+.card-action:first-child { background: var(--blue); color: var(--cream); border-color: var(--blue); }
+.card-action:hover { background: var(--blue-soft); color: var(--ink); }
+.email-card { background: var(--blue-soft); }
+.email-card-note { border: 1px solid var(--line-strong); background: var(--cream); border-radius: 999px; }
+.email-card .card-action[type="submit"] { background: var(--blue); color: var(--cream); }
+.composer { border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface-strong); box-shadow: var(--shadow); padding-left: 10px; }
+.composer-tool:hover { background: var(--blue-soft); }
+.composer-send { background: var(--coral); color: var(--ink); border: 0; border-radius: 50%; }
+.composer-send:hover { background: #ec7a45; }
+.composer:focus-within { outline-color: var(--blue); }
+.composer-wrap { background: linear-gradient(to bottom, rgba(246, 236, 218, 0), var(--paper) 30%); }
+
+/* The greeting becomes a landscape panel */
+.landscape-panel { position: relative; isolation: isolate; overflow: hidden; color: var(--cream); }
+.landscape-panel .landscape-art { position: absolute; left: 0; right: 0; bottom: 0; width: 100%; height: auto; aspect-ratio: 1440 / 420; z-index: -1; }
+/* Under the bottom labels: .68 of navy keeps cream text ≥ 6.8:1 over the
+   brightest thing drawn there (a yellow flower). */
+.landscape-panel::after { content: ""; position: absolute; inset: auto 0 0 0; height: 30%; z-index: -1; background: linear-gradient(to bottom, rgba(12, 16, 48, 0) 0%, rgba(12, 16, 48, .68) 62%, rgba(12, 16, 48, .78) 100%); pointer-events: none; }
+.greeting.landscape-panel { display: block; min-height: 540px; padding: 34px 30px 26px; margin-bottom: 40px; border: 0; border-radius: 30px; box-shadow: var(--shadow); text-align: center; }
+.greeting .hello-kicker { color: var(--cream); }
+.greeting h2 { margin: 6px 0 14px; color: var(--cream); font: 600 clamp(44px, 6.4vw, 82px)/.95 var(--display); letter-spacing: -.03em; text-transform: none; }
+.greeting p { margin: 0 auto 22px; max-width: 36ch; color: var(--cream); font-weight: 500; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; justify-content: center; }
+.hero-pill { display: inline-flex; align-items: center; gap: 8px; min-height: 46px; padding: 0 22px; border: 0; border-radius: 999px; background: var(--cream); color: var(--ink); font: 700 12px/1 var(--font); letter-spacing: .12em; text-transform: uppercase; text-decoration: none; cursor: pointer; }
+.hero-pill:hover { background: #fff6e6; }
+.hero-pill:disabled { opacity: .7; cursor: progress; }
+.hero-link { color: var(--cream); font: 700 12px/1 var(--font); letter-spacing: .12em; text-transform: uppercase; text-decoration: underline; text-underline-offset: 6px; }
+.hero-meta { position: absolute; left: 26px; right: 26px; bottom: 18px; display: flex; justify-content: space-between; gap: 16px; color: var(--cream); font: 600 10px/1.4 var(--font); letter-spacing: .18em; text-transform: uppercase; }
+.hero-meta span + span { text-align: right; }
+.hero-place { display: inline-flex; align-items: center; gap: 8px; }
+.hero-place svg { width: 14px; height: 14px; flex: none; }
+
+/* ---- Today ---------------------------------------------------------------- */
+.day-header { color: var(--cream); border: 0; border-radius: 28px; box-shadow: var(--shadow); padding: 28px 32px; }
+.day-header .eyebrow,
+.day-header h1,
+.day-header .page-subtitle,
+.day-header .date-poster { color: var(--cream); }
+.date-poster { transform: none; }
+.date-poster b { font: 600 80px/.8 var(--display); letter-spacing: -.04em; }
+.date-poster span { letter-spacing: .16em; }
+.subtle-callout { background: var(--mint); color: var(--ink); }
+.meetings-hint { background: var(--blue-soft); }
+.checklist-count { background: var(--blue); color: var(--cream); }
+.checklist-item { border-radius: 20px; }
+.checklist-item.done { background: var(--mint); box-shadow: none; }
+.checklist-box { border: 1px solid var(--ink); border-radius: 50%; }
+.checklist-item.done .checklist-box { background: var(--blue); color: var(--cream); border-color: var(--blue); }
+.checklist-state { border: 1px solid var(--line-strong); letter-spacing: .12em; }
+.checklist-item.todo .checklist-state { background: var(--yellow); }
+button.checklist-item:hover { transform: translateY(-1px); box-shadow: 0 18px 34px -22px rgba(20, 26, 63, .5); }
+
+/* ---- Thoughts board, settings, sheets ------------------------------------- */
+.board-column { border-radius: 26px; }
+.board-column.column-high { background: var(--accent-soft); }
+.board-column.column-mid { background: var(--yellow); }
+.board-column.column-low { background: var(--mint); }
+.board-column.drag-over { transform: translateY(-2px); outline: 2px dashed var(--blue); }
+.board-count { background: var(--blue); color: var(--cream); }
+.priority-chip { border: 1px solid var(--line-strong); border-radius: 999px; }
+.priority-chip.selected.priority-high { background: var(--coral); color: var(--ink); }
+.thought-button { border: 1px solid var(--line-strong); border-radius: 50%; }
+.thought-button:hover { background: var(--blue-soft); }
+.toggle-input { border: 1px solid var(--line-strong); }
+.toggle-input::after { background: var(--blue); }
+.toggle-input:checked { background: var(--mint); }
+.integration-icon { border: 1px solid var(--line-strong); background: var(--blue-soft); border-radius: 50%; }
+.bottom-sheet { background: var(--surface-strong); }
+.upload-option:hover { background: var(--blue-soft); }
+.empty-state { background: var(--surface-strong); border-radius: 24px; }
+.skip-link { background: var(--blue); color: var(--cream); border-radius: 999px; }
+
+/* ---- Sign-in: the full landscape hero ------------------------------------- */
+.main.main-full { margin-left: 0; }
+.login-hero { min-height: 100vh; min-height: 100dvh; display: grid; grid-template-rows: auto 1fr auto; padding: 28px clamp(20px, 4vw, 48px) 22px; text-align: center; }
+.login-top { display: flex; justify-content: flex-start; }
+.login-top .wordmark { padding: 0; font-size: 34px; }
+.login-body { align-self: start; margin-top: clamp(28px, 7vh, 70px); }
+.login-body h1 { margin: 0 0 16px; color: var(--cream); font-size: clamp(44px, 6vw, 84px); line-height: .95; letter-spacing: -.03em; }
+.login-body .eyebrow { color: var(--cream); }
+.login-lede { margin: 0 auto 28px; max-width: 42ch; color: var(--cream); font-size: 15px; line-height: 1.55; }
+.login-form { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; align-items: center; }
+.login-form input { width: min(360px, 82vw); min-height: 48px; padding: 0 22px; border: 1px solid rgba(246, 236, 218, .6); border-radius: 999px; background: rgba(16, 22, 60, .35); color: var(--cream); font-size: 15px; }
+.login-form input::placeholder { color: var(--nav-text); }
+.login-error { margin: 18px auto 0; max-width: 46ch; padding: 10px 16px; border-radius: 999px; background: var(--cream); color: var(--ink); font-weight: 600; }
+.login-meta { position: static; justify-content: space-between; }
+
+@media (max-width: 760px) {
+  /* Narrow screens: the landscape takes a share of the height and crops at
+     the sides (the SVG slices around its middle), so the peak and the lake
+     stay in view instead of shrinking to a strip. */
+  .landscape-panel .landscape-art { aspect-ratio: auto; height: 36%; }
+  .login-hero .landscape-art { height: 34%; }
+  .mobile-tabs { border-top: 0; }
+  .mobile-tab { color: var(--nav-text); letter-spacing: .06em; text-decoration: none; }
+  .mobile-tab.active { color: var(--cream); }
+  .chat-head { background: var(--paper); border-bottom: 1px solid var(--line-strong); }
+  .chat-head h1 { color: var(--ink); }
+  .greeting.landscape-panel { min-height: 440px; padding: 26px 18px 22px; border-radius: 24px; box-shadow: var(--soft-shadow); }
+  .greeting h2 { font-size: 46px; }
+  .hero-meta { left: 16px; right: 16px; font-size: 9px; }
+  .composer { border: 1px solid var(--line-strong); box-shadow: var(--soft-shadow); }
+  .message.user { box-shadow: none; }
+  .context-card { box-shadow: var(--soft-shadow); }
+  .bottom-sheet { background: var(--surface-strong); border: 1px solid var(--line); box-shadow: var(--shadow); }
+  .person-card:nth-child(even) { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .person-card:hover,
+  .project-card:hover,
+  button.checklist-item:hover { transform: none; }
+}
+
+/* Permanent delete: the same pill as every other button, in the danger colour. */
+.danger-button { min-height: 46px; padding: 0 22px; border-radius: 999px; font-weight: 700; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
+.delete-confirm { border-radius: 16px; background: var(--surface-strong); }
+.delete-phrase input { border-radius: 999px; }

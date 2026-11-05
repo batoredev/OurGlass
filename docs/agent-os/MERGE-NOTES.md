@@ -84,8 +84,8 @@ Two agents driving that daemon concurrently corrupt each other's session state a
 - **`.claude/rules/agent-teams.md`** — the eight rules that keep parallel agents from destroying each other's work.
 - **`.claude/rules/ai-systems.md`** — evals, prompt injection, tracing, cost, irreversible actions. v1 had no AI-specific rules despite shipping an AI engineer role.
 - **`21-documentation-engineer`** — v1 had no dedicated doc owner; handover packs are a deliverable for a solutions studio, not an afterthought.
-- **`docs/MISSIONS.md`** — seven ready-to-paste team compositions.
-- **`docs/SKILL-COVERAGE.md`** — every gstack skill mapped to an owner, or marked lead-only with a reason.
+- **`docs/agent-os/MISSIONS.md`** — seven ready-to-paste team compositions.
+- **`docs/agent-os/SKILL-COVERAGE.md`** — every gstack skill mapped to an owner, or marked lead-only with a reason.
 
 ---
 
