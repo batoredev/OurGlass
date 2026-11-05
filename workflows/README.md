@@ -1,8 +1,8 @@
 # Workflows
 
-Task SOPs. **Distinct from `docs/MISSIONS.md`**, which defines *who* runs (team composition). These define *how a specific task is done* (procedure).
+Task SOPs. **Distinct from `docs/agent-os/MISSIONS.md`**, which defines *who* runs (team composition). These define *how a specific task is done* (procedure).
 
-| | `docs/MISSIONS.md` | `workflows/` |
+| | `docs/agent-os/MISSIONS.md` | `workflows/` |
 |---|---|---|
 | Answers | Which agents to spawn | How to perform a task |
 | Scope | A whole mission | One repeatable procedure |

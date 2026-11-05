@@ -1,6 +1,9 @@
 # Phase checklist
 
-Tracking checklist for `docs/EXECUTION-PLAN.md`. No importers — read by contributors and
+> **Archived 2026-11-05.** Superseded by [`../ROADMAP.md`](../ROADMAP.md); kept as history.
+> Status lines and "next" items below are as they stood when it was last updated.
+
+Tracking checklist for `docs/archive/EXECUTION-PLAN.md`. No importers — read by contributors and
 agents at the start of each phase to confirm scope and definition of done. Update the checkbox
 and add the completion date/commit as each phase lands.
 

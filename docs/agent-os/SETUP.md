@@ -128,7 +128,7 @@ Detail in `.claude/rules/agent-teams.md`. In short:
 
 ## Running it
 
-Start with `docs/MISSIONS.md`. Mission 1 (four-lens plan review) is the right first run — read-only, four teammates, cannot corrupt anything, and it produces the file-ownership map every later mission depends on.
+Start with `docs/agent-os/MISSIONS.md`. Mission 1 (four-lens plan review) is the right first run — read-only, four teammates, cannot corrupt anything, and it produces the file-ownership map every later mission depends on.
 
 Do not start at Mission 4. Parallel implementation is where file conflicts and coordination failures appear, and you want the review and debug patterns in muscle memory first.
 

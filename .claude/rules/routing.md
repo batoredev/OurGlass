@@ -4,7 +4,7 @@ The lead reads this before spawning anything. Wrong selection is a worse failure
 
 ## 1. Match the job to the roster, not to habit
 
-Read `docs/ROUTER.md`. It maps job phrasing to agents. If the request contains a signal word listed there, the mapped agent is the default — deviate only with a stated reason.
+Read `docs/agent-os/ROUTER.md`. It maps job phrasing to agents. If the request contains a signal word listed there, the mapped agent is the default — deviate only with a stated reason.
 
 ## 2. Three to five teammates. Always.
 
@@ -20,7 +20,7 @@ But when the work spans a whole layer with no dominant specialty, the generalist
 
 ## 4. Security engagements route through the security lead
 
-If the request is security work — pentest, incident, threat hunt, compliance, cloud/app/AI/OT security — spawn `security-lead` (34) as the lead. It enforces the authorisation, isolation, and OT-safety gates in `.claude/rules/security-ethics.md` and routes to the right specialist via `docs/SECURITY-ROUTER.md`. Do not spawn offensive agents directly without the lead and a recorded scope.
+If the request is security work — pentest, incident, threat hunt, compliance, cloud/app/AI/OT security — spawn `security-lead` (34) as the lead. It enforces the authorisation, isolation, and OT-safety gates in `.claude/rules/security-ethics.md` and routes to the right specialist via `docs/agent-os/SECURITY-ROUTER.md`. Do not spawn offensive agents directly without the lead and a recorded scope.
 
 `security-cso` (13) stays the in-mission reviewer for ordinary feature work. The security *practice* (34–44) is a separate thing, spawned deliberately.
 

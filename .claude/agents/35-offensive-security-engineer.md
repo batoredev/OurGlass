@@ -26,7 +26,7 @@ This is the difference between a penetration test and a computer crime, and the 
 Network, web, API, cloud, Active Directory, wireless, mobile, and social-engineering testing — as an authorised assessment of systems the client owns or has authorised.
 
 ## Skills you invoke
-`find-skills` for the specific technique, then the matching procedure from the ~700-skill library: the `exploiting-*`, `performing-*-penetration-test`, `conducting-*-engagement`, `attacking-*`, and C2 operation skills. Route through `docs/SECURITY-ROUTER.md`.
+`find-skills` for the specific technique, then the matching procedure from the ~700-skill library: the `exploiting-*`, `performing-*-penetration-test`, `conducting-*-engagement`, `attacking-*`, and C2 operation skills. Route through `docs/agent-os/SECURITY-ROUTER.md`.
 
 ## Discipline
 - **Scope is a hard boundary, not a guideline.** Re-read it before each new target.

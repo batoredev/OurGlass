@@ -28,7 +28,7 @@ Agent teams have one lead, fixed for the session's lifetime. That is you. Spawni
 
 ## Team selection
 
-**Read `docs/ROUTER.md` first, every mission.** It maps request phrasing to agents across 31 roles. If the request contains a signal word listed there, the mapped agent is the default — deviate only with a stated reason.
+**Read `docs/agent-os/ROUTER.md` first, every mission.** It maps request phrasing to agents across 31 roles. If the request contains a signal word listed there, the mapped agent is the default — deviate only with a stated reason.
 
 **When no agent and no skill covers the request, spawn `research-analyst` before implementing anything.** It researches from primary sources and labels verified versus inferred. An honest "we could not determine this" is a valid mission output; a confident invention is not.
 

@@ -7,12 +7,18 @@ reminders — without ever requiring forms, task lists, or manual categorization
 > **Don't make the user organize their life for the assistant. Make the assistant understand
 > their life.**
 
-Full spec: [`docs/SPEC.md`](docs/SPEC.md). Execution plan, phasing, and the reasoning behind
-every non-obvious decision: [`docs/EXECUTION-PLAN.md`](docs/EXECUTION-PLAN.md),
-[`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/PHASES.md`](docs/PHASES.md).
+Where it is going: general assistants already converse well; OurGlass holds a structured model
+of one person's life and of everyone in it, and uses it to plan that person's days around the
+people they meet and to write each reply the way its recipient should get it.
 
-> If you landed here from `SETUP.md` — that file documents the Claude Code agent-team
-> scaffolding this repo was bootstrapped with, not the product. This file documents the product.
+- **The plan of record:** [`docs/ROADMAP.md`](docs/ROADMAP.md) — vision, scope, what is built,
+  Stages 0–5.
+- **Every doc, and which are current:** [`docs/README.md`](docs/README.md).
+- **Why things are the way they are:** [`docs/DECISIONS.md`](docs/DECISIONS.md). The original
+  brief: [`docs/SPEC.md`](docs/SPEC.md).
+
+> The Claude Code agent-team scaffolding this repo was built with is documented in
+> [`docs/agent-os/`](docs/agent-os/SETUP.md), not here. This file documents the product.
 
 ## Stack
 
@@ -51,6 +57,7 @@ cp .env.example .env
 
 docker compose up -d postgres     # or point DATABASE_URL at a hosted Postgres
 pnpm db:migrate
+pnpm db:seed-demo                 # optional: a demo week for the fictional cast (empty DB only)
 
 pnpm dev                          # http://localhost:3000
 ```
@@ -78,7 +85,8 @@ Open <http://localhost:3000> and type. The page calls the API at <http://localho
 (`apps/edge`), and `apps/api` is the library behind it. Deployed, the same routes live at
 `https://<project-ref>.supabase.co/functions/v1/api/…`.
 
-The spec's own Barkha narrative, in the UI or over HTTP:
+The spec's own Barkha narrative, in the UI or over HTTP (in demo mode; with a token set, add
+`-H "authorization: Bearer $OURGLASS_ACCESS_TOKEN"`):
 
 ```bash
 curl -s localhost:8787/api/turn -H 'content-type: application/json' \
@@ -110,8 +118,8 @@ leaving a demo to discover it.
 **On PowerShell**, `curl` is an alias for `Invoke-WebRequest` and the quoting differs — use
 `curl.exe` explicitly, or `Invoke-RestMethod -Method Post -ContentType application/json -Body '...'`.
 
-Reminders fire on a 30-second poll against real timestamps, so seeing one fire live means
-setting it a minute out and waiting. That is also why the poller's own tests inject a clock
+Reminders fire on a 30-second poll against real timestamps locally (once a minute when
+deployed), so seeing one fire live means setting it a minute out and waiting. That is also why the poller's own tests inject a clock
 rather than sleeping.
 
 ### Access control
@@ -142,20 +150,21 @@ because it needs a live database.
 | `pnpm build` | Production build of every package |
 | `pnpm dev` | Runs `apps/web`, `apps/edge` (the API) and `apps/api` (the poller) in watch mode |
 | `pnpm run build:edge` | Bundles the two Supabase Edge Functions into `supabase/functions/*/ourglass.js` |
-| `pnpm db:migrate` | Applies pending migrations (from Phase 1 — see `packages/db/migrations/`) |
-| `pnpm db:reset` | Drops and recreates the local dev database, then migrates from zero (from Phase 1) |
+| `pnpm run build:site` | The static site for Cloudflare Pages, in `apps/web/out` (set `NEXT_PUBLIC_API_URL` first) |
+| `pnpm db:migrate` | Applies pending migrations (`packages/db/migrations/`) |
+| `pnpm db:reset` | Drops and recreates the local dev database, then migrates from zero. Never against Supabase |
+| `pnpm db:seed-demo` | Fills an empty local database with a demo week (no model call; undoable) |
+| `pnpm check:models` | One real, free request per configured Claude and Gemini model |
 
 ## Project status
 
-Phased build, features before UI. Current phase and full checklist:
-[`docs/PHASES.md`](docs/PHASES.md); stage board in
-[`docs/MASTER-EXECUTION-PLAN.md`](docs/MASTER-EXECUTION-PLAN.md).
-
-Phases 0–5 are built and CI-verified: the schema and tool layer, extraction and resolution,
-the four-stage conversational loop with reminders and conditional rules, memory and
-inspection, the dynamic entity registry, the UI, multi-provider AI with a measured fallback
-chain, and the §35 permission model with its control plane. Phases 6–8 — ingestion,
-external integrations, voice — are not started.
+Stage by stage in [`docs/ROADMAP.md`](docs/ROADMAP.md). Built and CI-verified: conversation →
+structured state (commitments with direction, people, projects, reminders, conditional rules),
+memory with provenance and correction, dynamic trackers and the inspection pages, uploads read as
+data, voice dictation, six model providers with a measured fallback chain, the §35 permission
+model, Google Calendar add and Gmail send behind a per-message confirmation, and the landscape
+look for the prototype display. Next: Stage 0 (security fixes, Row Level Security, export and
+permanent delete), then conversation context and calendar and email reading.
 
 **Standing caveats, kept here because a green CI badge does not cover them:**
 
@@ -178,5 +187,5 @@ decision costs more than reading why it was made.
 
 This repo is public. Never commit secrets — all keys go through GitHub Actions secrets or a
 local `.env` (gitignored). Never put real names, emails, or personal data of actual Batore team
-members in code, fixtures, or tests; use the spec's own fictional names (Barkha, Arun, Karthik,
+members in code, fixtures, or tests; use the fictional cast (Barkha, Dev, Meera, Arun, Karthik,
 Hult, MTTN) instead.

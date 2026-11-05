@@ -2,7 +2,7 @@
  * The shared bits of the §29 inspection surfaces.
  *
  * DELIBERATELY UNSTYLED, and that is a plan decision rather than neglect:
- * `docs/EXECUTION-PLAN.md` puts UI last, and these pages exist to make state
+ * `docs/archive/EXECUTION-PLAN.md` puts UI last, and these pages exist to make state
  * INSPECTABLE, not attractive. A design pass belongs in a later phase, and
  * spending it now would be effort invested before anyone has looked at real
  * data through these tables.
