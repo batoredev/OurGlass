@@ -39,11 +39,15 @@ re-checked since 2026-10-20 (item 9).
      alerts** on.
   - **Done when** a pull request into `main` shows both checks as required.
 
-- [ ] **4. Look at Supabase's Security Advisor** 👤
-  Dashboard → **Advisors → Security Advisor**. Row Level Security is not yet enabled on any
-  table; Stage 0 adds a migration that enables it. **When that pull request merges, apply the
-  migration to Supabase before deploying the code that ships with it** (`pnpm db:migrate`
-  against the direct connection, [`RUNBOOK.md`](RUNBOOK.md)).
+- [ ] **4. Turn on Row Level Security in Supabase** 👤
+  Migration `017_row_level_security` (Stage 0) enables it on every table, makes every view run
+  with the caller's rights, and revokes the Data API roles' grants. No code depends on it, so it
+  can be applied as soon as the pull request merges:
+  1. `pnpm db:migrate` against the **direct** connection ([`RUNBOOK.md`](RUNBOOK.md)).
+  2. Run the smoke check. Pages should show your data exactly as before: the app connects as the
+     tables' owner, which RLS does not restrict. If pages come back **empty**, the API connects as
+     some other role — tell me, and I write the one-line compensating migration.
+  3. Dashboard → **Advisors → Security Advisor**: the RLS warnings should be gone.
 
 ## Part 2 — Models and your data (decisions, about 10 minutes)
 
