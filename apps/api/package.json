@@ -9,7 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "seed:demo": "tsx src/demo/seed-main.ts"
+    "seed:demo": "tsx --env-file-if-exists=../../.env src/demo/seed-main.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.135.0",
