@@ -57,6 +57,10 @@
       "types": "./dist/ingest/index.d.ts",
       "default": "./dist/ingest/index.js"
     },
+    "./replies": {
+      "types": "./dist/replies/index.d.ts",
+      "default": "./dist/replies/index.js"
+    },
     "./briefs": {
       "types": "./dist/briefs/index.d.ts",
       "default": "./dist/briefs/index.js"

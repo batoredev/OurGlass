@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { personProfile } from "@ourglass/db";
 import { deriveProfile } from "@ourglass/api/people";
+import { followUpDraft, recipientStyle } from "@ourglass/api/replies";
 import { authorize } from "../../../_auth";
 import { read, userTimeZone } from "../../../_lib";
 
@@ -21,7 +22,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   if (!UUID_RE.test(id)) return NextResponse.json({ error: "No such person." }, { status: 404 });
 
-  const data = await read((tx) => personProfile.loadPersonProfile(tx, id));
-  if (!data) return NextResponse.json({ error: "No such person." }, { status: 404 });
-  return NextResponse.json({ profile: deriveProfile(data, new Date(), await userTimeZone()) });
+  const timeZone = await userTimeZone();
+  const result = await read(async (tx) => {
+    const data = await personProfile.loadPersonProfile(tx, id);
+    if (!data) return null;
+    const profile = deriveProfile(data, new Date(), timeZone);
+    // Stage 4: a follow-up about what is open, in the owner's own style — a
+    // suggestion to copy, never sent from here.
+    const style = await recipientStyle(tx, id, profile.name);
+    const followUp = followUpDraft(profile.name, [
+      ...profile.owesYou.value.map((item) => ({ what: item.what, due: item.due, theyOwe: true })),
+      ...profile.youOwe.value.map((item) => ({ what: item.what, due: item.due, theyOwe: false })),
+    ], style);
+    return { profile, followUp, styleFrom: style.from };
+  });
+  if (!result) return NextResponse.json({ error: "No such person." }, { status: 404 });
+  return NextResponse.json(result);
 }

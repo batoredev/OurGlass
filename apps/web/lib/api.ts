@@ -375,8 +375,16 @@ export interface PersonProfile {
   readonly lastInteraction: Sourced<string> | null;
 }
 
-export async function fetchPersonProfile(id: string): Promise<PersonProfile> {
-  return (await get<{ profile: PersonProfile }>(`/api/people/${encodeURIComponent(id)}/profile`)).profile;
+export interface PersonPage {
+  readonly profile: PersonProfile;
+  /** Stage 4: a follow-up about what is open, in your own style; null when nothing is open. */
+  readonly followUp: string | null;
+  /** How many of your sent emails the style was learned from. */
+  readonly styleFrom: number;
+}
+
+export async function fetchPersonProfile(id: string): Promise<PersonPage> {
+  return get<PersonPage>(`/api/people/${encodeURIComponent(id)}/profile`);
 }
 
 // ---------------------------------------------------------------------------

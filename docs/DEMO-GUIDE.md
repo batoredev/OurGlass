@@ -129,7 +129,7 @@ Do not promise these. Each has a stage in [`ROADMAP.md`](ROADMAP.md).
 | Not built | Stage |
 |---|---|
 | Conversation context ("yes", "the second one") · reading the calendar and the inbox | 1 |
-| Replies written for each recipient | 4 |
+| Tone adjusted per recipient by a model, translation | 4 |
 | More than one user — one shared access token, one person's data | not planned |
 
 ---

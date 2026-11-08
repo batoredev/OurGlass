@@ -1883,4 +1883,35 @@ suite("runTurn (integration)", () => {
       expect(result.committed).toEqual(["create_commitment"]);
     });
   });
+  // -------------------------------------------------------------------------
+  // ROADMAP Stage 4 — a draft in the owner's own greeting and sign-off
+  // -------------------------------------------------------------------------
+
+  it("drafts an email in the greeting and sign-off the owner uses with that person", async () => {
+    const barkha = await seedBarkha();
+    for (const body of ["Hi Barkha,\n\nCould you send the outline?\n\nThanks,\nVaibhav", "Hi Barkha,\n\nLooks great.\n\nThanks,\nVaibhav"]) {
+      await pool.query(
+        `INSERT INTO sent_emails (person_id, to_address, subject, body, gmail_message_id) VALUES ($1, 'barkha@example.com', 's', $2, gen_random_uuid()::text)`,
+        [barkha.id, body],
+      );
+    }
+    const { responder } = recordingResponder();
+    await runTurn(
+      { utterance: "Email Barkha that the meeting moved to 4", userId },
+      deps(
+        fakeExtractor([
+          intent({
+            kind: "action",
+            recipient: mention("Barkha"),
+            emailDraft: { subject: "Friday", body: "The meeting moved to 4." },
+            sourceText: "Email Barkha that the meeting moved to 4",
+          }),
+        ]),
+        responder,
+      ),
+    );
+    const held = await pool.query<{ calls: { name: string; input: { body: string } }[] }>(`SELECT calls FROM pending_actions`);
+    const send = held.rows[0]!.calls.find((call) => call.name === "send_email")!;
+    expect(send.input.body).toBe("Hi Barkha,\n\nThe meeting moved to 4.\n\nThanks,\nVaibhav");
+  });
 });

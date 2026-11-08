@@ -152,6 +152,14 @@ the acceptance-rate eval.
 
 ### Stage 4 — Replies tailored to each person
 
+**Status: the deterministic half built 2026-11-08** (`apps/api/src/replies/`): a drafted email
+takes the greeting and sign-off you use with that person (or with everyone), learned by counting
+your own sent emails and added only where the draft has none; a person's page suggests a
+follow-up about what is open between you, in that style, to copy; and every send records how
+many words you changed in the draft (migration 019) — the measure this stage is judged by.
+**Not yet:** tone and wording adjusted by a model, invitations and letters, translation — they
+need an eval set scored against drafts you approve, and paid runs.
+
 - Drafts in the owner's voice, adjusted to the recipient — relationship, the tone of past
   exchanges, what is still open between them; follow-ups, invitations and letters; translation.
 - Every send confirmed, as today.
@@ -233,7 +241,8 @@ planned) · — not planned, with the reason.
 | Draft an email · send after a yes · remember addresses | ✅ |
 | Read, summarise, thread summaries · flag urgent / needs-a-reply / suspicious | S1 (triage in S5) |
 | Communication history per person | S1 → S2 |
-| Replies, follow-ups, invitations, letters in the right tone per recipient · translation | S4 |
+| Greeting and sign-off per recipient · suggested follow-ups · edit distance recorded | ✅ |
+| Tone per recipient by a model · invitations, letters · translation | S4 (not yet) |
 | Messaging apps · voice-message transcription | L |
 
 ### 4. Voice & conversation
@@ -314,7 +323,7 @@ planned) · — not planned, with the reason.
 | Context across sessions · temporary vs lasting instructions | S1 |
 | Review learned preferences | ✅ person page · reset by correcting in conversation or deleting |
 | Scheduling patterns · personalised priorities · learn accepted suggestions · explain a suggestion | S3 |
-| Response style per recipient | S4 |
+| Response style per recipient | ✅ greeting and sign-off · tone S4 (not yet) |
 | Notification frequency · repeated manual work → suggested automation | S5 |
 | Adapting to knowledge level | L |
 

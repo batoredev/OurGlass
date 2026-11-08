@@ -70,6 +70,8 @@ import { singularTypeKey, toSnakeKey } from "./snake-key.js";
 import { isQuestion, namedFieldCount } from "./write-guards.js";
 import { renderTrackedTypes } from "./tracked-context.js";
 import { groundInUtterance, renderConversation } from "./conversation-context.js";
+import { recipientStyle } from "../replies/load.js";
+import { tailorBody } from "../replies/style.js";
 
 export interface TurnRequest {
   readonly utterance: string;
@@ -1953,12 +1955,17 @@ async function planEmail(intent: ExtractedIntent, ctx: PlanContext, index: numbe
   const known = party.creates.length > 0 ? null : await people.resolvePerson(ctx.tx, party.id);
   const toName = party.displayName ?? mention.name;
   const subject = draft.subject.trim() || `Message for ${toName}`;
+  // Stage 4: the owner's own greeting and sign-off for this person, learned
+  // from their sent emails (replies/style.ts) — added only where the draft
+  // has none. The owner still reads and can edit every word before Send.
+  const style = await recipientStyle(ctx.tx, party.creates.length > 0 ? null : party.id, toName);
+  const body = tailorBody(draft.body.trim(), toName, style);
   return {
     calls: [
       ...party.creates,
       {
         name: "send_email",
-        input: { person_id: party.id, to: known?.email ?? "", subject, body: draft.body.trim() },
+        input: { person_id: party.id, to: known?.email ?? "", subject, body },
       },
     ],
     facts: [{ kind: "email_drafted", toName, subject }],

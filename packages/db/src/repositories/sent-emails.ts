@@ -30,3 +30,24 @@ export async function listRecent(tx: Queryable, limit = 50): Promise<SentEmail[]
   const { rows } = await tx.query<SentEmail>(`SELECT * FROM sent_emails ORDER BY sent_at DESC LIMIT $1`, [limit]);
   return rows;
 }
+
+/** The owner's own emails to one person, newest first — what Stage 4 learns their style from. */
+export async function listForPerson(tx: Queryable, personId: string, limit = 10): Promise<SentEmail[]> {
+  const { rows } = await tx.query<SentEmail>(
+    `SELECT * FROM sent_emails WHERE person_id = $1 ORDER BY sent_at DESC LIMIT $2`,
+    [personId, limit],
+  );
+  return rows;
+}
+
+/** How much a draft was changed before it was sent (migration 019). */
+export async function recordDraftEdit(
+  tx: Queryable,
+  gmailMessageId: string,
+  edit: { readonly distance: number; readonly draftWords: number },
+): Promise<void> {
+  await tx.query(
+    `UPDATE sent_emails SET draft_edit_distance = $2, draft_words = $3 WHERE gmail_message_id = $1`,
+    [gmailMessageId, edit.distance, edit.draftWords],
+  );
+}

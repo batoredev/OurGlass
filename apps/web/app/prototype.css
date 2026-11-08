@@ -981,3 +981,6 @@ a.person-name:hover, a.person-name:focus-visible { text-decoration: underline; }
   .day-plan-item { grid-template-columns: 1fr; }
   .day-plan-reason { grid-column: 1; }
 }
+
+/* A suggested follow-up (ROADMAP Stage 4). */
+.follow-up-text { white-space: pre-wrap; font: inherit; font-size: 14px; line-height: 1.5; margin: 10px 0 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-strong); }

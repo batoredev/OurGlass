@@ -15,7 +15,8 @@ import { useSearchParams } from "next/navigation";
 import { AsyncPage } from "../../async-page";
 import { DeletePermanently } from "../../delete-permanently";
 import { Avatar } from "../../icons";
-import { fetchPersonProfile, type OpenItem, type PersonProfile, type Sourced } from "../../../lib/api";
+import { fetchPersonProfile, type OpenItem, type PersonPage, type Sourced } from "../../../lib/api";
+import { FollowUp } from "./follow-up";
 import { LoadFailure, PageHeader } from "../../surface";
 import { MeetingSlots } from "./meeting-slots";
 
@@ -53,7 +54,8 @@ function Facts({ title, facts }: { title: string; facts: readonly Sourced<string
   );
 }
 
-function ProfileView({ profile }: { profile: PersonProfile }) {
+function ProfileView({ page }: { page: PersonPage }) {
+  const { profile } = page;
   const record = profile.reliability;
   return (
     <section className="page page-narrow">
@@ -103,6 +105,8 @@ function ProfileView({ profile }: { profile: PersonProfile }) {
 
       <MeetingSlots personId={profile.id} name={profile.name} />
 
+      {page.followUp ? <FollowUp text={page.followUp} name={profile.name} styleFrom={page.styleFrom} /> : null}
+
       <Facts title="Preferences" facts={profile.preferences} />
       <Facts title="What you've told me" facts={profile.facts} />
       <Facts title="Patterns" facts={profile.patterns} />
@@ -123,7 +127,7 @@ function ProfileView({ profile }: { profile: PersonProfile }) {
 
 async function renderPerson(id: string) {
   try {
-    return <ProfileView profile={await fetchPersonProfile(id)} />;
+    return <ProfileView page={await fetchPersonProfile(id)} />;
   } catch (error: unknown) {
     return (
       <section className="page page-narrow">
