@@ -84,6 +84,7 @@ undone, and it must never be run against Supabase.
 | 13 | In Chrome or Edge, the microphone next to Send | Your words appear in the box **without sending** |
 | 14 | **Settings → Your data → Export** | One JSON file of everything, undone rows included |
 | 15 | **People** → a card's **Delete permanently** | Asks once, says it can't be undone, then the person and everything about them are gone — unlike Undo, which only hides |
+| 16 | **Read replies aloud** in the chat header (Chrome, Edge, Safari) | The next reply is spoken; **Stop reading** cuts it off. Off by default, remembered on that browser |
 
 **Two points worth making while demoing.** Nothing is a form: every row on every page arrived as
 a sentence. And nothing irreversible happens without a yes: every email waits for a per-message
@@ -124,7 +125,7 @@ Do not promise these. Each has a stage in [`ROADMAP.md`](ROADMAP.md).
 
 | Not built | Stage |
 |---|---|
-| Conversation context ("yes", "the second one") · reading the calendar and the inbox · spoken replies | 1 |
+| Conversation context ("yes", "the second one") · reading the calendar and the inbox | 1 |
 | A profile per person (reliability, preferred times) · a brief before each meeting | 2 |
 | Day and week plans, focus blocks, slots that suit both people | 3 |
 | Replies written for each recipient | 4 |

@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { MAX_UPLOAD_BYTES } from "@ourglass/shared";
 import { Icon } from "./icons";
 import { useDictation } from "./use-dictation";
+import { useSpeech } from "./use-speech";
 import { apiFetch } from "../lib/session";
 import { fetchEmailDrafts, type EmailDraft } from "../lib/api";
 import { EmailDraftCard } from "./email-draft";
@@ -139,6 +140,9 @@ export function Conversation() {
     onError: setNotice,
   });
 
+  // Spoken replies (Stage 1d): off until turned on here, always stoppable.
+  const speech = useSpeech();
+
   // THE READER'S CLOCK, NOT THE SERVER'S. See `useReaderNow` below.
   const now = useReaderNow();
 
@@ -199,6 +203,7 @@ export function Conversation() {
     // A turn is on its way; anything said now belongs to the NEXT one, and a
     // microphone left open after sending is its own kind of surprise.
     dictation.stop();
+    speech.stop();
     setBusy(true);
     const stamp = `local-${Date.now()}`;
     const line = file === null ? utterance : uploadLine(utterance, file.name);
@@ -265,12 +270,14 @@ export function Conversation() {
           asked: result.asked,
         },
       ]);
+      // Only a conversation reply is read aloud — an upload's reply quotes the file.
+      speech.say(result.reply);
     } catch (error: unknown) {
       setNotice(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
     }
-  }, [draft, attachment, busy, dictation]);
+  }, [draft, attachment, busy, dictation, speech]);
 
   const undo = useCallback(async (turnId: string) => {
     setNotice(null);
@@ -307,6 +314,23 @@ export function Conversation() {
               : ""}
           </div>
         </div>
+        {speech.supported ? (
+          <div className="speech-controls">
+            {speech.speaking ? (
+              <button type="button" className="quiet-button" onClick={speech.stop}>
+                Stop reading
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="quiet-button"
+              aria-pressed={speech.enabled}
+              onClick={() => speech.setEnabled(!speech.enabled)}
+            >
+              {speech.enabled ? "Replies read aloud: on" : "Read replies aloud"}
+            </button>
+          </div>
+        ) : null}
       </header>
 
       {/* A live LOG, so a screen reader hears "Thinking…" and then the reply.

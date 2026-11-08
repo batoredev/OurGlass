@@ -942,3 +942,9 @@ button.checklist-item:disabled { cursor: progress; opacity: .7; }
 .delete-phrase { display: grid; gap: 6px; margin-top: 12px; font-size: 13px; }
 .delete-phrase input { min-height: 40px; max-width: 260px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface-strong); color: var(--ink); font: inherit; }
 .row.delete-everything { align-items: start; }
+
+/* Spoken replies (Stage 1d): the toggle and Stop sit at the right of the chat header. */
+.speech-controls { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.speech-controls .quiet-button { min-height: 36px; padding: 0 14px; border: 1px solid var(--line-strong); background: transparent; color: var(--ink); }
+.speech-controls .quiet-button[aria-pressed="true"] { background: var(--surface-strong); }
+@media (max-width: 760px) { .speech-controls .quiet-button { min-height: 32px; padding: 0 10px; font-size: 11px; } }

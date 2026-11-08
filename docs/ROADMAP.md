@@ -98,7 +98,9 @@ Supabase ([`YOUR-ACTIONS.md`](YOUR-ACTIONS.md) item 4).
 - **1c Email reading** (3, 24; owner default 2026-11-05: read-only Gmail): summaries, threads,
   "needs a reply", suspicious-message flags. **Email text is data, never instructions** — the
   same boundary as uploads (a reading stage with a descriptive-only output).
-- **1d Spoken replies** (4; opt-in): the browser reads replies aloud, can be stopped.
+- **1d Spoken replies** (4; opt-in): the browser reads replies aloud, can be stopped. **Built
+  2026-11-08** (`apps/web/app/speech.ts`): off until turned on in the chat header, remembered on
+  that browser, never reads an upload's reply.
 - **Needs:** 1b–1c the owner's Google OAuth client and a re-consent for `gmail.readonly`.
 - **Done when:** a multi-turn eval set passes; calendar and email adapters are tested against
   recorded API responses and, once the client exists, live.
@@ -209,7 +211,7 @@ planned) · — not planned, with the reason.
 | Voice input (dictation) | ✅ |
 | Text, voice, images and files as input | ✅ |
 | Conversational context · follow-ups · temporary vs lasting instructions | S1 |
-| Spoken replies, stoppable | S1 (opt-in) |
+| Spoken replies, stoppable | ✅ opt-in, the browser's own voice |
 | Notifications read aloud | S5 |
 | Hands-free use · multilingual conversation | L |
 | General knowledge questions | — left to general assistants |
