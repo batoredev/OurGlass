@@ -130,7 +130,6 @@ Do not promise these. Each has a stage in [`ROADMAP.md`](ROADMAP.md).
 |---|---|
 | Conversation context ("yes", "the second one") · reading the calendar and the inbox | 1 |
 | Replies written for each recipient | 4 |
-| Morning brief, evening and weekly review | 5 |
 | More than one user — one shared access token, one person's data | not planned |
 
 ---

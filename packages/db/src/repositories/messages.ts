@@ -200,3 +200,32 @@ export async function invalidateMessage(
     [id, at ?? null],
   );
 }
+
+/**
+ * A brief (ROADMAP Stage 5), delivered as an assistant message AT MOST ONCE
+ * per key ("morning:2026-11-09"): migration 018's unique index is the
+ * arbiter, so two scheduled passes racing deliver one. True when this call
+ * delivered it.
+ */
+export async function createBriefOnce(
+  tx: Queryable,
+  input: { readonly key: string; readonly kind: string; readonly body: string },
+): Promise<boolean> {
+  const { rowCount } = await tx.query(
+    `INSERT INTO messages (role, body, trace)
+     VALUES ('assistant', $2, jsonb_build_object('stage', 'brief', 'brief', $1::text, 'kind', $3::text))
+     ON CONFLICT ((trace->>'brief')) WHERE trace->>'brief' IS NOT NULL DO NOTHING`,
+    [input.key, input.body, input.kind],
+  );
+  return (rowCount ?? 0) === 1;
+}
+
+/** Which of these brief keys were already delivered. */
+export async function deliveredBriefs(tx: Queryable, keys: readonly string[]): Promise<Set<string>> {
+  if (keys.length === 0) return new Set();
+  const { rows } = await tx.query<{ key: string }>(
+    `SELECT trace->>'brief' AS key FROM messages WHERE trace->>'brief' = ANY($1::text[])`,
+    [keys],
+  );
+  return new Set(rows.map((row) => row.key));
+}

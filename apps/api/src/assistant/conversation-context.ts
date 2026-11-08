@@ -42,11 +42,14 @@ export interface ConversationMessage {
   readonly t_created: Date;
 }
 
-/** An upload's own messages: the "📎 name" line, and the Read stage's reply. */
+/**
+ * An upload's own messages (the "📎 name" line and the Read stage's reply) —
+ * and the scheduled briefs (Stage 5), which are summaries, not conversation.
+ */
 export function isUploadMessage(message: ConversationMessage): boolean {
   if (message.role === "assistant") {
     const trace = message.trace as { stage?: unknown } | null;
-    return trace !== null && typeof trace === "object" && trace.stage === "read";
+    return trace !== null && typeof trace === "object" && (trace.stage === "read" || trace.stage === "brief");
   }
   const lastLine = message.body.slice(message.body.lastIndexOf("\n") + 1);
   return lastLine.startsWith("📎 ");

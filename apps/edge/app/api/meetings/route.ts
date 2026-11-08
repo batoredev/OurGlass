@@ -4,8 +4,8 @@
  * Calendar.
  */
 import { NextResponse } from "next/server";
-import { events, people, personProfile, users } from "@ourglass/db";
-import { briefFor, deriveProfile, peopleInMeeting, type BriefForPerson } from "@ourglass/api/people";
+import { events } from "@ourglass/db";
+import { briefsForMeetings } from "@ourglass/api/people";
 import { authorize } from "../_auth";
 import { localDayWindow, read, userTimeZone } from "../_lib";
 
@@ -26,26 +26,7 @@ export async function GET(request: Request) {
   const briefUntil = new Date(now.getTime() + BRIEF_DAYS * 24 * 60 * 60 * 1000);
   const { rows, briefs } = await read(async (tx) => {
     const rows = await events.listBetween(tx, start, end);
-    const everyone = await people.list(tx);
-    const selfId = (await users.currentAccount(tx))?.self?.id ?? null;
-    // One profile per person, however many meetings name them.
-    const cache = new Map<string, BriefForPerson | null>();
-    const briefs = new Map<string, BriefForPerson[]>();
-    for (const row of rows) {
-      if (row.starts_at === null || row.starts_at.getTime() < now.getTime() || row.starts_at > briefUntil) continue;
-      const named = peopleInMeeting(row, everyone, selfId);
-      const forMeeting: BriefForPerson[] = [];
-      for (const person of named) {
-        if (!cache.has(person.id)) {
-          const data = await personProfile.loadPersonProfile(tx, person.id);
-          cache.set(person.id, data ? briefFor(deriveProfile(data, now, timeZone)) : null);
-        }
-        const brief = cache.get(person.id);
-        if (brief) forMeeting.push(brief);
-      }
-      if (forMeeting.length > 0) briefs.set(row.id, forMeeting);
-    }
-    return { rows, briefs };
+    return { rows, briefs: await briefsForMeetings(tx, rows, now, briefUntil, timeZone) };
   });
   return NextResponse.json({
     timeZone,

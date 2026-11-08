@@ -162,6 +162,15 @@ the acceptance-rate eval.
 
 *The Machine's proactive contact and minimal disclosure.*
 
+**Status: built in the app 2026-11-08** (`apps/api/src/briefs/`) — every scheduled pass may
+deliver one brief into the conversation: a **morning brief** (08:00–12:00 local: meetings with
+who and what is open, the first thing to do, what is owed today, reminders; on Mondays last week
+and who has gone quiet with something open) and an **evening review** (18:00–21:00: done today,
+still open, tomorrow's meetings). Facts only, from stored rows, by template; once per day by a
+unique index (migration 018), even when passes race; never sent late. **Not yet:** the email
+digest (needs the owner's sender and quiet-hours decision), browser push, missed-notification
+summaries, pending-reply nudges (need Stage 1c), priority rules.
+
 - A morning brief (the plan, who you meet, what is owed), an evening review, a weekly review;
   missed-notification summaries, pending-reply and reconnect nudges, quiet hours and priority
   rules.
@@ -215,7 +224,7 @@ planned) · — not planned, with the reason.
 | Meeting briefs | ✅ for meetings in the next 7 days |
 | Find slots that suit the other person · schedule tasks around meetings | ✅ |
 | Reschedule clashes automatically | S3 (not yet) |
-| Daily and weekly summaries | S5 |
+| Daily and weekly summaries | ✅ in the app |
 | Travel time between appointments | L (needs a maps integration) |
 
 ### 3. Communication
@@ -276,14 +285,16 @@ planned) · — not planned, with the reason.
 | Context before meetings · last interaction · groups (from what you said) | ✅ |
 | Important dates · full interaction history | S2 (not yet) |
 | Invitations | S4 |
-| Reconnect reminders · follow-up timing | S5 |
+| Reconnect (quiet with something open, in the weekly review) | ✅ |
+| Follow-up timing | S5 (not yet) |
 
 ### 17. Notifications & proactive help
 | Capability | Status |
 |---|---|
 | Reminders on time · overdue and upcoming in the chat | ✅ |
 | Meeting changes | S1 → S5 |
-| Morning brief · evening summary · weekly review · missed summaries · grouping · priority and quiet rules · pending replies | S5 |
+| Morning brief · evening review · weekly review (Mondays) · quiet hours | ✅ in the app |
+| Email digest · browser push · missed summaries · priority rules · pending replies | S5 (not yet) |
 | Travel disruptions | — travel is out of scope |
 
 ### 24. Security, privacy & digital safety
@@ -333,5 +344,5 @@ planned) · — not planned, with the reason.
 | 0 | Apply migration 017 (Row Level Security) to Supabase — no code depends on it |
 | 1 | The Google OAuth client; re-consent for `gmail.readonly`; approval for the paid multi-turn eval run (8 calls per provider), then switching `AI_CONVERSATION_CONTEXT` on |
 | 2–3 | Nothing beyond review |
-| 4–5 | A decision on the email digest's sender and quiet hours |
+| 4–5 | Migration 018 applied; a decision on the email digest's sender and quiet hours |
 | Any | Branch protection on `main`; deploy credentials ([`YOUR-ACTIONS.md`](YOUR-ACTIONS.md)) |

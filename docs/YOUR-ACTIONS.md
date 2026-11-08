@@ -48,6 +48,8 @@ re-checked since 2026-10-20 (item 9).
      tables' owner, which RLS does not restrict. If pages come back **empty**, the API connects as
      some other role — tell me, and I write the one-line compensating migration.
   3. Dashboard → **Advisors → Security Advisor**: the RLS warnings should be gone.
+  4. The same `pnpm db:migrate` applies **018** (the once-a-day brief index, Stage 5): deploy
+     the functions only after it, or the scheduled pass's briefs fail (reminders still fire).
 
 ## Part 2 — Models and your data (decisions, about 10 minutes)
 

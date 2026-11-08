@@ -19,6 +19,7 @@ import {
 } from "./scheduler.js";
 
 export * from "./scheduler.js";
+export { localDayWindow } from "./local-day.js";
 import { nudgeTitle } from "./scheduler.js";
 
 /** How an accepted block is titled on the calendar (POST /api/plan/accept). */

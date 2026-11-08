@@ -136,3 +136,38 @@ export async function loadPersonProfile(tx: Queryable, personId: string): Promis
     emails: emails.rows,
   };
 }
+
+/**
+ * People with something still open between you and nothing recorded about
+ * them since `since` — the weekly review's "quiet for a while" (Stage 5).
+ * Interaction here means a commitment, a memory or an email: what this app
+ * holds, never anything looked up elsewhere.
+ */
+export async function quietPeople(
+  tx: Queryable,
+  since: Date,
+  selfPersonId: string,
+): Promise<{ id: string; display_name: string; last: Date }[]> {
+  const { rows } = await tx.query<{ id: string; display_name: string; last: Date }>(
+    `WITH open_with AS (
+       SELECT CASE WHEN owner_id = $2 THEN recipient_id ELSE owner_id END AS person_id
+         FROM commitments_current
+        WHERE status IN ('pending', 'in_progress', 'waiting', 'waiting_on_someone', 'blocked')
+          AND (owner_id = $2 OR recipient_id = $2)
+     ),
+     last_seen AS (
+       SELECT person_id, max(at) AS last FROM (
+         SELECT owner_id AS person_id, t_created AS at FROM commitments_current
+         UNION ALL SELECT recipient_id, t_created FROM commitments_current
+         UNION ALL SELECT subject_id, t_created FROM memories_current WHERE subject_kind = 'person'
+         UNION ALL SELECT person_id, sent_at FROM sent_emails
+       ) seen GROUP BY person_id
+     )
+     SELECT p.id, p.display_name, l.last
+       FROM people_current p JOIN last_seen l ON l.person_id = p.id
+      WHERE p.id IN (SELECT person_id FROM open_with) AND p.id <> $2 AND l.last < $1
+      ORDER BY l.last`,
+    [since, selfPersonId],
+  );
+  return rows;
+}
