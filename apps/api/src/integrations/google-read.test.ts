@@ -95,6 +95,13 @@ describe("the inbox (Stage 1c) — metadata and snippets, never bodies", () => {
     expect(parseAddress("Dev <DEV@example.com>")).toEqual({ name: "Dev", address: "dev@example.com" });
     expect(parseAddress("meera@example.com")).toEqual({ name: "", address: "meera@example.com" });
     expect(parseAddress("not an address")).toEqual({ name: "", address: "" });
+    expect(parseAddress("Two <a@b@c.com>")).toEqual({ name: "Two", address: "" });
+  });
+
+  it("parses a crafted header in linear time (CodeQL: '<!@' + '!@' repeated)", () => {
+    const started = performance.now();
+    for (const n of [20_000, 200_000]) expect(parseAddress(`<!@${"!@".repeat(n)}`).address).toBe("");
+    expect(performance.now() - started).toBeLessThan(200);
   });
 });
 

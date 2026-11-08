@@ -114,12 +114,31 @@ interface MessageMeta {
   readonly payload?: { readonly headers?: readonly { readonly name?: string; readonly value?: string }[] };
 }
 
-/** "Barkha <barkha@example.com>" -> name and lower-cased address. */
+/** A header is a line; anything longer is not an address worth parsing. */
+const MAX_HEADER = 512;
+
+/** One "@", something on each side, no spaces or angle brackets. Linear. */
+function isAddress(text: string): boolean {
+  const at = text.indexOf("@");
+  return at > 0 && at === text.lastIndexOf("@") && at < text.length - 1 && !/[\s<>]/.test(text);
+}
+
+/**
+ * "Barkha <barkha@example.com>" -> name and lower-cased address.
+ *
+ * By index, not by a pattern: a header is attacker-controlled, and the regex
+ * this replaced backtracked quadratically on "<!@" + "!@"×n (CodeQL, PR #26).
+ */
 export function parseAddress(header: string): { name: string; address: string } {
-  const angle = /^(.*)<([^<>\s]+@[^<>\s]+)>\s*$/.exec(header.trim());
-  if (angle) return { name: angle[1]!.trim().replace(/^"|"$/g, ""), address: angle[2]!.toLowerCase() };
-  const bare = header.trim().toLowerCase();
-  return { name: "", address: /^[^\s@]+@[^\s@]+$/.test(bare) ? bare : "" };
+  const text = header.trim().slice(0, MAX_HEADER);
+  const open = text.lastIndexOf("<");
+  const close = open === -1 ? -1 : text.indexOf(">", open + 1);
+  if (open !== -1 && close !== -1 && text.slice(close + 1).trim() === "") {
+    const address = text.slice(open + 1, close).toLowerCase();
+    return { name: text.slice(0, open).trim().replace(/^"|"$/g, ""), address: isAddress(address) ? address : "" };
+  }
+  const bare = text.toLowerCase();
+  return { name: "", address: isAddress(bare) ? bare : "" };
 }
 
 /** The recent inbox: metadata and snippets only, never full bodies. */
