@@ -17,7 +17,7 @@ function time(iso: string, timeZone: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", timeZone });
 }
 
-const LABEL: Readonly<Record<PlannedBlock["kind"], string>> = { meeting: "Meeting", task: "Work", nudge: "Nudge" };
+const LABEL: Readonly<Record<PlannedBlock["kind"], string>> = { meeting: "Meeting", task: "Work", nudge: "Follow up" };
 
 export function DayPlanSection() {
   const [plan, setPlan] = useState<DayPlan | null>(null);

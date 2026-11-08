@@ -125,7 +125,7 @@ Supabase ([`YOUR-ACTIONS.md`](YOUR-ACTIONS.md) item 4).
 
 **Status: built 2026-11-08** — a page per person (`/people/view?id=`): what is open both ways,
 their on-time record and typical lateness, preferences, facts, patterns, groups, files and the
-last interaction, every line with its source; and a brief on each meeting in the next 7 days
+last interaction, every line with its source; and meeting prep notes for each meeting in the next 7 days
 that names a known person. **Not yet:** important dates, per-person time zone and preferred
 channel beyond a saved email, and searching document contents.
 
@@ -133,16 +133,16 @@ channel beyond a saved email, and searching document contents.
   owe and are owed, an on-time record from completed commitments, typical lateness, preferred
   meeting times and channel, time zone, important dates, groups, last interaction.
 - Editable and deletable on the person's page; nothing is inferred from outside data.
-- **A brief before each meeting**: who, what is open between you, what was said last time.
+- **Meeting prep notes before each meeting**: who, what is open between you, what was said last time.
 - **Done when:** derivations are unit-tested on fixtures; a profile never shows a fact without a
-  source; the brief appears for every meeting with a known person.
+  source; meeting prep notes appear for every meeting with a known person.
 
 ### Stage 3 — Today's plan and meeting times
 
 *The Machine's simulation and contingency, made deterministic.*
 
 **Status: built 2026-11-08** — `apps/api/src/planning/scheduler.ts`. **Today → Today's plan**: your work placed around meetings (with a 10-minute buffer) most urgent first, a
-next-best task with its reason, nudges for anyone overdue or due today with a late record, and
+next-best task with its reason, follow-ups with anyone overdue or due today with a late record, and
 what does not fit. **Add plan to my calendar** adds the blocks as events in one undoable turn,
 re-checked against the calendar first; booked work is not planned twice. A person's page
 **suggests meeting times** inside their stated time of day. Property-tested over 500 random days:
@@ -154,7 +154,7 @@ the acceptance-rate eval.
   work**: a day and week plan around fixed meetings and deadlines, focus blocks, estimated
   durations, recurring tasks and subtasks, a next-best-task suggestion with its reason,
   re-planning when something slips, and meeting slots that suit both people's known preferences.
-- Buffers learned from the person model ("Barkha is usually a day late").
+- Buffers learned from each person's profile ("Barkha is usually a day late").
 - Plans are **proposals**: accepting one writes through the tools, so it is logged and undoable.
 - **Done when:** property tests prove no plan double-books or breaks a hard constraint; an eval
   set measures how often proposed plans are accepted unchanged.
@@ -180,21 +180,21 @@ need an eval set scored against drafts you approve, and paid runs.
 *The Machine's proactive contact and minimal disclosure.*
 
 **Status: built in the app 2026-11-08** (`apps/api/src/briefs/`) — every scheduled pass may
-deliver one brief into the conversation: a **morning summary** (08:00–12:00 local: meetings with
+deliver one summary into the conversation: a **morning summary** (08:00–12:00 local: meetings with
 who and what is open, the first thing to do, what is owed today, reminders; on Mondays last week
 and who has gone quiet with something open) and an **evening summary** (18:00–21:00: done today,
 still open, tomorrow's meetings). Facts only, from stored rows, by template; once per day by a
-unique index (migration 018), even when passes race; never sent late. **Not yet:** the email
-digest (needs the owner's sender and quiet-hours decision), browser push, missed-notification
-summaries, pending-reply nudges (need Stage 1c), priority rules.
+unique index (migration 018), even when passes race; never sent late. **Not yet:** the daily
+summary email (needs the owner's sender and quiet-hours decision), browser push, missed-notification
+summaries, pending-reply reminders (need Stage 1c), priority rules.
 
-- A morning brief (the plan, who you meet, what is owed), an evening review, a weekly review;
-  missed-notification summaries, pending-reply and reconnect nudges, quiet hours and priority
+- A morning summary (the plan, who you meet, what is owed), an evening summary, a weekly summary;
+  missed-notification summaries, pending-reply and get-back-in-touch reminders, quiet hours and priority
   rules.
-- **In the app first.** An email digest to the owner's own address comes second, behind a
-  setting (owner default 2026-11-05: email digest first among outside channels; browser push
+- **In the app first.** A daily summary email to the owner's own address comes second, behind a
+  setting (owner default 2026-11-05: summary email first among outside channels; browser push
   later).
-- **Done when:** briefs are generated from stored data by tested code (a model only phrases
+- **Done when:** summaries are generated from stored data by tested code (a model only phrases
   them, and its phrasing is checked against the facts like Respond's today); delivery is
   idempotent per day.
 
@@ -245,7 +245,7 @@ planned) · — not planned, with the reason.
 | Edit / cancel Google events · multiple calendars | S1 (not yet) |
 | Event reminders | S1 |
 | Birthdays and important dates | S2 |
-| Meeting briefs | ✅ for meetings in the next 7 days |
+| Meeting prep notes | ✅ for meetings in the next 7 days |
 | Find slots that suit the other person · schedule tasks around meetings | ✅ |
 | Reschedule clashes automatically | S3 (not yet) |
 | Daily and weekly summaries | ✅ in the app |
@@ -268,7 +268,7 @@ planned) · — not planned, with the reason.
 | Natural-language commands · questions about your own data · confirmations | ✅ |
 | Voice input (dictation) | ✅ |
 | Text, voice, images and files as input | ✅ |
-| Conversational context · follow-ups | ✅ built, off until the multi-turn eval runs |
+| Follow-up understanding ("yes", "that one") | ✅ built, off until the multi-turn eval runs |
 | Temporary vs lasting instructions | S1 |
 | Spoken replies, stoppable | ✅ opt-in, the browser's own voice |
 | Notifications read aloud | S5 |
@@ -291,7 +291,7 @@ planned) · — not planned, with the reason.
 | Scheduled jobs · failure alerts · safe retries · action log · approval gates | ✅ |
 | Extract data from documents | ✅ |
 | Sync between apps (calendar two-way) | S1 |
-| Generated reports (briefs, reviews) · suggested automations | S5 |
+| Generated reports (summaries) · suggested automations | S5 |
 | Organise, rename, convert files | L (needs Drive) |
 | Automating the owner's computer | — connected apps only (owner default 2026-11-05) |
 
@@ -308,10 +308,10 @@ planned) · — not planned, with the reason.
 | Capability | Status |
 |---|---|
 | Contact records · relationship notes · promised follow-ups | ✅ |
-| Context before meetings · last interaction · groups (from what you said) | ✅ |
+| Meeting prep notes · last interaction · groups (from what you said) | ✅ |
 | Important dates · full interaction history | S2 (not yet) |
 | Invitations | S4 |
-| Reconnect (quiet with something open, in the weekly review) | ✅ |
+| Reconnect (quiet with something open, in the Monday summary) | ✅ |
 | Follow-up timing | S5 (not yet) |
 
 ### 17. Notifications & proactive help
@@ -319,8 +319,8 @@ planned) · — not planned, with the reason.
 |---|---|
 | Reminders on time · overdue and upcoming in the chat | ✅ |
 | Meeting changes | S1 → S5 |
-| Morning brief · evening review · weekly review (Mondays) · quiet hours | ✅ in the app |
-| Email digest · browser push · missed summaries · priority rules · pending replies | S5 (not yet) |
+| Morning summary · evening summary · weekly summary (Mondays) · quiet hours | ✅ in the app |
+| Daily summary email · browser push · missed summaries · priority rules · pending replies | S5 (not yet) |
 | Travel disruptions | — travel is out of scope |
 
 ### 24. Security, privacy & digital safety
@@ -370,5 +370,5 @@ planned) · — not planned, with the reason.
 | 0 | Apply migration 017 (Row Level Security) to Supabase — no code depends on it |
 | 1 | The Google OAuth client; re-consent for `gmail.readonly`; approval for the paid multi-turn eval run (8 calls per provider), then switching `AI_CONVERSATION_CONTEXT` on |
 | 2–3 | Nothing beyond review |
-| 4–5 | Migration 018 applied; a decision on the email digest's sender and quiet hours |
+| 4–5 | Migration 018 applied; a decision on the summary email's sender and quiet hours |
 | Any | Branch protection on `main`; deploy credentials ([`YOUR-ACTIONS.md`](YOUR-ACTIONS.md)) |

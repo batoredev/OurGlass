@@ -48,8 +48,8 @@ re-checked since 2026-10-20 (item 9).
      tables' owner, which RLS does not restrict. If pages come back **empty**, the API connects as
      some other role — tell me, and I write the one-line compensating migration.
   3. Dashboard → **Advisors → Security Advisor**: the RLS warnings should be gone.
-  4. The same `pnpm db:migrate` applies **018** (the once-a-day brief index, Stage 5) and **019**
-     (draft edit distance, Stage 4): deploy the functions only after them, or briefs and the
+  4. The same `pnpm db:migrate` applies **018** (sends each summary only once a day, Stage 5) and **019**
+     (draft edit distance, Stage 4): deploy the functions only after them, or the summaries and the
      send-time measure fail (reminders and sending still work).
 
 ## Part 2 — Models and your data (decisions, about 10 minutes)
@@ -149,7 +149,7 @@ re-checked since 2026-10-20 (item 9).
 - [ ] **17. Will there be a second customer?** Only a yes makes multi-user work worth doing.
 - [ ] **18. Terms of service and a privacy policy** before anyone outside your team uses it. The
       app stores commitments and facts about real people.
-- [ ] **19. The daily digest (Stage 5):** which address it is sent from, and your quiet hours.
+- [ ] **19. The daily summary email (Stage 5):** which address it is sent from, and your quiet hours.
 
 ## Part 7 — Optional
 

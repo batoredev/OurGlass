@@ -142,6 +142,17 @@ function urgency(task: TaskInput, now: Date): [number, number, string] {
 }
 
 /** A nudge's title — shared with the planner so an accepted nudge is recognised. */
+/** How an accepted block is titled on the calendar (POST /api/plan/accept). */
+export const PLAN_PREFIX = { task: "Focus", nudge: "Follow up" } as const;
+
+/** Earlier titles that still mark a block as booked: follow-ups were "Nudge: …" before 2026-11-08. */
+const OLD_PREFIXES: Readonly<Record<keyof typeof PLAN_PREFIX, readonly string[]>> = { task: [], nudge: ["Nudge"] };
+
+/** Whether an accepted plan already put this block on the calendar (`booked` holds event titles). */
+export function alreadyBooked(booked: ReadonlySet<string>, kind: keyof typeof PLAN_PREFIX, title: string): boolean {
+  return [PLAN_PREFIX[kind], ...OLD_PREFIXES[kind]].some((prefix) => booked.has(`${prefix}: ${title}`));
+}
+
 export function nudgeTitle(item: Pick<IncomingInput, "who" | "what">): string {
   return `Ask ${item.who} about ${item.what}`;
 }

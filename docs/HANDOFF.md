@@ -13,7 +13,7 @@ conversations**. Everything it needs is in this file and the docs it links. Read
 delete), 1a (follow-up understanding — switched off until its paid eval runs), 1b/1c (Google
 Calendar busy times and the Gmail inbox — verified against recorded responses only), 1d (spoken
 replies), 2 (people profiles, meeting prep), 3 (today's plan, meeting times), 4 (email drafts in your style: greeting and sign-off
-per recipient, follow-ups, the edit-distance measure), 5 (morning brief and evening review in the
+per recipient, follow-ups, the edit-distance measure), 5 (morning and evening summaries in the
 app). Each stage's ROADMAP section has a **Status** paragraph saying what is built and what is
 not yet. Migrations 017–019 must be applied to Supabase before deploying this code.
 
