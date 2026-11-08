@@ -36,6 +36,7 @@ export * as googleAccounts from "./repositories/google-accounts.js";
 export * as checklistMarks from "./repositories/checklist-marks.js";
 export * as sentEmails from "./repositories/sent-emails.js";
 export * as dataControl from "./repositories/data-control.js";
+export * as personProfile from "./repositories/person-profile.js";
 
 export type { Person, CreatePersonInput } from "./repositories/people.js";
 export type { Organization } from "./repositories/organizations.js";
@@ -127,3 +128,4 @@ export type {
   PurgeCounts,
   PurgePersonResult,
 } from "./repositories/data-control.js";
+export type { PersonProfileData } from "./repositories/person-profile.js";

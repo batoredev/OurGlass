@@ -113,6 +113,12 @@ Supabase ([`YOUR-ACTIONS.md`](YOUR-ACTIONS.md) item 4).
 
 *The Machine's identity resolution and world model, over the owner's own data only.*
 
+**Status: built 2026-11-08** — a page per person (`/people/view?id=`): what is open both ways,
+their on-time record and typical lateness, preferences, facts, patterns, groups, files and the
+last interaction, every line with its source; and a brief on each meeting in the next 7 days
+that names a known person. **Not yet:** important dates, per-person time zone and preferred
+channel beyond a saved email, and searching document contents.
+
 - A profile per person, **derived from what happened**, every field with its source: what they
   owe and are owed, an on-time record from completed commitments, typical lateness, preferred
   meeting times and channel, time zone, important dates, groups, last interaction.
@@ -194,7 +200,7 @@ planned) · — not planned, with the reason.
 | Read busy times · edit / cancel · recurring · multiple calendars | S1 |
 | Event reminders | S1 |
 | Birthdays and important dates | S2 |
-| Meeting agendas / briefs | S2 |
+| Meeting briefs | ✅ for meetings in the next 7 days |
 | Find slots that suit both people · reschedule clashes · schedule tasks around meetings | S3 |
 | Daily and weekly summaries | S5 |
 | Travel time between appointments | L (needs a maps integration) |
@@ -227,7 +233,8 @@ planned) · — not planned, with the reason.
 | Facts, preferences, commitments, notes, with provenance | ✅ |
 | Natural-language search · corrections · inspection | ✅ |
 | Export · permanent delete | ✅ |
-| Important dates · decisions · routines · saved instructions · patterns · summaries per person | S2 |
+| Summaries per person · patterns | ✅ the person page |
+| Important dates · decisions · routines · saved instructions | S2 (not yet) |
 
 ### 8. Workflow automation
 | Capability | Status |
@@ -253,7 +260,8 @@ planned) · — not planned, with the reason.
 | Capability | Status |
 |---|---|
 | Contact records · relationship notes · promised follow-ups | ✅ |
-| Groups · important dates · interaction history · context before meetings | S2 |
+| Context before meetings · last interaction · groups (from what you said) | ✅ |
+| Important dates · full interaction history | S2 (not yet) |
 | Invitations | S4 |
 | Reconnect reminders · follow-up timing | S5 |
 
@@ -280,7 +288,7 @@ planned) · — not planned, with the reason.
 |---|---|
 | Ask when unsure · remember corrections | ✅ |
 | Context across sessions · temporary vs lasting instructions | S1 |
-| Review and reset learned preferences | S2 |
+| Review learned preferences | ✅ person page · reset by correcting in conversation or deleting |
 | Scheduling patterns · personalised priorities · learn accepted suggestions · explain a suggestion | S3 |
 | Response style per recipient | S4 |
 | Notification frequency · repeated manual work → suggested automation | S5 |

@@ -331,3 +331,7 @@ button.checklist-item:hover { transform: translateY(-1px); box-shadow: 0 18px 34
 .danger-button { min-height: 46px; padding: 0 22px; border-radius: 999px; font-weight: 700; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
 .delete-confirm { border-radius: 16px; background: var(--surface-strong); }
 .delete-phrase input { border-radius: 999px; }
+
+/* Meeting briefs and the person page, in the theme's softer cards. */
+.meeting-brief { border-radius: 16px; background: var(--surface-strong); }
+.profile-subtitle { font: 600 16px/1.2 var(--display); }

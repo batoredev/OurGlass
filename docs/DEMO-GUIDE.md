@@ -72,7 +72,8 @@ undone, and it must never be run against Supabase.
 | 1 | Open the site and sign in | The landscape sign-in page, then the chat with its greeting panel |
 | 2 | **See today ↗** | Today: the article due, the overdue feedback for Arun, the reminder, a tickable checklist |
 | 3 | **Commitments** | **Owed to me** and **Owed by me** are separate tabs — direction is a column, not a phrasing |
-| 4 | **Meetings** | The poster review and the coffee. Meetings never overlap |
+| 4 | **Meetings** | The poster review and the coffee. Meetings never overlap. The coffee carries a **brief**: what Meera owes you, her preference, the last interaction — each with its source |
+| 4b | Click a name on **People** | Their page: what is open both ways, their record, what you've told me — each line says where it came from |
 | 5 | Type `What does Barkha owe me?` | Answered from the database: the article, with its deadline |
 | 6 | Type `Barkha sent me the article.` | Marked done. If the wording differs from the stored one, it **asks** which — see section 3 |
 | 7 | Type `Remind me tomorrow at 9 to call the printer.` | *"Reminder set for …"* and a **Saved** card |
@@ -127,7 +128,6 @@ Do not promise these. Each has a stage in [`ROADMAP.md`](ROADMAP.md).
 | Not built | Stage |
 |---|---|
 | Conversation context ("yes", "the second one") · reading the calendar and the inbox | 1 |
-| A profile per person (reliability, preferred times) · a brief before each meeting | 2 |
 | Day and week plans, focus blocks, slots that suit both people | 3 |
 | Replies written for each recipient | 4 |
 | Morning brief, evening and weekly review | 5 |

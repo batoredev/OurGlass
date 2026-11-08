@@ -289,6 +289,14 @@ export interface Meeting {
   readonly ends_at: string | null;
   readonly location: string | null;
   readonly on_google_calendar: boolean;
+  /** Stage 2: one brief per known person the meeting names (meetings in the next 7 days). */
+  readonly brief: readonly MeetingBrief[];
+}
+
+export interface MeetingBrief {
+  readonly id: string;
+  readonly name: string;
+  readonly lines: readonly string[];
 }
 
 export async function fetchMeetings(): Promise<{ readonly timeZone: string; readonly meetings: readonly Meeting[] }> {
@@ -333,4 +341,40 @@ export async function fetchEmailDrafts(): Promise<readonly EmailDraft[]> {
 
 export async function fetchGoogleStatus(): Promise<GoogleStatus> {
   return get<GoogleStatus>("/api/google");
+}
+
+// ---------------------------------------------------------------------------
+// The person model (ROADMAP Stage 2)
+// ---------------------------------------------------------------------------
+
+export interface Sourced<T> {
+  readonly value: T;
+  readonly source: string;
+}
+
+export interface OpenItem {
+  readonly id: string;
+  readonly what: string;
+  readonly due: string | null;
+  readonly overdue: boolean;
+}
+
+export interface PersonProfile {
+  readonly id: string;
+  readonly name: string;
+  readonly owesYou: Sourced<readonly OpenItem[]>;
+  readonly youOwe: Sourced<readonly OpenItem[]>;
+  readonly reliability: Sourced<{ readonly onTime: number; readonly late: number; readonly typicalLateHours: number | null }> | null;
+  readonly preferences: readonly Sourced<string>[];
+  readonly facts: readonly Sourced<string>[];
+  readonly patterns: readonly Sourced<string>[];
+  readonly email: Sourced<string> | null;
+  readonly organization: Sourced<string> | null;
+  readonly groups: readonly Sourced<string>[];
+  readonly files: readonly Sourced<string>[];
+  readonly lastInteraction: Sourced<string> | null;
+}
+
+export async function fetchPersonProfile(id: string): Promise<PersonProfile> {
+  return (await get<{ profile: PersonProfile }>(`/api/people/${encodeURIComponent(id)}/profile`)).profile;
 }

@@ -948,3 +948,19 @@ button.checklist-item:disabled { cursor: progress; opacity: .7; }
 .speech-controls .quiet-button { min-height: 36px; padding: 0 14px; border: 1px solid var(--line-strong); background: transparent; color: var(--ink); }
 .speech-controls .quiet-button[aria-pressed="true"] { background: var(--surface-strong); }
 @media (max-width: 760px) { .speech-controls .quiet-button { min-height: 32px; padding: 0 10px; font-size: 11px; } }
+
+/* The person page and meeting briefs (ROADMAP Stage 2). */
+.profile-head { display: flex; align-items: center; gap: 16px; margin: 4px 0 8px; }
+.profile-meta { display: grid; gap: 4px; color: var(--muted); font-size: 14px; }
+.profile-source { color: var(--muted); font-size: 12px; }
+.profile-list { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; line-height: 1.45; }
+.profile-due { color: var(--muted); font-size: 13px; }
+.profile-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+.profile-subtitle { font-size: 13px; font-weight: 700; margin: 0; }
+.profile-empty { color: var(--muted); font-size: 14px; margin: 6px 0 0; }
+.profile-record { margin: 6px 0 0; }
+a.person-name { color: inherit; text-decoration: none; }
+a.person-name:hover, a.person-name:focus-visible { text-decoration: underline; }
+.meeting-brief { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; line-height: 1.45; }
+.meeting-brief ul { margin: 6px 0 0; padding-left: 18px; }
+.meeting-brief-name { font-weight: 700; color: inherit; }
