@@ -128,7 +128,8 @@ Do not promise these. Each has a stage in [`ROADMAP.md`](ROADMAP.md).
 
 | Not built | Stage |
 |---|---|
-| Conversation context ("yes", "the second one") · reading the calendar and the inbox | 1 |
+| Conversation context ("yes", "the second one") — built, switched off until measured | 1 |
+| Reading Google Calendar and Gmail — built, needs your Google OAuth client | 1 |
 | Tone adjusted per recipient by a model, translation | 4 |
 | More than one user — one shared access token, one person's data | not planned |
 

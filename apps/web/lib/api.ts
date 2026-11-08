@@ -402,6 +402,8 @@ export interface PlannedBlock {
 
 export interface DayPlan {
   readonly timeZone: string;
+  /** Set when Google Calendar is connected but could not be read (Stage 1b). */
+  readonly calendarNote?: string | null;
   readonly blocks: readonly PlannedBlock[];
   readonly unplaced: readonly { readonly id: string; readonly title: string; readonly reason: string }[];
   readonly next: PlannedBlock | null;
@@ -421,4 +423,29 @@ export interface SlotSuggestion {
 
 export async function fetchMeetingSlots(personId: string, minutes = 30): Promise<SlotSuggestion> {
   return get<SlotSuggestion>(`/api/plan/slots?person=${encodeURIComponent(personId)}&minutes=${minutes}`);
+}
+
+// ---------------------------------------------------------------------------
+// The inbox, triaged (ROADMAP Stage 1c)
+// ---------------------------------------------------------------------------
+
+export interface InboxMessage {
+  readonly id: string;
+  readonly fromName: string;
+  readonly fromAddress: string;
+  readonly subject: string;
+  readonly snippet: string;
+  readonly receivedAt: string | null;
+  readonly personName: string | null;
+  readonly needsReply: boolean;
+  readonly warnings: readonly string[];
+}
+
+export interface Inbox {
+  readonly state: "ok" | "not_configured" | "not_connected" | "needs_read_permission" | "unavailable";
+  readonly messages: readonly InboxMessage[];
+}
+
+export async function fetchInbox(): Promise<Inbox> {
+  return get<Inbox>("/api/google/inbox");
 }

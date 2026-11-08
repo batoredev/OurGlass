@@ -37,6 +37,7 @@ import * as undo from "../app/api/undo/route";
 import * as google from "../app/api/google/route";
 import * as googleCallback from "../app/api/google/callback/route";
 import * as googleConnect from "../app/api/google/connect/route";
+import * as googleInbox from "../app/api/google/inbox/route";
 import * as meetings from "../app/api/meetings/route";
 import * as thoughts from "../app/api/thoughts/route";
 import * as todayCheck from "../app/api/today/check/route";
@@ -92,6 +93,7 @@ const ROUTES: readonly Route[] = [
   route("/turn", turn),
   route("/undo", undo),
   route("/google/connect", googleConnect),
+  route("/google/inbox", googleInbox),
   route("/google/callback", googleCallback),
   route("/google", google),
   route("/meetings", meetings),

@@ -984,3 +984,10 @@ a.person-name:hover, a.person-name:focus-visible { text-decoration: underline; }
 
 /* A suggested follow-up (ROADMAP Stage 4). */
 .follow-up-text { white-space: pre-wrap; font: inherit; font-size: 14px; line-height: 1.5; margin: 10px 0 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-strong); }
+
+/* Today → Inbox (ROADMAP Stage 1c): quoted data, warnings in the danger colour. */
+.inbox-list { list-style: none; margin: 8px 0 14px; padding: 0; display: grid; gap: 8px; }
+.inbox-item { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 14px; }
+.inbox-from { font-weight: 700; }
+.inbox-snippet { color: var(--muted); font-size: 13px; }
+.inbox-warning { color: var(--danger); font-size: 13px; font-weight: 600; }

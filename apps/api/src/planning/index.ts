@@ -45,12 +45,17 @@ export async function loadDayPlan(
   now: Date,
   localMidnight: Date,
   timeZone: string,
+  /** Busy times from Google Calendar (Stage 1b), when it is connected. */
+  external: readonly { readonly id: string; readonly title: string; readonly start: Date; readonly end: Date }[] = [],
 ): Promise<DayPlan> {
   const dayStart = new Date(localMidnight.getTime() + WORK_START_HOUR * HOUR);
   const dayEnd = new Date(localMidnight.getTime() + WORK_END_HOUR * HOUR);
   const selfId = (await users.currentAccount(tx))?.self?.id ?? null;
 
-  const fixed: FixedBlock[] = (await events.listBetween(tx, localMidnight, new Date(localMidnight.getTime() + 24 * HOUR)))
+  const ours = await events.listBetween(tx, localMidnight, new Date(localMidnight.getTime() + 24 * HOUR));
+  // An event OurGlass itself added to Google is already here once.
+  const mirrored = new Set(ours.map((row) => row.google_event_id).filter((id): id is string => id !== null));
+  const fixed: FixedBlock[] = ours
     .filter((row) => row.starts_at !== null)
     .map((row) => ({
       id: row.id,
@@ -59,6 +64,9 @@ export async function loadDayPlan(
       // A meeting with no end is held for 30 minutes, as the calendar shows it.
       end: row.ends_at ?? new Date(row.starts_at!.getTime() + 30 * 60_000),
     }));
+  for (const busy of external) {
+    if (!mirrored.has(busy.id)) fixed.push({ id: `google:${busy.id}`, title: busy.title, start: busy.start, end: busy.end });
+  }
 
   // Work already given a block today (an accepted plan) is not planned again:
   // re-planning it would book it twice. The block shows as a calendar entry.

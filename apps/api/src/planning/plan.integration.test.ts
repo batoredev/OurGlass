@@ -64,6 +64,23 @@ suite("day plan (integration)", () => {
     expect(again.blocks.filter((block) => block.title === "Focus: feedback on the backend plan").map((b) => b.kind)).toEqual(["meeting"]);
   });
 
+  it("plans around Google Calendar's busy times, without counting OurGlass's own copy twice", async () => {
+    const nine = new Date("2026-11-09T09:00:00.000Z");
+    const external = [{ id: "g-busy", title: "Dentist", start: nine, end: new Date("2026-11-09T12:00:00.000Z") }];
+    const plan = await withTransaction(pool, (tx) => loadDayPlan(tx, NOW, MIDNIGHT, "UTC", external));
+    expect(plan.blocks.find((block) => block.id === "google:g-busy")).toMatchObject({ kind: "meeting", title: "Dentist" });
+    for (const block of plan.blocks.filter((b) => b.kind === "task")) {
+      expect(block.end <= nine || block.start >= new Date("2026-11-09T12:10:00.000Z")).toBe(true);
+    }
+    // An event OurGlass itself put on Google shows once, not twice.
+    await pool.query(
+      `INSERT INTO events (title, starts_at, ends_at, google_event_id) VALUES ('Synced', '2026-11-09T13:00:00Z', '2026-11-09T13:30:00Z', 'g-mine')`,
+    );
+    const mirrored = [{ id: "g-mine", title: "Synced", start: new Date("2026-11-09T13:00:00Z"), end: new Date("2026-11-09T13:30:00Z") }];
+    const again = await withTransaction(pool, (tx) => loadDayPlan(tx, NOW, MIDNIGHT, "UTC", mirrored));
+    expect(again.blocks.filter((block) => block.title === "Synced")).toHaveLength(1);
+  });
+
   it("offers Meera mornings, because she said she prefers them", async () => {
     const { rows } = await pool.query<{ id: string }>(`SELECT id FROM people WHERE display_name = 'Meera'`);
     const suggestion = await withTransaction(pool, (tx) => suggestMeetingSlots(tx, rows[0]!.id, 30, NOW, MIDNIGHT, "UTC"));

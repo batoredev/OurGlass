@@ -105,7 +105,17 @@ Supabase ([`YOUR-ACTIONS.md`](YOUR-ACTIONS.md) item 4).
 - **1d Spoken replies** (4; opt-in): the browser reads replies aloud, can be stopped. **Built
   2026-11-08** (`apps/web/app/speech.ts`): off until turned on in the chat header, remembered on
   that browser, never reads an upload's reply.
-- **Needs:** 1b–1c the owner's Google OAuth client and a re-consent for `gmail.readonly`.
+- **1b and 1c built 2026-11-08, verified against recorded API responses only**
+  (`apps/api/src/integrations/google-read.ts`): the day plan and meeting slots plan around
+  Google Calendar's busy times (recurring events expanded; all-day, free and cancelled events
+  are not busy; OurGlass's own synced events counted once). **Today → Inbox** shows who is
+  waiting on your reply and what looks suspicious (a known name from a stranger's address, a
+  reply-to on another domain, look-alike domains, an unknown sender pressing for urgency) —
+  sender, subject and Gmail's snippet as quoted data, decided by code, never a model.
+  **Not yet:** editing or cancelling Google events, more than one calendar, summaries by a model,
+  thread-level "needs a reply".
+- **Needs:** 1b–1c the owner's Google OAuth client and a re-consent for `gmail.readonly` (now
+  in the consent request).
 - **Done when:** a multi-turn eval set passes; calendar and email adapters are tested against
   recorded API responses and, once the client exists, live.
 
@@ -226,7 +236,8 @@ planned) · — not planned, with the reason.
 |---|---|
 | Create events · refuse clashes · time zones (owner) | ✅ |
 | Add to Google Calendar | ✅ (round trip unverified live) |
-| Read busy times · edit / cancel · recurring · multiple calendars | S1 |
+| Read busy times · recurring events (expanded) | ✅ built, verified against recorded responses |
+| Edit / cancel Google events · multiple calendars | S1 (not yet) |
 | Event reminders | S1 |
 | Birthdays and important dates | S2 |
 | Meeting briefs | ✅ for meetings in the next 7 days |
@@ -239,7 +250,8 @@ planned) · — not planned, with the reason.
 | Capability | Status |
 |---|---|
 | Draft an email · send after a yes · remember addresses | ✅ |
-| Read, summarise, thread summaries · flag urgent / needs-a-reply / suspicious | S1 (triage in S5) |
+| Read the inbox · needs a reply · suspicious flags | ✅ built, verified against recorded responses |
+| Summaries · thread summaries | S1 (not yet — a model reading email needs the Read-stage boundary) |
 | Communication history per person | S1 → S2 |
 | Greeting and sign-off per recipient · suggested follow-ups · edit distance recorded | ✅ |
 | Tone per recipient by a model · invitations, letters · translation | S4 (not yet) |
@@ -312,7 +324,7 @@ planned) · — not planned, with the reason.
 | Approval for sensitive actions · audit log · permissions explained | ✅ |
 | Delete personal data (a person, a file, everything) · export | ✅ |
 | Retention preferences · privacy settings · sensitive memories kept out of prompts | S2 |
-| Suspicious email and link flags | S1 |
+| Suspicious email flags | ✅ by code, from headers |
 | Account security alerts · emergency access | L |
 | Software updates · password managers · exposed-data searches | — outside the product (and the last would mean looking people up) |
 
@@ -330,8 +342,8 @@ planned) · — not planned, with the reason.
 ### 27. Integrations (in-scope only)
 | Integration | Status |
 |---|---|
-| Email (Gmail) | ✅ send · S1 read |
-| Calendar (Google) | ✅ add · S1 read |
+| Email (Gmail) | ✅ send · ✅ read (recorded responses; live needs the OAuth client) |
+| Calendar (Google) | ✅ add · ✅ busy times (recorded responses; live needs the OAuth client) |
 | Outgoing webhooks (alerts) | ✅ |
 | Cloud storage (Drive), notes, task managers, office apps, messaging, maps, incoming webhooks | L |
 | Project management, CRM | later, with category 20 |

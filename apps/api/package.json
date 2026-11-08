@@ -78,8 +78,8 @@
       "default": "./dist/data/index.js"
     },
     "./integrations": {
-      "types": "./dist/integrations/google-calendar.d.ts",
-      "default": "./dist/integrations/google-calendar.js"
+      "types": "./dist/integrations/index.d.ts",
+      "default": "./dist/integrations/index.js"
     }
   }
 }

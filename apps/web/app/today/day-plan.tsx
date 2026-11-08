@@ -77,6 +77,7 @@ export function DayPlanSection() {
           </button>
         ) : null}
       </div>
+      {plan.calendarNote ? <p className="profile-empty">{plan.calendarNote}</p> : null}
       {plan.next ? (
         <p className="day-plan-next">
           <strong>Next:</strong> {plan.next.title} at {time(plan.next.start, plan.timeZone)} — {plan.next.reason}

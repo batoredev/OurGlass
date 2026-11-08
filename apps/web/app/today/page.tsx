@@ -11,6 +11,7 @@ import Link from "next/link";
 import { AsyncPage } from "../async-page";
 import { TodayChecklist } from "./checklist";
 import { DayPlanSection } from "./day-plan";
+import { InboxSection } from "./inbox";
 import { fetchDirectory, fetchToday, type Commitment, type Today } from "../../lib/api";
 import { Icon, StatusPill } from "../icons";
 import { EmptyState, LoadFailure, statusLabel, statusTone, when } from "../surface";
@@ -74,6 +75,7 @@ async function renderToday() {
       </header>
 
       <DayPlanSection />
+      <InboxSection />
 
       {today.checklist.length > 0 && (
         // Keyed on the server's view, so a reload with different data resets
