@@ -1,6 +1,6 @@
 name: Uptime
 
-# Track P2 of docs/REMAINING-EXECUTION-PLAN.md: `/api/health` existed and
+# Track P2 of docs/archive/REMAINING-EXECUTION-PLAN.md: `/api/health` existed and
 # nothing ever called it.
 #
 # ⚠ WHAT THIS IS NOT. GitHub's scheduled runs are best-effort and can be delayed

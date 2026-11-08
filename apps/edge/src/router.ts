@@ -23,6 +23,10 @@ import * as messages from "../app/api/messages/route";
 import * as confirmPending from "../app/api/pending-actions/[id]/confirm/route";
 import * as declinePending from "../app/api/pending-actions/[id]/decline/route";
 import * as people from "../app/api/people/route";
+import * as personProfile from "../app/api/people/[id]/profile/route";
+import * as plan from "../app/api/plan/route";
+import * as planAccept from "../app/api/plan/accept/route";
+import * as planSlots from "../app/api/plan/slots/route";
 import * as permissions from "../app/api/permissions/route";
 import * as projects from "../app/api/projects/route";
 import * as session from "../app/api/session/route";
@@ -33,10 +37,13 @@ import * as undo from "../app/api/undo/route";
 import * as google from "../app/api/google/route";
 import * as googleCallback from "../app/api/google/callback/route";
 import * as googleConnect from "../app/api/google/connect/route";
+import * as googleInbox from "../app/api/google/inbox/route";
 import * as meetings from "../app/api/meetings/route";
 import * as thoughts from "../app/api/thoughts/route";
 import * as todayCheck from "../app/api/today/check/route";
 import * as emailDrafts from "../app/api/email-drafts/route";
+import * as dataExport from "../app/api/data/export/route";
+import * as dataDelete from "../app/api/data/delete/route";
 import { isAllowedOrigin } from "../app/api/_http";
 import { routePath } from "./route-path";
 
@@ -61,6 +68,8 @@ function route(path: string, module: unknown): Route {
 
 const ROUTES: readonly Route[] = [
   route("/activity", activity),
+  route("/data/export", dataExport),
+  route("/data/delete", dataDelete),
   route("/commitments", commitments),
   route("/documents/[id]/file", documentFile),
   route("/documents", documents),
@@ -71,6 +80,10 @@ const ROUTES: readonly Route[] = [
   route("/messages", messages),
   route("/pending-actions/[id]/confirm", confirmPending),
   route("/pending-actions/[id]/decline", declinePending),
+  route("/people/[id]/profile", personProfile),
+  route("/plan/accept", planAccept),
+  route("/plan/slots", planSlots),
+  route("/plan", plan),
   route("/people", people),
   route("/permissions", permissions),
   route("/projects", projects),
@@ -80,6 +93,7 @@ const ROUTES: readonly Route[] = [
   route("/turn", turn),
   route("/undo", undo),
   route("/google/connect", googleConnect),
+  route("/google/inbox", googleInbox),
   route("/google/callback", googleCallback),
   route("/google", google),
   route("/meetings", meetings),

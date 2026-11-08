@@ -1,7 +1,8 @@
 # Decisions and research findings
 
-This records the locked decisions behind `docs/EXECUTION-PLAN.md` and the research that drove
-them, so a future contributor does not have to re-derive or re-litigate them. Importers:
+This records the locked decisions behind the plan of record, [`ROADMAP.md`](ROADMAP.md) (and,
+before 2026-11-05, `docs/archive/EXECUTION-PLAN.md`), and the research that drove them, so a
+future contributor does not have to re-derive or re-litigate them. Importers:
 none — this is a reference document read by contributors and agents before touching the
 schema, the tool layer, or CI config.
 
@@ -11,11 +12,11 @@ schema, the tool layer, or CI config.
 |---|---|---|
 | Repo visibility | Public | User's explicit choice, hardened with secret scanning + push protection and zero real names in fixtures |
 | Stack | TypeScript end-to-end (Next.js + Node/TS API + Postgres/pgvector + Anthropic SDK, pnpm monorepo) | One language, shared commitment/entity types between UI and API, simplest CI |
-| Scope | Full spec, all 38 sections, phased | User's explicit choice |
+| Scope | **The 13 checklist categories in `ROADMAP.md`** (1–5, 8, 14, 15, 17, 24, 25, 27, 28); 20, 21 and 26 later — decided 2026-11-05 | Owner's choice from the capability checklist, replacing "full spec, all 38 sections, phased". The spec still governs behaviour inside that scope |
 | LLM ↔ DB | Full write power through typed, validated tools; no raw SQL generation | Spec §37 plus the user's requirement that every operation be reachable by command |
 | Dynamic entities | LLM may define new entity types at runtime; frontend renders them with no code change | User's explicit requirement |
 | Confirmations | Act immediately on internal state, undo available; external actions confirm | Spec §27 (no confirmation fatigue) plus spec §35 (external actions are higher risk) |
-| UI priority | Last; bare inspection surfaces for testing only | User's explicit priority |
+| UI priority | Last; bare inspection surfaces for testing only — **superseded 2026-11-05** by the prototype display (below) | User's explicit priority at the time |
 | Execution unit | Agent teams always, never subagents | User's explicit standing instruction |
 | Knowledge graph | `/graphify --update` after every feature | User's explicit standing instruction |
 | Uploaded-file storage (Phase 6) | **Supabase Storage** — decided 2026-09-24 | Owner's choice: same project and bill as the database, access rules beside the data. The `documents` table stores an object key, never the bytes (`bytea` was already ruled out for large PDFs) |
@@ -26,6 +27,18 @@ schema, the tool layer, or CI config.
 | Association (Phase 6) | Exact name match against EXISTING rows only, unambiguous within kind; the note's names CONFIRMED, the file's INFERRED; never creates a row — 2026-09-26 | The spec's two-Aruns rule: a wrong link is worse than a missing one. Links to commitments deferred (fuzzy text) |
 | Hosting | **Supabase Edge Functions for the API + reminders; Cloudflare Pages for a static frontend** — decided 2026-10-19, replacing Cloudflare Workers | Owner's choice after the first Workers deploy failed: the OpenNext adapter's bundle, built on Windows, crashed on every request (`Dynamic require of "/.next/server/middleware-manifest.json"`), and the adapter documents Windows support as limited. The route files moved unchanged to `apps/edge` and run in Deno behind a `next/server` shim; pages load data in the browser; reminders are `pg_cron` → the `reminders` function. Trade-offs accepted: the access token lives in browser storage (a cross-site cookie would not be sent), and uploads download rather than open inline. Full design: `docs/DEPLOYMENT-DESIGN.md` |
 | Email power (Phase 7) | **Send, after confirming each one** — decided 2026-09-24 | Owner's choice over draft-only. Every send goes through the existing `pending_actions` hold-and-confirm path, never a standing grant: sending cannot be undone, so confirmation is per message by construction |
+| Plan of record | **`docs/ROADMAP.md`**, Stages 0–5 — 2026-11-05 | Built from the owner's three references (checklist, projected path, the Machine). The four earlier plans are kept in `docs/archive/` as history, not deleted |
+| Gmail reading | **Read-only Gmail (`gmail.readonly`) is allowed** — owner default 2026-11-05 | Needed for summaries, threads and "needs a reply". Email text is data, never instructions: the same boundary as uploads (one descriptive-only reading call). Sending is unchanged: per-message confirmation |
+| Spoken replies | **In scope, opt-in** browser speech that can be stopped — owner default 2026-11-05 | Category 4. The browser's own voice; no new provider or cost |
+| Deleting data | **Permanent delete and export, alongside undo** — owner default 2026-11-05 | Undo invalidates and keeps the row; a person must also be able to remove data for good (category 24). Export is JSON of everything |
+| Computer control | **Connected apps only; no desktop helper** — owner default 2026-11-05 | A helper on the owner's computer is a new trust boundary for little gain in the chosen categories |
+| Proactive delivery | **In the app first; an email digest to the owner's own address next; browser push later** — owner default 2026-11-05 | Email needs no new account or permission; push needs a service worker and a consent prompt |
+| Product principles | Spec §2 and §4 kept, reworded as ROADMAP principle 8: **planning features propose; they never nag, gamify or reorganise the owner's life unasked** — owner default 2026-11-05 | Scheduling (Stage 3) is now the core of the product, so "no study plan unasked" needed restating, not dropping |
+| Docs layout | Current docs in `docs/`, history in `docs/archive/`, the agent-team operating system in `docs/agent-os/`, design notes in `docs/reference/`; `.claude/` untouched apart from path strings — owner default 2026-11-05 | Too many outdated Markdown files competed with the current ones. Moving keeps history and every link (checked by a link scan) |
+| Prototype display | **The landscape editorial look** (`apps/web/app/theme.css`, `landscape.tsx`) — 2026-11-05 | The owner's suggested design: ultramarine halftone sky, serif headlines, cream pill buttons, an illustrated landscape. The artwork is original SVG, not copied. Text contrast ≥ 4.5:1 (axe: 0 violations on 14 pages at two widths); orange is never text on cream (2.89:1). Removing the one `theme.css` import restores the earlier look |
+| `@types/node` | **Held at ^24**; Dependabot ignores its semver-major — 2026-10-20, re-applied 2026-11 | The runtime is Node 24. 26's typings reject `Uint8Array<ArrayBufferLike>` as `BufferSource` (`ingest.ts`), breaking the build |
+| `@anthropic-ai/sdk` 1.x | **Held at 0.135.0** (Dependabot #23 open) — 2026-11-05 | 1.x targets API version 2026-10-21, which rejects `temperature`, document blocks in assistant turns and citations on user text. A code read found none of these in use, but only a live (paid) call proves it; it is taken after the demo, with the owner's approval |
+| Free model tiers and real data | **Open — the owner's call.** The deployed project ran Interpret on Groq first (October 2026) | Groq, Cerebras and OpenRouter free tiers may use what is sent for training. Until the owner accepts their terms, real data should go to Claude or Gemini (`AI_PROVIDER_ORDER=claude,gemini,…`) |
 
 ## Research findings that changed the design
 
@@ -212,7 +225,7 @@ whose lossy path was unreachable from any current caller — worth carrying into
 new callers make exactly these paths reachable:
 
 1. **Migrations live at `packages/db/migrations/**`, not repo-root `migrations/**`** as
-   `docs/EXECUTION-PLAN.md` originally stated. Co-locating with `node-pg-migrate` and its config
+   `docs/archive/EXECUTION-PLAN.md` originally stated. Co-locating with `node-pg-migrate` and its config
    is the conventional layout for this tool; still entirely inside `database-data-engineer`'s
    one owned glob (`packages/db/**`). `docs/PHASE-1-DESIGN.md` §7 corrected to match.
 2. **`node-pg-migrate@9` has no default export.** `import runner from "node-pg-migrate"`
@@ -517,4 +530,5 @@ says so.
    judgement, not architecture. The spec's own narrative implies "soon" should key off the
    commitment's own reminder rather than a global constant. Not a Phase 1 blocker.
 
-See `docs/EXECUTION-PLAN.md` for the full plan and `docs/PHASES.md` for the phase checklist.
+The plan of record is [`ROADMAP.md`](ROADMAP.md). The earlier plan and phase checklist are kept as history in
+`docs/archive/EXECUTION-PLAN.md` and `docs/archive/PHASES.md`.

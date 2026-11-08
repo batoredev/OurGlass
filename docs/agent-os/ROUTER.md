@@ -8,7 +8,7 @@ The lead consults this before spawning. Signal words on the left, default team o
 
 ## Security work → its own router
 
-Any request about penetration testing, incident response, threat hunting, detection, compliance, cloud/app/AI/OT security, forensics, or threat intel goes to **`security-lead` (34)** and **`docs/SECURITY-ROUTER.md`**, not the table below. The security practice has its own authorisation gates. Do not spawn offensive agents from this table.
+Any request about penetration testing, incident response, threat hunting, detection, compliance, cloud/app/AI/OT security, forensics, or threat intel goes to **`security-lead` (34)** and **`docs/agent-os/SECURITY-ROUTER.md`**, not the table below. The security practice has its own authorisation gates. Do not spawn offensive agents from this table.
 
 ---
 
@@ -123,7 +123,7 @@ Every installed skill has an owner. Nothing is unused.
 | `remotion-*` | `motion-graphics-engineer` (45) | |
 | `higgsfield-*`, `brandkit` | `brand-media-producer` (46) | |
 | `ios-*` (clean/fix/qa/review/sync) | `mobile-qa-engineer` (28) | `frontend-lead` (07) |
-| ~700 `security` skills | agents 34–44 | see docs/SECURITY-ROUTER.md |
+| ~700 `security` skills | agents 34–44 | see docs/agent-os/SECURITY-ROUTER.md |
 | **ECC** engineering, TDD, refactoring, research-first | `backend-lead`, `frontend-lead`, `solutions-architect` | all implementers |
 | **Ruflo** memory / RAG | `ai-agent-engineer`, `observability-learning-engineer` | |
 | **karpathy-skills** | every agent, as the shared preamble | not invoked — applied |

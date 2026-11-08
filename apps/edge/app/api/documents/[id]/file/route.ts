@@ -7,9 +7,10 @@
  *
  *   - `nosniff` + our own content type: a "PNG" cannot be run as script.
  *   - `sandbox` CSP: opened in a tab, the file gets no origin, no scripts and
- *     no access to this app's session. Set in next.config.ts, NOT here: a
- *     route's own CSP is overridden by the global rule, so writing it here
- *     looked like protection and delivered none (caught end to end).
+ *     no access to this app's session. Set for this path by
+ *     `src/router.ts` (`withResponseHeaders`), on every answer, and pinned by
+ *     `src/file-headers.test.ts`. (Under Next.js it lived in next.config.ts,
+ *     because a route's own CSP lost to the global rule.)
  *   - Only images display inline; everything else downloads.
  */
 import { NextResponse } from "next/server";

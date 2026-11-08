@@ -8,6 +8,8 @@
  */
 import { AsyncPage } from "../async-page";
 import { fetchCommitments, fetchDirectory } from "../../lib/api";
+import Link from "next/link";
+import { DeletePermanently } from "../delete-permanently";
 import { Avatar } from "../icons";
 import { EmptyState, LoadFailure, PageHeader } from "../surface";
 
@@ -60,7 +62,9 @@ async function renderPeople() {
                 <div className="person-card-top">
                   <Avatar name={person.display_name} />
                   <div>
-                    <div className="person-name">{person.display_name}</div>
+                    <Link className="person-name" href={`/people/view?id=${encodeURIComponent(person.id)}`}>
+                      {person.display_name}
+                    </Link>
                   </div>
                 </div>
                 <div className="person-card-stat">
@@ -68,6 +72,12 @@ async function renderPeople() {
                     ? "No open commitments"
                     : `${open} open commitment${open === 1 ? "" : "s"}`}
                 </div>
+                <DeletePermanently
+                  scope="person"
+                  id={person.id}
+                  name={person.display_name}
+                  consequence="Every commitment between you, and every memory, reminder and link about them, goes too."
+                />
               </div>
             );
           })}

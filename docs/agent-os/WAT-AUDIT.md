@@ -10,7 +10,7 @@ Assessment of `company-claude-os-v2` against the WAT (Workflows · Agents · Too
 
 | WAT requirement | Status | Evidence |
 |---|---|---|
-| **Layer 1 — Workflows** | ⚠️ Partial | `docs/MISSIONS.md` and the agent bodies are *role* and *team-composition* instructions, not task SOPs. No `workflows/` directory. No SOP has the required shape: objective → inputs → tools → outputs → edge cases. |
+| **Layer 1 — Workflows** | ⚠️ Partial | `docs/agent-os/MISSIONS.md` and the agent bodies are *role* and *team-composition* instructions, not task SOPs. No `workflows/` directory. No SOP has the required shape: objective → inputs → tools → outputs → edge cases. |
 | **Layer 2 — Agents** | ✅ Satisfied | 21 agents, explicit orchestration, error escalation, clarifying-question rules, handoff protocol. This layer is arguably over-built. |
 | **Layer 3 — Tools** | ❌ **Absent** | Zero `.py` files. No `tools/`. No `.env`. No deterministic execution anywhere. The only scripts in the pack are two bash quality-gate hooks. |
 | **Look for existing tools first** | ⚠️ Analogous only | `CLAUDE.md` §12 says "do not reinvent an existing skill." That's skill reuse, not tool reuse. |
@@ -47,7 +47,7 @@ Note the tension I introduced: I restricted `/skillify` to agent 12 and told it 
 ## What was added to close the gap
 
 - **`.claude/rules/wat.md`** — tool-first rule, the paid-API gate, workflow preservation, `.tmp/` discipline.
-- **`workflows/`** with `_TEMPLATE.md` — the SOP shape WAT specifies. Distinct from `docs/MISSIONS.md`, which stays as team composition.
+- **`workflows/`** with `_TEMPLATE.md` — the SOP shape WAT specifies. Distinct from `docs/agent-os/MISSIONS.md`, which stays as team composition.
 - **`tools/`** with `_template.py` and a README — the convention every generated tool follows.
 - **`.tmp/`** — disposable intermediates.
 - **`CLAUDE.md` §14** — WAT operating model, inherited by every agent.

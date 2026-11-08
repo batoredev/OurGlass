@@ -28,6 +28,11 @@ export const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events";
  * to publish. Optional at consent: without it, email drafts say to reconnect.
  */
 export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
+/**
+ * Read-only Gmail (ROADMAP Stage 1c; owner default 2026-11-05). Requested with
+ * the others; an account connected before it was added reconnects once.
+ */
+export const GMAIL_READ_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 const GMAIL_SEND_URL = "https://gmail.googleapis.com/gmail/v1/users/me/messages/send";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
@@ -147,7 +152,7 @@ export function authorizationUrl(config: GoogleOAuthConfig, state: string): stri
     redirect_uri: config.redirectUri,
     response_type: "code",
     // openid + email: only to show WHICH account is connected in Settings.
-    scope: `openid email ${CALENDAR_SCOPE} ${GMAIL_SEND_SCOPE}`,
+    scope: `openid email ${CALENDAR_SCOPE} ${GMAIL_SEND_SCOPE} ${GMAIL_READ_SCOPE}`,
     // Already-granted scopes carry over, so reconnecting to add Gmail keeps
     // Calendar without asking for it twice.
     include_granted_scopes: "true",

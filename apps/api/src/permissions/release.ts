@@ -5,7 +5,8 @@
  * explicit user action.
  */
 import type { ToolCall, ToolError } from "@ourglass/shared";
-import { permissions } from "@ourglass/db";
+import { permissions, sentEmails } from "@ourglass/db";
+import { wordCount, wordEditDistance } from "../replies/style.js";
 import { executeTurn, type Deps } from "../tools/executor.js";
 
 export type ReleaseOutcome =
@@ -68,6 +69,33 @@ function withEmailEdits(calls: readonly ToolCall[], edits: EmailEdits | undefine
   });
 }
 
+/**
+ * Stage 4's measure: how many words the owner changed in a draft before
+ * sending it (replies/style.ts, migration 019). After the send, in its own
+ * transaction, and never able to fail it: the email is already gone.
+ */
+async function recordDraftEdit(
+  deps: Deps,
+  held: readonly ToolCall[],
+  edits: EmailEdits | undefined,
+  results: readonly unknown[],
+): Promise<void> {
+  const send = held.find((call) => call.name === "send_email");
+  const drafted = (send?.input as { body?: unknown } | undefined)?.body;
+  const messageId = results
+    .map((result) => (result as { messageId?: unknown } | null)?.messageId)
+    .find((id): id is string => typeof id === "string");
+  if (typeof drafted !== "string" || messageId === undefined) return;
+  const sent = edits?.body ?? drafted;
+  try {
+    await deps.db.withTransaction((tx) =>
+      sentEmails.recordDraftEdit(tx, messageId, { distance: wordEditDistance(drafted, sent), draftWords: wordCount(drafted) }),
+    );
+  } catch (error: unknown) {
+    console.error("[release] could not record the draft edit:", error instanceof Error ? error.message : error);
+  }
+}
+
 export async function releasePendingAction(deps: Deps, id: string, edits?: EmailEdits): Promise<ReleaseOutcome> {
   const pending = await deps.db.withTransaction((tx) => permissions.getPendingAction(tx, id));
   if (!pending) {
@@ -81,6 +109,7 @@ export async function releasePendingAction(deps: Deps, id: string, edits?: Email
   );
 
   if (outcome.ok) {
+    await recordDraftEdit(deps, heldCalls(pending.calls), edits, outcome.results);
     // The first result is the release marker; the rest are the held calls'
     // (plus set_person_email, when a draft card supplied a new address).
     return { ok: true, turnId: outcome.turnId, results: outcome.results.slice(1) };

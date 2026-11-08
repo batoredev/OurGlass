@@ -1,5 +1,8 @@
 # Master execution plan — multi-provider AI, then Phases 6–8
 
+> **Archived 2026-11-05.** Superseded by [`../ROADMAP.md`](../ROADMAP.md); kept as history.
+> Status lines and "next" items below are as they stood when it was last updated.
+
 **Written 2026-09-16.** This is the plan of record for all remaining work: the
 multi-provider AI orchestration layer, the unfinished half of Phase 4, and Phases 6, 7 and 8.
 It supersedes nothing — `EXECUTION-PLAN.md` stays the project plan; this is the execution

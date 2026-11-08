@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    # Weekly, per docs/EXECUTION-PLAN.md's GitHub Actions section.
+    # Weekly, per docs/archive/EXECUTION-PLAN.md's GitHub Actions section.
     - cron: "17 3 * * 1"
 
 permissions: {}

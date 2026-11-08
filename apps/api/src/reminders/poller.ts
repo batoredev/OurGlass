@@ -24,6 +24,7 @@ import { reminders, workflows, type DueReminder, type DueWorkflow } from "@ourgl
 import { backfillMemoryEmbeddings, type DocumentEmbedder } from "../embeddings/backfill.js";
 import type { EmbeddingFailureReason } from "../embeddings/voyage.js";
 import { executeTurn, type Deps as ExecutorDeps } from "../tools/index.js";
+import { deliverDueBrief } from "../briefs/deliver.js";
 
 export interface Clock {
   now(): Date;
@@ -85,6 +86,8 @@ export interface PollResult {
   readonly embeddingFailure: EmbeddingFailureReason | null;
   /** The instant the pass ran at. Echoed so a caller can log it. */
   readonly asOf: Date;
+  /** The brief delivered this pass ("morning:2026-11-09"), or null (ROADMAP Stage 5). */
+  readonly brief?: string | null;
 }
 
 /**
@@ -170,6 +173,11 @@ export async function pollOnce(deps: PollerDeps): Promise<PollResult> {
     embedded: backfill.embedded,
     embeddingFailure: backfill.failure,
     asOf,
+    brief: await deliverDueBrief(deps, asOf).catch((error: unknown) => {
+      // A brief must never stop reminders: logged, and the next pass retries.
+      console.error("[poller] brief failed:", error instanceof Error ? error.message : error);
+      return null;
+    }),
   };
 }
 

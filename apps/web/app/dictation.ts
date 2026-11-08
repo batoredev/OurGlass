@@ -1,6 +1,6 @@
 /**
  * Dictation, the parts that are not React — Stage 15 (spec §1's "eventually",
- * scoped by docs/REMAINING-EXECUTION-PLAN.md to speech INTO THE COMPOSER).
+ * scoped by docs/archive/REMAINING-EXECUTION-PLAN.md to speech INTO THE COMPOSER).
  *
  * The browser's own SpeechRecognition, not a hosted transcription API: it costs
  * nothing, adds no backend, and sends no audio anywhere this app controls. The
@@ -9,8 +9,9 @@
  * returns null rather than throwing, and the button is not rendered when it
  * does. A dead microphone button is worse than no microphone button.
  *
- * NOT IN SCOPE, deliberately: voice replies, a wake word, continuous listening.
- * None is in the spec, and each is easy to add and hard to remove.
+ * NOT IN SCOPE, deliberately: a wake word, continuous listening. Each is easy
+ * to add and hard to remove. Spoken REPLIES are a separate, opt-in feature
+ * (speech.ts, ROADMAP Stage 1d).
  */
 
 /** The slice of the SpeechRecognition API this app uses. */

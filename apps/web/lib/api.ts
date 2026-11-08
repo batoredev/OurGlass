@@ -289,6 +289,14 @@ export interface Meeting {
   readonly ends_at: string | null;
   readonly location: string | null;
   readonly on_google_calendar: boolean;
+  /** Stage 2: one brief per known person the meeting names (meetings in the next 7 days). */
+  readonly brief: readonly MeetingBrief[];
+}
+
+export interface MeetingBrief {
+  readonly id: string;
+  readonly name: string;
+  readonly lines: readonly string[];
 }
 
 export async function fetchMeetings(): Promise<{ readonly timeZone: string; readonly meetings: readonly Meeting[] }> {
@@ -333,4 +341,111 @@ export async function fetchEmailDrafts(): Promise<readonly EmailDraft[]> {
 
 export async function fetchGoogleStatus(): Promise<GoogleStatus> {
   return get<GoogleStatus>("/api/google");
+}
+
+// ---------------------------------------------------------------------------
+// The person model (ROADMAP Stage 2)
+// ---------------------------------------------------------------------------
+
+export interface Sourced<T> {
+  readonly value: T;
+  readonly source: string;
+}
+
+export interface OpenItem {
+  readonly id: string;
+  readonly what: string;
+  readonly due: string | null;
+  readonly overdue: boolean;
+}
+
+export interface PersonProfile {
+  readonly id: string;
+  readonly name: string;
+  readonly owesYou: Sourced<readonly OpenItem[]>;
+  readonly youOwe: Sourced<readonly OpenItem[]>;
+  readonly reliability: Sourced<{ readonly onTime: number; readonly late: number; readonly typicalLateHours: number | null }> | null;
+  readonly preferences: readonly Sourced<string>[];
+  readonly facts: readonly Sourced<string>[];
+  readonly patterns: readonly Sourced<string>[];
+  readonly email: Sourced<string> | null;
+  readonly organization: Sourced<string> | null;
+  readonly groups: readonly Sourced<string>[];
+  readonly files: readonly Sourced<string>[];
+  readonly lastInteraction: Sourced<string> | null;
+}
+
+export interface PersonPage {
+  readonly profile: PersonProfile;
+  /** Stage 4: a follow-up about what is open, in your own style; null when nothing is open. */
+  readonly followUp: string | null;
+  /** How many of your sent emails the style was learned from. */
+  readonly styleFrom: number;
+}
+
+export async function fetchPersonProfile(id: string): Promise<PersonPage> {
+  return get<PersonPage>(`/api/people/${encodeURIComponent(id)}/profile`);
+}
+
+// ---------------------------------------------------------------------------
+// The day plan and meeting slots (ROADMAP Stage 3)
+// ---------------------------------------------------------------------------
+
+export interface PlannedBlock {
+  readonly kind: "meeting" | "task" | "nudge";
+  readonly id: string;
+  readonly title: string;
+  readonly reason: string;
+  readonly start: string;
+  readonly end: string;
+}
+
+export interface DayPlan {
+  readonly timeZone: string;
+  /** Set when Google Calendar is connected but could not be read (Stage 1b). */
+  readonly calendarNote?: string | null;
+  readonly blocks: readonly PlannedBlock[];
+  readonly unplaced: readonly { readonly id: string; readonly title: string; readonly reason: string }[];
+  readonly next: PlannedBlock | null;
+}
+
+export async function fetchDayPlan(): Promise<DayPlan> {
+  return get<DayPlan>("/api/plan");
+}
+
+export interface SlotSuggestion {
+  readonly timeZone: string;
+  readonly person: string;
+  readonly preference: "morning" | "afternoon" | "evening" | null;
+  readonly basis: string;
+  readonly slots: readonly { readonly start: string; readonly end: string }[];
+}
+
+export async function fetchMeetingSlots(personId: string, minutes = 30): Promise<SlotSuggestion> {
+  return get<SlotSuggestion>(`/api/plan/slots?person=${encodeURIComponent(personId)}&minutes=${minutes}`);
+}
+
+// ---------------------------------------------------------------------------
+// The inbox, triaged (ROADMAP Stage 1c)
+// ---------------------------------------------------------------------------
+
+export interface InboxMessage {
+  readonly id: string;
+  readonly fromName: string;
+  readonly fromAddress: string;
+  readonly subject: string;
+  readonly snippet: string;
+  readonly receivedAt: string | null;
+  readonly personName: string | null;
+  readonly needsReply: boolean;
+  readonly warnings: readonly string[];
+}
+
+export interface Inbox {
+  readonly state: "ok" | "not_configured" | "not_connected" | "needs_read_permission" | "unavailable";
+  readonly messages: readonly InboxMessage[];
+}
+
+export async function fetchInbox(): Promise<Inbox> {
+  return get<Inbox>("/api/google/inbox");
 }

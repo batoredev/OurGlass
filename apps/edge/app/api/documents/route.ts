@@ -26,6 +26,35 @@ export const dynamic = "force-dynamic";
 /** Room for the multipart envelope and the note around a maximum-size file. */
 const MAX_BODY_BYTES = MAX_UPLOAD_BYTES + 64 * 1024;
 
+function tooLarge(): Response {
+  return NextResponse.json({ error: "That file is over 10 MB — too large for me to take." }, { status: 413 });
+}
+
+/** The body's bytes, or null as soon as there are more than `max`. Never buffers past the cap. */
+async function readBounded(request: Request, max: number): Promise<Uint8Array<ArrayBuffer> | null> {
+  if (request.body === null) return new Uint8Array(0);
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > max) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
 export async function GET(request: Request) {
   const denied = await authorize(request);
   if (denied) return denied;
@@ -46,10 +75,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Send the file as multipart/form-data." }, { status: 415 });
   }
   // Refused BEFORE the body is read, when the client says how big it is.
+  // A missing or false Content-Length is caught by the counted read below.
   const declared = Number(request.headers.get("content-length") ?? "0");
-  if (declared > MAX_BODY_BYTES) {
-    return NextResponse.json({ error: "That file is over 10 MB — too large for me to take." }, { status: 413 });
-  }
+  if (declared > MAX_BODY_BYTES) return tooLarge();
 
   // Uploads are optional infrastructure: without storage the rest of the app
   // works, and this says why this one thing does not.
@@ -68,9 +96,14 @@ export async function POST(request: Request) {
   );
   if (limited) return limited;
 
+  // COUNTED, not trusted: `formData()` on the request itself would buffer a
+  // body of any size before the real size check (Phase 6 security review).
+  // The bytes are read up to the cap and the read stops there.
+  const body = await readBounded(request, MAX_BODY_BYTES);
+  if (body === null) return tooLarge();
   let form: FormData;
   try {
-    form = await request.formData();
+    form = await new Response(body, { headers: { "content-type": type } }).formData();
   } catch {
     return NextResponse.json({ error: "The upload could not be read." }, { status: 400 });
   }
@@ -78,10 +111,8 @@ export async function POST(request: Request) {
   if (typeof file !== "object" || file === null || typeof file.arrayBuffer !== "function") {
     return NextResponse.json({ error: "No file in the upload." }, { status: 400 });
   }
-  // Checked again on the real size: Content-Length is the client's claim.
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return NextResponse.json({ error: "That file is over 10 MB — too large for me to take." }, { status: 413 });
-  }
+  // Checked again on the file itself: the cap above includes the envelope.
+  if (file.size > MAX_UPLOAD_BYTES) return tooLarge();
   const note = form.get("note");
 
   // No model configured is a STATE: the file is still saved, and the reply

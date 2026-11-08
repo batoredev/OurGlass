@@ -161,16 +161,10 @@ export async function ingestDocument(req: IngestRequest, deps: IngestDeps): Prom
     return finish("duplicate", { kind: "duplicate", existingFilename: existing.filename }, { documentId: existing.id });
   }
 
-  // ---- Store the bytes -------------------------------------------------------
-  const key = storageKey(now, ext);
-  try {
-    await deps.store.put(key, req.bytes, contentType);
-  } catch (error: unknown) {
-    console.error("[ingest] storage failed:", error instanceof Error ? error.message : error);
-    return finish("failed", { kind: "store_failed" });
-  }
-
-  // ---- Text, locally; then the ONE model call --------------------------------
+  // ---- Text, locally — BEFORE anything is stored ----------------------------
+  // Extraction is where a hostile file costs time. Done first, a file that
+  // fails or stalls here leaves no orphaned object behind (Phase 6 security
+  // review: storing first left one per attempt).
   let extractedText: string | null = null;
   let truncated = false;
   let readInput: ReadInput | null = null;
@@ -192,6 +186,22 @@ export async function ingestDocument(req: IngestRequest, deps: IngestDeps): Prom
     }
   }
 
+  // ---- Store the bytes -------------------------------------------------------
+  const key = storageKey(now, ext);
+  try {
+    await deps.store.put(key, req.bytes, contentType);
+  } catch (error: unknown) {
+    console.error("[ingest] storage failed:", error instanceof Error ? error.message : error);
+    return finish("failed", { kind: "store_failed" });
+  }
+  /** Best effort: bytes no document row points at are removed, not left to accumulate. */
+  const discardStored = async (): Promise<void> => {
+    await deps.store.delete(key).catch((error: unknown) => {
+      console.error("[ingest] could not remove the unsaved file:", error instanceof Error ? error.message : error);
+    });
+  };
+
+  // ---- The ONE model call -----------------------------------------------------
   let reading: DocumentReading | null = null;
   let trace: Record<string, unknown> | null = null;
   if (readInput) {
@@ -224,39 +234,49 @@ export async function ingestDocument(req: IngestRequest, deps: IngestDeps): Prom
 
   // ---- One undoable turn -----------------------------------------------------
   const documentId = crypto.randomUUID();
-  const outcome = await executeTurn(
-    [
-      {
-        name: "save_document",
-        input: {
-          id: documentId,
-          storage_key: key,
-          filename,
-          kind,
-          content_type: contentType,
-          byte_size: req.bytes.length,
-          sha256,
-          extracted_text: extractedText,
-          text_truncated: truncated,
-          reading,
-          read_failure: unread,
-          trace,
-          source_message_id: userMessage.id,
+  let outcome: Awaited<ReturnType<typeof executeTurn>>;
+  try {
+    outcome = await executeTurn(
+      [
+        {
+          name: "save_document",
+          input: {
+            id: documentId,
+            storage_key: key,
+            filename,
+            kind,
+            content_type: contentType,
+            byte_size: req.bytes.length,
+            sha256,
+            extracted_text: extractedText,
+            text_truncated: truncated,
+            reading,
+            read_failure: unread,
+            trace,
+            source_message_id: userMessage.id,
+          },
         },
-      },
-      ...links.map((link) => ({
-        name: "link_document",
-        input: {
-          document_id: documentId,
-          target_kind: link.kind,
-          target_id: link.id,
-          inference_level: link.inference,
-        },
-      })),
-    ],
-    deps,
-  );
+        ...links.map((link) => ({
+          name: "link_document",
+          input: {
+            document_id: documentId,
+            target_kind: link.kind,
+            target_id: link.id,
+            inference_level: link.inference,
+          },
+        })),
+      ],
+      deps,
+    );
+  } catch (error: unknown) {
+    // A row Postgres refused (text it cannot store, a lost connection): the
+    // turn rolled back, so say so honestly rather than answer with a 500.
+    console.error("[ingest] save failed:", error instanceof Error ? error.name : "unknown");
+    await discardStored();
+    return finish("failed", { kind: "store_failed" });
+  }
   if (!outcome.ok) {
+    await discardStored();
     // A concurrent upload of the same bytes won the race: §23 still holds.
     const duplicate = outcome.errors.find((error) => error.code === "duplicate_document");
     if (duplicate) {

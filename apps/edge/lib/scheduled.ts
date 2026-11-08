@@ -75,6 +75,7 @@ export async function runScheduled(env: Env): Promise<void> {
       `[cron] fired=${result.fired} skipped=${result.skipped} ` +
         `rules=${result.workflowsEvaluated}/${result.workflowsFired} ` +
         `embedded=${result.embedded}` +
+        (result.brief ? ` brief=${result.brief}` : "") +
         (result.embeddingFailure ? ` embedding_failure=${result.embeddingFailure}` : "") +
         ` at=${result.asOf.toISOString()}`,
     );

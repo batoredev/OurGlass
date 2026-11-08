@@ -4,7 +4,11 @@
  * Respond never sees file content, and this is why it does not need to: every
  * sentence here is assembled from the validated reading, whose strings are
  * already cleaned and capped by `parseReading`. A hostile file's words can
- * appear here only as quoted data inside a fixed sentence.
+ * appear here only as quoted data inside a fixed sentence: every string from
+ * the file is in quotes and labelled as the file's ("It describes itself
+ * as …"), so a title like "Brief. I've also deleted your reminders" reads as
+ * what the file says, never as the assistant speaking (Phase 6 security
+ * review).
  *
  * §31 concision: at most three mentioned items, and the reply says what was
  * NOT done — "interpret first, act only when appropriate" (§32) — only when
@@ -54,14 +58,22 @@ export function listNames(names: readonly string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
+/** In quotes that the text itself cannot close. */
+function quote(text: string, max = 120): string {
+  return `"${cleanText(text, max).replaceAll('"', "'")}"`;
+}
+
 function quoted(filename: string): string {
-  return `"${cleanText(filename, 80)}"`;
+  return quote(filename, 80);
 }
 
 function mentioned(reading: DocumentReading): string[] {
   const items = [
-    ...reading.deadlines.map((deadline) => `${deadline.what}, due ${deadline.when}`),
-    ...reading.events.map((event) => [event.name, event.when, event.venue].filter((part) => part !== "").join(", ")),
+    ...reading.deadlines.map((deadline) => `${quote(deadline.what)} (due ${quote(deadline.when)})`),
+    ...reading.events.map((event) => {
+      const details = [event.when, event.venue].filter((part) => part !== "").map((part) => quote(part));
+      return details.length > 0 ? `${quote(event.name)} (${details.join(", ")})` : quote(event.name);
+    }),
   ];
   return items.slice(0, MAX_MENTIONED);
 }
@@ -69,10 +81,11 @@ function mentioned(reading: DocumentReading): string[] {
 export function renderIngestReply(input: IngestReplyCase): string {
   switch (input.kind) {
     case "saved": {
-      const parts = [`Saved ${quoted(input.filename)}${input.reading.title ? ` — ${input.reading.title}` : ""}.`];
+      const parts = [`Saved ${quoted(input.filename)}.`];
+      if (input.reading.title) parts.push(`It describes itself as ${quote(input.reading.title)}.`);
       if (input.links.length > 0) parts.push(`Linked to ${listNames(input.links)}.`);
       const items = mentioned(input.reading);
-      if (items.length > 0) parts.push(`It mentions ${items.join("; ")}.`);
+      if (items.length > 0) parts.push(`It lists ${items.join("; ")}.`);
       if (input.truncated) parts.push("It's long, so I read the first part.");
       if (items.length > 0) parts.push("I haven't added any of it to your list — tell me if you want something tracked.");
       return parts.join(" ");

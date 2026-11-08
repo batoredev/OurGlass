@@ -1,5 +1,8 @@
 # Remaining execution plan
 
+> **Archived 2026-11-05.** Superseded by [`../ROADMAP.md`](../ROADMAP.md); kept as history.
+> Status lines and "next" items below are as they stood when it was last updated.
+
 Everything still to build, in the order it should be built, with the decisions that must be
 settled before each piece starts. Written for whoever picks this up next — the owner, or an
 agent session reading it cold.
@@ -7,7 +10,7 @@ agent session reading it cold.
 The plan of record for what is *already* built is
 [`MASTER-EXECUTION-PLAN.md`](MASTER-EXECUTION-PLAN.md); this file takes over where its board
 stops. Phase definitions come from [`PHASES.md`](PHASES.md), the product requirements from
-[`SPEC.md`](SPEC.md), and the mission formats from [`MISSIONS.md`](MISSIONS.md).
+[`SPEC.md`](../SPEC.md), and the mission formats from [`MISSIONS.md`](../agent-os/MISSIONS.md).
 
 ---
 
@@ -145,7 +148,7 @@ including integration.
 
 **Size:** the biggest remaining item. Plan two missions — pipeline, then UI and association.
 
-**State (2026-09-26): BUILT.** Design and results: [`PHASE-6-DESIGN.md`](PHASE-6-DESIGN.md).
+**State (2026-09-26): BUILT.** Design and results: [`PHASE-6-DESIGN.md`](../PHASE-6-DESIGN.md).
 The four unknowns, settled: (1) Supabase Storage, owner decision; (2) `unpdf` 1.8.1 and
 `fflate` 0.8.3, both MIT, versions and Workers support checked at the source, plus our own
 bounded Word/Excel reader; (3) a third model stage, **Read**, on every provider — Claude and

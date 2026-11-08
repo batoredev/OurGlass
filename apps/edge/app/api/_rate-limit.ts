@@ -1,5 +1,5 @@
 /**
- * The spend cap on /api/turn — Track P2 of docs/REMAINING-EXECUTION-PLAN.md.
+ * The spend cap on /api/turn — Track P2 of docs/archive/REMAINING-EXECUTION-PLAN.md.
  *
  * Every turn asks a model to spend tokens, and until this file there was no
  * cap of any kind: one leaked access token was unbounded spend. Pure, like

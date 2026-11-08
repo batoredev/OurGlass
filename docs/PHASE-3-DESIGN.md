@@ -8,14 +8,14 @@ This is a design contract, not a tutorial. It states what to build and **why the
 alternative was rejected**, because the rejections are the expensive part to rediscover.
 It matches `docs/PHASE-1-DESIGN.md` in rigour deliberately.
 
-**Read first, in this order:** `docs/PHASES.md` (the Phase 3 entry — scope is **settled**
+**Read first, in this order:** `docs/archive/PHASES.md` (the Phase 3 entry — scope is **settled**
 by the `ceo3` review and is not open for relitigation), `docs/DECISIONS.md` (locked
 decisions and all build findings), `docs/PHASE-1-DESIGN.md` (§2.4, §2.6, §2.7, §3, §4),
 `docs/PHASE-2-DESIGN.md`, `.claude/rules/agent-teams.md` (file ownership).
 
 **Consumed as settled, not redesigned here:**
 
-- Scope in/out exactly as recorded in `docs/PHASES.md`. §24, §26, §16/§17, §28 and all
+- Scope in/out exactly as recorded in `docs/archive/PHASES.md`. §24, §26, §16/§17, §28 and all
   UI stay out.
 - Respond is **one constrained Haiku call**, no tools, no DB handle, with a **mandatory**
   deterministic template fallback (§5 below).

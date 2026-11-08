@@ -1,5 +1,5 @@
 /**
- * Response headers for every page — Track P2 of docs/REMAINING-EXECUTION-PLAN.md.
+ * Response headers for every page — Track P2 of docs/archive/REMAINING-EXECUTION-PLAN.md.
  *
  * The site is static on Cloudflare Pages, which reads headers from an `_headers`
  * file; scripts/write-headers.ts writes that file from this module after

@@ -8,7 +8,7 @@ tutorial: it states what to build and *why the alternative was rejected*, becaus
 rejections are the expensive part to rediscover.
 
 **Read first:** `docs/DECISIONS.md` (locked decisions — do not re-litigate),
-`docs/EXECUTION-PLAN.md` (full plan), `.claude/rules/agent-teams.md` (file ownership).
+`docs/archive/EXECUTION-PLAN.md` (full plan), `.claude/rules/agent-teams.md` (file ownership).
 
 ---
 

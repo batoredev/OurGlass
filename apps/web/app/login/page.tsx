@@ -9,7 +9,7 @@
  */
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Page } from "../ui";
+import { Landscape } from "../landscape";
 import { apiFetch, setToken as saveToken } from "../../lib/session";
 
 export default function LoginPage() {
@@ -44,23 +44,50 @@ export default function LoginPage() {
   }
 
   return (
-    <Page title="Sign in">
-      <form onSubmit={submit} style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-        <label>
-          Access token{" "}
+    <section className="login-hero landscape-panel">
+      <Landscape className="landscape-art" />
+      <div className="login-top">
+        <span className="wordmark">
+          ourglass<span className="wordmark-dot" aria-hidden="true">.</span>
+        </span>
+      </div>
+      <div className="login-body">
+        <div className="eyebrow">Your personal assistant</div>
+        <h1>
+          Know your day.
+          <br />
+          Know your people.
+        </h1>
+        <p className="login-lede">
+          Commitments, meetings and the people behind them — remembered and kept in order, so you
+          don&apos;t have to.
+        </p>
+        <form className="login-form" onSubmit={submit}>
+          <label className="sr-only" htmlFor="access-token">
+            Access token
+          </label>
           <input
+            id="access-token"
             type="password"
             autoComplete="current-password"
+            placeholder="Access token"
             value={token}
             onChange={(event) => setToken(event.target.value)}
-            style={{ width: "22rem" }}
           />
-        </label>
-        <button type="submit" disabled={busy || token === ""}>
-          Sign in
-        </button>
-      </form>
-      {error && <p style={{ color: "#b00" }}>{error}</p>}
-    </Page>
+          <button className="hero-pill" type="submit" disabled={busy || token === ""}>
+            {busy ? "Signing in…" : "Sign in"} <span aria-hidden="true">↗</span>
+          </button>
+        </form>
+        {error && (
+          <p className="login-error" role="alert">
+            {error}
+          </p>
+        )}
+      </div>
+      <div className="hero-meta login-meta">
+        <span>Private to you</span>
+        <span>Every email waits for your yes</span>
+      </div>
+    </section>
   );
 }

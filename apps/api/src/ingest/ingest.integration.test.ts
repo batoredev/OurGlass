@@ -26,6 +26,7 @@ import {
 } from "@ourglass/db";
 import type { DocumentReading } from "@ourglass/shared";
 import { buildToolRegistry, executeTurn, undoTurn } from "../tools/index.js";
+import { ToolRegistry } from "../tools/registry.js";
 import type { ReadInput } from "../ai/provider.js";
 import { MemoryObjectStore, StorageError, type ObjectStore } from "../storage/object-store.js";
 import { ingestDocument, type DocumentReader, type IngestDeps } from "./ingest.js";
@@ -279,6 +280,7 @@ suite("ingestDocument (integration)", () => {
         throw new StorageError("File storage is unreachable");
       },
       get: async () => null,
+      delete: async () => undefined,
     };
     const result = await ingestDocument(
       { bytes: fixture("brief.pdf"), filename: "brief.pdf", note: "", userId },
@@ -287,6 +289,34 @@ suite("ingestDocument (integration)", () => {
     expect(result).toMatchObject({ outcome: "failed", documentId: null, turnId: null });
     expect(result.reply).toContain("nothing was saved");
     expect(await count("documents")).toBe(0);
+  });
+
+  it("a save Postgres refuses is an honest failure, and leaves no stored bytes behind", async () => {
+    // Before the Phase 6 fixes a throwing save escaped as a 500 after the
+    // model was paid, and the stored object was orphaned.
+    const registry = new ToolRegistry();
+    for (const tool of buildToolRegistry().list()) {
+      registry.register(
+        tool.name === "save_document"
+          ? {
+              ...tool,
+              commit: async () => {
+                throw new Error("invalid byte sequence for encoding UTF8: 0x00");
+              },
+            }
+          : tool,
+      );
+    }
+    const result = await ingestDocument(
+      { bytes: fixture("brief.pdf"), filename: "brief.pdf", note: "", userId },
+      { ...deps(compromisedReader()), registry },
+    );
+    expect(result).toMatchObject({ outcome: "failed", documentId: null, turnId: null });
+    expect(result.reply).toContain("nothing was saved");
+    expect(await count("documents")).toBe(0);
+    expect(store.objects.size).toBe(0);
+    // The conversation still shows the attempt and its reply.
+    expect(await count("messages")).toBe(2);
   });
 
   it("refuses a file by its bytes, recording the attempt but no document", async () => {

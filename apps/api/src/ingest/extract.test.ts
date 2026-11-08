@@ -4,12 +4,12 @@
  */
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { zipSync } from "fflate";
+import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 import { MAX_READ_CHARS } from "@ourglass/shared";
 import { UnreadableFileError } from "./errors.js";
 import { capText, extractText, normalizeText } from "./extract.js";
-import { MAX_UNZIPPED_BYTES } from "./ooxml.js";
+import { MAX_UNZIPPED_BYTES, decodeXml } from "./ooxml.js";
 import { sniffFile } from "./sniff.js";
 
 function fixture(name: string): Uint8Array {
@@ -161,3 +161,149 @@ describe("normalizeText / capText", () => {
     expect(capText("short", 12)).toEqual({ text: "short", truncated: false });
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 6 security review: crafted input must cost linear time, and every
+// extracted string must be one Postgres will store.
+// ---------------------------------------------------------------------------
+
+/** STORED, not deflated: the ratio cap would refuse these before the parser ran. */
+function docx(xml: string): Uint8Array {
+  return zipSync({ "word/document.xml": strToU8(xml) }, { level: 0 });
+}
+
+function xlsx(sheet: string, shared = "<sst/>"): Uint8Array {
+  return zipSync(
+    {
+      "xl/workbook.xml": strToU8('<workbook><sheets><sheet name="S" r:id="rId1"/></sheets></workbook>'),
+      "xl/_rels/workbook.xml.rels": strToU8(
+        '<Relationships><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>',
+      ),
+      "xl/worksheets/sheet1.xml": strToU8(sheet),
+      "xl/sharedStrings.xml": strToU8(shared),
+    },
+    { level: 0 },
+  );
+}
+
+/** The central directory's declared uncompressed size, rewritten — an archive that lies. */
+function declareSize(zip: Uint8Array, size: number): Uint8Array {
+  const out = zip.slice();
+  const view = new DataView(out.buffer);
+  for (let offset = 0; offset + 46 <= out.length; offset += 1) {
+    if (view.getUint32(offset, true) === 0x02014b50) view.setUint32(offset + 24, size, true);
+  }
+  return out;
+}
+
+async function elapsed(run: () => Promise<unknown>): Promise<number> {
+  const started = performance.now();
+  await run();
+  return performance.now() - started;
+}
+
+/**
+ * Each shape took seconds before the linear scanners (measured: 20k unclosed
+ * <row> tags 1.1 s, 20k ' |' cells before a value 3.5 s, and 4-6x more per
+ * doubling). At 100k they now take tens of milliseconds; the budget is wide
+ * so a slow CI runner cannot fail it, and narrow enough that quadratic code
+ * cannot pass it.
+ */
+describe("extractText — linear time on crafted input", () => {
+  const N = 100_000;
+  const BUDGET_MS = 1_500;
+
+  it.each([
+    ["a docx of bare '<'", () => extractText(docx("<".repeat(N)), "docx")],
+    ["a docx of unclosed <w:t>", () => extractText(docx("<w:t>".repeat(N)), "docx")],
+    ["an xlsx of unclosed <row>", () => extractText(xlsx("<row>".repeat(N)), "xlsx")],
+    ["an xlsx of unclosed <si>", () => extractText(xlsx("<worksheet/>", "<si>".repeat(N)), "xlsx")],
+    [
+      "an xlsx row of ' |' then a value",
+      () =>
+        extractText(
+          xlsx(
+            `<worksheet><sheetData><row><c r="A1" t="inlineStr"><is><t>${" |".repeat(N)}</t></is></c>` +
+              `<c r="B1" t="inlineStr"><is><t>y</t></is></c></row></sheetData></worksheet>`,
+          ),
+          "xlsx",
+        ),
+    ],
+    ["a text file of spaces", () => extractText(strToU8(`${" ".repeat(N * 2)}x`), "text")],
+    ["a text file of tabs and spaces", () => extractText(strToU8(`${" \t".repeat(N)}x`), "text")],
+  ])("%s", async (_label, run) => {
+    expect(await elapsed(run)).toBeLessThan(BUDGET_MS);
+  });
+
+  it("decodes '&' runs with no ';' in linear time", () => {
+    const started = performance.now();
+    expect(decodeXml("&".repeat(N * 2))).toHaveLength(N * 2);
+    expect(performance.now() - started).toBeLessThan(BUDGET_MS);
+  });
+});
+
+describe("extractText — zip entries that lie", () => {
+  it("refuses an entry whose compressed bytes could not come from its declared size", async () => {
+    // ~100 KB of varied text deflates to tens of KB; declaring 1 KB is a lie
+    // that made fflate inflate everything into a buffer that kept nothing.
+    let text = "";
+    for (let i = 0; text.length < 100_000; i += 1) text += `${(i * 7919) % 104_729} `;
+    const lying = declareSize(zipSync({ "word/document.xml": strToU8(text) }), 1024);
+    await expect(extractText(lying, "docx")).rejects.toMatchObject({ reason: "damaged" });
+  });
+
+  it("refuses a compression ratio only a bomb reaches", async () => {
+    const honest = zipSync({ "word/document.xml": strToU8("<w:t>small</w:t>".repeat(64)) });
+    const inflated = declareSize(honest, 5 * 1024 * 1024);
+    await expect(extractText(inflated, "docx")).rejects.toMatchObject({ reason: "too_large" });
+  });
+});
+
+describe("extractText — text Postgres will store", () => {
+  it("drops a NUL after the sniffer's 8 KB probe", async () => {
+    const { text } = await extractText(strToU8(`${"a".repeat(9_000)}\u0000b`), "text");
+    expect(text).not.toContain("\u0000");
+    expect(text.endsWith("ab")).toBe(true);
+  });
+
+  it("drops &#0; and replaces a surrogate reference in a docx", async () => {
+    const { text } = await extractText(docx("<w:p><w:t>a&#0;b&#xD800;c</w:t></w:p>"), "docx");
+    expect(text).toBe("ab\uFFFDc");
+  });
+
+  it("replaces a lone surrogate, keeps a real pair", () => {
+    expect(normalizeText("x\uD800y \uDC00 z")).toBe("x\uFFFDy \uFFFD z");
+    expect(normalizeText("rocket \uD83D\uDE80")).toBe("rocket \uD83D\uDE80");
+  });
+
+  it("never cuts between the halves of a surrogate pair", () => {
+    const { text } = capText(`${"a".repeat(9)}\uD83D\uDE80`, 10);
+    expect(text).toBe("a".repeat(9));
+    expect(text.charCodeAt(text.length - 1)).not.toBe(0xd83d);
+  });
+});
+
+describe("decodeXml", () => {
+  it("decodes the five entities and numeric references", () => {
+    expect(decodeXml("R&amp;D &lt;x&gt; &quot;q&quot; &apos;a&apos; &#65;&#x42;")).toBe("R&D <x> \"q\" 'a' AB");
+  });
+
+  it("leaves unknown and prototype names alone", () => {
+    expect(decodeXml("&nbsp; &constructor; &toString; &")).toBe("&nbsp; &constructor; &toString; &");
+  });
+
+  it("keeps CDATA literally", async () => {
+    const { text } = await extractText(docx("<w:p><w:t><![CDATA[a &amp; <b>]]></w:t></w:p>"), "docx");
+    expect(text).toBe("a &amp; <b>");
+  });
+});
+
+describe("extractText — PDF time budget", () => {
+  it("stops between pages when the budget runs out, and says it read the first part", async () => {
+    const result = await extractText(fixture("brief.pdf"), "pdf", { pdfBudgetMs: 0 });
+    expect(result.truncated).toBe(true);
+    expect(result.text).toContain("Hult poster brief");
+    expect(result.pages).toBe(2);
+  });
+});
+

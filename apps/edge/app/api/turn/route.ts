@@ -131,6 +131,8 @@ export async function POST(request: Request) {
         db,
         registry: buildToolRegistry({ google }),
         googleCalendarConfigured: google !== null,
+        // ROADMAP Stage 1a — off until the multi-turn eval set has been run.
+        conversationContext: process.env["AI_CONVERSATION_CONTEXT"] === "on",
         extractor: new RoutedExtractor(router, requestId),
         responder: new RoutedResponder(router, requestId),
         // Optional semantic recall. Without a key, recall is lexical-only —

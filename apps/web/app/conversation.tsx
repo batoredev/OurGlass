@@ -16,9 +16,12 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { MAX_UPLOAD_BYTES } from "@ourglass/shared";
 import { Icon } from "./icons";
 import { useDictation } from "./use-dictation";
+import { useSpeech } from "./use-speech";
 import { apiFetch } from "../lib/session";
 import { fetchEmailDrafts, type EmailDraft } from "../lib/api";
 import { EmailDraftCard } from "./email-draft";
+import Link from "next/link";
+import { Landscape } from "./landscape";
 
 /** What /api/documents returns for an upload — IngestResponse in @ourglass/api/ingest. */
 interface UploadResult {
@@ -137,6 +140,9 @@ export function Conversation() {
     onError: setNotice,
   });
 
+  // Spoken replies (Stage 1d): off until turned on here, always stoppable.
+  const speech = useSpeech();
+
   // THE READER'S CLOCK, NOT THE SERVER'S. See `useReaderNow` below.
   const now = useReaderNow();
 
@@ -197,6 +203,7 @@ export function Conversation() {
     // A turn is on its way; anything said now belongs to the NEXT one, and a
     // microphone left open after sending is its own kind of surprise.
     dictation.stop();
+    speech.stop();
     setBusy(true);
     const stamp = `local-${Date.now()}`;
     const line = file === null ? utterance : uploadLine(utterance, file.name);
@@ -263,12 +270,14 @@ export function Conversation() {
           asked: result.asked,
         },
       ]);
+      // Only a conversation reply is read aloud — an upload's reply quotes the file.
+      speech.say(result.reply);
     } catch (error: unknown) {
       setNotice(error instanceof Error ? error.message : String(error));
     } finally {
       setBusy(false);
     }
-  }, [draft, attachment, busy, dictation]);
+  }, [draft, attachment, busy, dictation, speech]);
 
   const undo = useCallback(async (turnId: string) => {
     setNotice(null);
@@ -305,6 +314,23 @@ export function Conversation() {
               : ""}
           </div>
         </div>
+        {speech.supported ? (
+          <div className="speech-controls">
+            {speech.speaking ? (
+              <button type="button" className="quiet-button" onClick={speech.stop}>
+                Stop reading
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="quiet-button"
+              aria-pressed={speech.enabled}
+              onClick={() => speech.setEnabled(!speech.enabled)}
+            >
+              {speech.enabled ? "Replies read aloud: on" : "Read replies aloud"}
+            </button>
+          </div>
+        ) : null}
       </header>
 
       {/* A live LOG, so a screen reader hears "Thinking…" and then the reply.
@@ -319,18 +345,28 @@ export function Conversation() {
         aria-live={loaded ? "polite" : "off"}
       >
         {empty && (
-          <div className="greeting">
-            <div>
-              <div className="hello-kicker">Your world, in context</div>
-              <h2>{now ? greeting(now) : "Hello."}</h2>
-              <p>Tell me what is happening.</p>
+          <div className="greeting landscape-panel">
+            <Landscape className="landscape-art" />
+            <div className="hello-kicker">Your world, in context</div>
+            <h2>{now ? greeting(now) : "Hello."}</h2>
+            <p>Tell me what is happening — who owes what, what is coming up, who you are meeting.</p>
+            <div className="hero-actions">
+              <Link className="hero-pill" href="/today">
+                See today <span aria-hidden="true">↗</span>
+              </Link>
+              <Link className="hero-link" href="/commitments">
+                Open commitments <span aria-hidden="true">→</span>
+              </Link>
             </div>
-            <div className="chat-illustration" aria-hidden="true">
-              <span className="sun-disc" />
-              <span className="time-arch" />
-              <span className="memory-dot one" />
-              <span className="memory-dot two" />
-              <span className="memory-dot three" />
+            <div className="hero-meta">
+              <span className="hero-place">
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M12 21s-6.5-6.1-6.5-11a6.5 6.5 0 0 1 13 0c0 4.9-6.5 11-6.5 11z" fill="currentColor" />
+                  <circle cx="12" cy="10" r="2.4" fill="var(--blue-deep)" />
+                </svg>
+                {now ? Intl.DateTimeFormat().resolvedOptions().timeZone.replace(/_/g, " ") : ""}
+              </span>
+              <span>Tell me below <span aria-hidden="true">↓</span></span>
             </div>
           </div>
         )}

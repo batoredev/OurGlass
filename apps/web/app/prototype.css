@@ -930,3 +930,64 @@ button.checklist-item:disabled { cursor: progress; opacity: .7; }
 .email-card-error { margin: 0; font-weight: 700; color: var(--danger); }
 .email-card .card-action[type="submit"] { background: var(--ink); color: white; }
 .email-card .card-action:disabled { opacity: .55; cursor: progress; }
+
+/* Permanent delete (ROADMAP Stage 0): Files, People and Settings → Your data. */
+.delete-link { display: inline-block; margin-top: 10px; color: var(--danger); font-size: 13px; }
+.danger-button { min-height: 40px; padding: 0 16px; border-radius: 9px; cursor: pointer; font-weight: 600; font-size: 13px; background: var(--danger); color: #fff; border: 1px solid var(--danger); }
+.danger-button:disabled { opacity: 0.45; cursor: not-allowed; }
+.delete-confirm { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--danger); border-radius: 10px; font-size: 13px; line-height: 1.45; }
+.delete-confirm p { margin: 0 0 8px; }
+.delete-confirm-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.delete-error { color: var(--danger); }
+.delete-phrase { display: grid; gap: 6px; margin-top: 12px; font-size: 13px; }
+.delete-phrase input { min-height: 40px; max-width: 260px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface-strong); color: var(--ink); font: inherit; }
+.row.delete-everything { align-items: start; }
+
+/* Spoken replies (Stage 1d): the toggle and Stop sit at the right of the chat header. */
+.speech-controls { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.speech-controls .quiet-button { min-height: 36px; padding: 0 14px; border: 1px solid var(--line-strong); background: transparent; color: var(--ink); }
+.speech-controls .quiet-button[aria-pressed="true"] { background: var(--surface-strong); }
+@media (max-width: 760px) { .speech-controls .quiet-button { min-height: 32px; padding: 0 10px; font-size: 11px; } }
+
+/* The person page and meeting briefs (ROADMAP Stage 2). */
+.profile-head { display: flex; align-items: center; gap: 16px; margin: 4px 0 8px; }
+.profile-meta { display: grid; gap: 4px; color: var(--muted); font-size: 14px; }
+.profile-source { color: var(--muted); font-size: 12px; }
+.profile-list { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 6px; line-height: 1.45; }
+.profile-due { color: var(--muted); font-size: 13px; }
+.profile-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+.profile-subtitle { font-size: 13px; font-weight: 700; margin: 0; }
+.profile-empty { color: var(--muted); font-size: 14px; margin: 6px 0 0; }
+.profile-record { margin: 6px 0 0; }
+a.person-name { color: inherit; text-decoration: none; }
+a.person-name:hover, a.person-name:focus-visible { text-decoration: underline; }
+.meeting-brief { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; line-height: 1.45; }
+.meeting-brief ul { margin: 6px 0 0; padding-left: 18px; }
+.meeting-brief-name { font-weight: 700; color: inherit; }
+
+/* Today → Your day, planned (ROADMAP Stage 3). */
+.day-plan-next { margin: 4px 0 12px; }
+.day-plan-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.day-plan-item { display: grid; grid-template-columns: 120px 64px 1fr; gap: 4px 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; align-items: baseline; }
+.day-plan-time { font-variant-numeric: tabular-nums; font-weight: 600; }
+.day-plan-kind { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.day-plan-title { font-weight: 600; }
+.day-plan-reason { grid-column: 3; color: var(--muted); font-size: 13px; }
+.day-plan-meeting { background: transparent; }
+.day-plan-task, .day-plan-nudge { background: var(--surface-strong); }
+.day-plan-unplaced { margin-top: 14px; font-size: 14px; }
+.day-plan-unplaced ul { margin: 6px 0 0; padding-left: 18px; }
+@media (max-width: 760px) {
+  .day-plan-item { grid-template-columns: 1fr; }
+  .day-plan-reason { grid-column: 1; }
+}
+
+/* A suggested follow-up (ROADMAP Stage 4). */
+.follow-up-text { white-space: pre-wrap; font: inherit; font-size: 14px; line-height: 1.5; margin: 10px 0 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-strong); }
+
+/* Today → Inbox (ROADMAP Stage 1c): quoted data, warnings in the danger colour. */
+.inbox-list { list-style: none; margin: 8px 0 14px; padding: 0; display: grid; gap: 8px; }
+.inbox-item { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 14px; }
+.inbox-from { font-weight: 700; }
+.inbox-snippet { color: var(--muted); font-size: 13px; }
+.inbox-warning { color: var(--danger); font-size: 13px; font-weight: 600; }
