@@ -6,7 +6,18 @@ conversations**. Everything it needs is in this file and the docs it links. Read
 [`DECISIONS.md`](DECISIONS.md) (the 2026-11-05 rows first) → [`YOUR-ACTIONS.md`](YOUR-ACTIONS.md)
 (the owner's checklist). Every doc is indexed in [`README.md`](README.md).
 
-## Where things stand (2026-11-05)
+## Where things stand (2026-11-08)
+
+**Every ROADMAP stage has a built, tested first slice** (PR #26, branch
+`claude/repo-overview-requirements-2nlq28`): Stage 0 (security fixes, RLS, export and permanent
+delete), 1a (conversation context — switched off until its paid eval runs), 1b/1c (Google
+Calendar busy times and the Gmail inbox — verified against recorded responses only), 1d (spoken
+replies), 2 (person model, meeting briefs), 3 (day plan, meeting slots), 4 (greeting and sign-off
+per recipient, follow-ups, the edit-distance measure), 5 (morning brief and evening review in the
+app). Each stage's ROADMAP section has a **Status** paragraph saying what is built and what is
+not yet. Migrations 017–019 must be applied to Supabase before deploying this code.
+
+### As of 2026-11-05
 
 - `main` is green in CI (typecheck, lint, unit, integration against Postgres, CodeQL).
 - **Built and verified:** see ROADMAP → *Where it stands*. In short: conversation → structured
@@ -27,8 +38,10 @@ conversations**. Everything it needs is in this file and the docs it links. Read
 
 ## The work left, in order
 
-**Build the ROADMAP stages in order, each as its own pull request with tests.** Stage 0 (safe to
-hold this data) was built 2026-11-05; next is 1 (conversation context, then calendar and email reading) → 2 (the person model and
+**Every stage now has a first slice; what is left in each is listed in its ROADMAP Status
+paragraph** — chiefly the model-based halves, which need paid eval runs the owner approves, and
+anything live against Google, which needs the OAuth client. Originally: Stage 0 (safe to
+hold this data) was built 2026-11-05; then 1 (conversation context, then calendar and email reading) → 2 (the person model and
 meeting briefs) → 3 (the personal scheduler) → 4 (replies per recipient) → 5 (the proactive
 loop). The Google halves of Stage 1 wait for the owner's OAuth client.
 
