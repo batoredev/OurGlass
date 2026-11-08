@@ -65,7 +65,9 @@ re-checked since 2026-10-20 (item 9).
 - [ ] **7. Approve the paid measurement** 👤 → 🤖
   Tell me "run the Claude eval". It is about 99 Claude calls; the project rules require your
   go-ahead before spending. I record the results in `docs/AI_EVALS.md`. The SDK upgrade waiting
-  in Dependabot #23 is confirmed the same way.
+  in Dependabot #23 is confirmed the same way, and so is conversation context (Stage 1a): its
+  multi-turn set is 8 calls per provider, and it is switched on (`supabase secrets set
+  AI_CONVERSATION_CONTEXT=on`) only when every safety case passes.
 
 ## Part 3 — Try it (about 30 minutes)
 

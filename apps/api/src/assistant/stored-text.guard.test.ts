@@ -28,7 +28,10 @@ const APPS = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const ALLOWED_READS: Readonly<Record<string, { reads: readonly string[]; why: string }>> = {
   "api/src/assistant/orchestrator.ts": {
     reads: ["messages.listRecent"],
-    why: "previousAssistantTurnAt reads role and t_created only — never a body",
+    why:
+      "previousAssistantTurnAt reads role and t_created only; with AI_CONVERSATION_CONTEXT=on, " +
+      "renderConversation quotes the last few bodies to Interpret — uploads excluded, every " +
+      "intent grounded in the current message (conversation-context.ts)",
   },
   "api/src/ingest/ingest.ts": {
     reads: ["documents.findCurrentBySha256"],

@@ -69,6 +69,7 @@ import { PENDING_ACTION_TTL_SECONDS } from "../permissions/policy.js";
 import { singularTypeKey, toSnakeKey } from "./snake-key.js";
 import { isQuestion, namedFieldCount } from "./write-guards.js";
 import { renderTrackedTypes } from "./tracked-context.js";
+import { groundInUtterance, renderConversation } from "./conversation-context.js";
 
 export interface TurnRequest {
   readonly utterance: string;
@@ -138,6 +139,13 @@ export interface OrchestratorDeps extends ExecutorDeps {
    * add_to_google_calendar. Optional: absent means "not set up".
    */
   readonly googleCalendarConfigured?: boolean | undefined;
+  /**
+   * ROADMAP Stage 1a: send the last few turns to Interpret as quoted context,
+   * and keep only intents that quote the CURRENT message
+   * (conversation-context.ts). Off unless AI_CONVERSATION_CONTEXT=on: it is
+   * not yet measured by the multi-turn eval set.
+   */
+  readonly conversationContext?: boolean | undefined;
 }
 
 /**
@@ -227,9 +235,19 @@ export async function runTurn(req: TurnRequest, deps: OrchestratorDeps): Promise
   const trackedContext = renderTrackedTypes(
     await deps.db.withTransaction((tx) => entityRecords.listTypes(tx)),
   );
+  // Stage 1a, when switched on: the turns just before this one, quoted.
+  const conversation = deps.conversationContext
+    ? renderConversation(
+        await deps.db.withTransaction((tx) => messages.listRecent(tx, 12)),
+        userMessage.id,
+        now,
+      )
+    : undefined;
+  const context =
+    [trackedContext, conversation].filter((part): part is string => part !== undefined).join("\n\n") || undefined;
   let interpretation: ExtractionResult;
   try {
-    interpretation = await deps.extractor.extract(req.utterance, trackedContext);
+    interpretation = await deps.extractor.extract(req.utterance, context);
   } catch (error: unknown) {
     if (error instanceof ExtractionError) {
       // TEMPLATE, never a Haiku call (§3.4). The model just failed; calling
@@ -262,6 +280,16 @@ export async function runTurn(req: TurnRequest, deps: OrchestratorDeps): Promise
       };
     }
     throw error;
+  }
+
+  // ---- Every write comes from THIS message (conversation-context.ts rule 3) -
+  if (conversation !== undefined) {
+    const grounded = groundInUtterance(interpretation, req.utterance);
+    if (grounded.dropped > 0) {
+      // Counts only — never the words.
+      console.warn(`[turn] dropped ${grounded.dropped} intent(s) not quoting the current message`);
+    }
+    interpretation = grounded.result;
   }
 
   // ---- Recall queries, embedded OUTSIDE any transaction -------------------

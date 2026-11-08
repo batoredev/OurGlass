@@ -97,8 +97,9 @@ confirmation, and every internal change can be undone.
 **It asks which commitment you meant.** Completion auto-matches only when the words match
 closely; marking the wrong one done is a real mistake and an invisible one, so it asks.
 
-**Answer with a whole sentence, never "yes".** Each message is understood on its own until
-Stage 1 adds conversation context. Say *"Barkha gave me the article at 11"*, not *"yes"*.
+**Answer with a whole sentence, never "yes".** Each message is understood on its own unless
+conversation context is switched on (`AI_CONVERSATION_CONTEXT=on`, Stage 1a — built, not yet
+measured). Say *"Barkha gave me the article at 11"*, not *"yes"*.
 
 **A deadline with no time shows as a date.** *"by Friday"* stores end of Friday. Say a time when
 you want one.

@@ -92,7 +92,11 @@ Supabase ([`YOUR-ACTIONS.md`](YOUR-ACTIONS.md) item 4).
 - **1a Conversation context** (category 4): the last few turns go to Interpret as context, so
   "yes", "the second one" and follow-ups work; temporary instructions ("for today…") are kept
   apart from lasting preferences. Stored message bodies stay out of every prompt except as
-  quoted conversation, and the injection tests cover that path.
+  quoted conversation, and the injection tests cover that path. **Built 2026-11-08, switched
+  off** (`AI_CONVERSATION_CONTEXT=on` turns it on): the last four messages of the last 30 minutes
+  are quoted, uploads never; any intent that does not quote the current message is dropped.
+  An 8-case multi-turn eval set exists (`packages/evals/src/multi-turn.fixtures.ts`) and needs
+  a paid run before it is switched on. Temporary instructions are not built yet.
 - **1b Calendar reading** (2): busy times from Google Calendar (the `calendar.events` scope
   already granted), edit and cancel events, recurring events, more than one calendar.
 - **1c Email reading** (3, 24; owner default 2026-11-05: read-only Gmail): summaries, threads,
@@ -210,7 +214,8 @@ planned) · — not planned, with the reason.
 | Natural-language commands · questions about your own data · confirmations | ✅ |
 | Voice input (dictation) | ✅ |
 | Text, voice, images and files as input | ✅ |
-| Conversational context · follow-ups · temporary vs lasting instructions | S1 |
+| Conversational context · follow-ups | ✅ built, off until the multi-turn eval runs |
+| Temporary vs lasting instructions | S1 |
 | Spoken replies, stoppable | ✅ opt-in, the browser's own voice |
 | Notifications read aloud | S5 |
 | Hands-free use · multilingual conversation | L |
@@ -305,7 +310,7 @@ planned) · — not planned, with the reason.
 | Stage | Needs from the owner |
 |---|---|
 | 0 | Apply migration 017 (Row Level Security) to Supabase — no code depends on it |
-| 1 | The Google OAuth client; re-consent for `gmail.readonly`; approval for paid eval runs |
+| 1 | The Google OAuth client; re-consent for `gmail.readonly`; approval for the paid multi-turn eval run (8 calls per provider), then switching `AI_CONVERSATION_CONTEXT` on |
 | 2–3 | Nothing beyond review |
 | 4–5 | A decision on the email digest's sender and quiet hours |
 | Any | Branch protection on `main`; deploy credentials ([`YOUR-ACTIONS.md`](YOUR-ACTIONS.md)) |
