@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * "Find a time to meet" on a person's page (ROADMAP Stage 3): three free
+ * "Suggest meeting times" on a person's page (ROADMAP Stage 3): three free
  * times in the next week, inside their stated time of day when there is one,
  * with what that is based on. Booking stays a sentence in the chat.
  */
@@ -24,11 +24,11 @@ export function MeetingSlots({ personId, name }: { personId: string; name: strin
   return (
     <section className="section" aria-labelledby="slots-title">
       <h2 className="section-title" id="slots-title">
-        Meet {name}
+        Meeting times with {name}
       </h2>
       {result === null ? (
         <button type="button" className="secondary-button" onClick={() => void find()}>
-          Find a time to meet
+          Suggest meeting times
         </button>
       ) : (
         <>

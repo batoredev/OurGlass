@@ -59,7 +59,7 @@ function items(list: readonly BriefItem[]): string {
 }
 
 export function composeMorning(input: MorningInput): string {
-  const lines: string[] = ["Good morning. Your day:"];
+  const lines: string[] = ["Morning summary:"];
   for (const meeting of input.meetings.slice(0, MAX)) {
     lines.push(`• ${time(meeting.start, input.timeZone)} ${meeting.title}`);
     for (const person of meeting.people.slice(0, 2)) lines.push(`  ${person.name}: ${person.line}`);
@@ -83,7 +83,7 @@ export function composeMorning(input: MorningInput): string {
 }
 
 export function composeEvening(input: EveningInput): string {
-  const lines: string[] = ["This evening:"];
+  const lines: string[] = ["Evening summary:"];
   lines.push(input.done.length > 0 ? `Done today: ${items(input.done)}.` : "Nothing was marked done today.");
   if (input.stillOpen.length > 0) lines.push(`Still open from today: ${items(input.stillOpen)}.`);
   if (input.tomorrow.length > 0) {

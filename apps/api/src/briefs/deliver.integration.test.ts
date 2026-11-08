@@ -43,7 +43,7 @@ suite("brief delivery (integration)", () => {
     expect(await deliverDueBrief(deps(), new Date(MORNING.getTime() + 60_000))).toBeNull();
     const [brief] = await briefs();
     expect(brief!.key).toBe("morning:2026-11-09");
-    expect(brief!.body).toMatch(/^Good morning\. Your day:/);
+    expect(brief!.body).toMatch(/^Morning summary:/);
     expect(brief!.body).toContain("You owe: feedback on the backend plan (Arun) — overdue");
     expect(brief!.body).toContain("Due to you: the article (Barkha)");
     expect(brief!.body).toContain("Last week:");
@@ -59,6 +59,6 @@ suite("brief delivery (integration)", () => {
     expect(await deliverDueBrief(deps(), new Date("2026-11-09T15:00:00.000Z"))).toBeNull();
     expect(await deliverDueBrief(deps(), new Date("2026-11-09T18:30:00.000Z"))).toBe("evening:2026-11-09");
     const [evening] = await briefs();
-    expect(evening!.body).toMatch(/^This evening:/);
+    expect(evening!.body).toMatch(/^Evening summary:/);
   });
 });

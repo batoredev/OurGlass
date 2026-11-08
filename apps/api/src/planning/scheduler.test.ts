@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  alreadyBooked,
   gaps,
   merge,
   planDay,
@@ -157,5 +158,16 @@ describe("meeting slots that suit the other person", () => {
       expect(hour).toBeGreaterThanOrEqual(9);
       expect(hour + 0.5).toBeLessThanOrEqual(12);
     }
+  });
+});
+
+describe("alreadyBooked", () => {
+  it("recognises accepted blocks under the current and the earlier titles", () => {
+    const booked = new Set(["Focus: the venue quote", "Follow up: Ask Barkha about the article", "Nudge: Ask Dev about the quote"]);
+    expect(alreadyBooked(booked, "task", "the venue quote")).toBe(true);
+    expect(alreadyBooked(booked, "nudge", "Ask Barkha about the article")).toBe(true);
+    expect(alreadyBooked(booked, "nudge", "Ask Dev about the quote")).toBe(true);
+    expect(alreadyBooked(booked, "task", "Ask Dev about the quote")).toBe(false);
+    expect(alreadyBooked(booked, "nudge", "Ask Meera about the poster draft")).toBe(false);
   });
 });

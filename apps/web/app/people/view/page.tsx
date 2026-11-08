@@ -75,7 +75,7 @@ function ProfileView({ page }: { page: PersonPage }) {
       </div>
 
       <section className="section">
-        <h2 className="section-title">Between you</h2>
+        <h2 className="section-title">Open commitments</h2>
         <div className="profile-columns">
           <div>
             <h3 className="profile-subtitle">Owes you</h3>
@@ -89,7 +89,7 @@ function ProfileView({ page }: { page: PersonPage }) {
       </section>
 
       <section className="section">
-        <h2 className="section-title">Their record</h2>
+        <h2 className="section-title">On-time record</h2>
         {record ? (
           <p className="profile-record">
             On time {record.value.onTime} of {record.value.onTime + record.value.late}
@@ -108,9 +108,9 @@ function ProfileView({ page }: { page: PersonPage }) {
       {page.followUp ? <FollowUp text={page.followUp} name={profile.name} styleFrom={page.styleFrom} /> : null}
 
       <Facts title="Preferences" facts={profile.preferences} />
-      <Facts title="What you've told me" facts={profile.facts} />
+      <Facts title="Facts you've told me" facts={profile.facts} />
       <Facts title="Patterns" facts={profile.patterns} />
-      <Facts title="Groups and work" facts={profile.groups} />
+      <Facts title="Work and groups" facts={profile.groups} />
       <Facts title="Files" facts={profile.files} />
 
       <section className="section">

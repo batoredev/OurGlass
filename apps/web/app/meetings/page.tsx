@@ -85,7 +85,7 @@ async function renderMeetings() {
                     {meeting.brief.map((person) => (
                       <div className="meeting-brief" key={`${meeting.id}-${person.id}`}>
                         <Link className="meeting-brief-name" href={`/people/view?id=${encodeURIComponent(person.id)}`}>
-                          Before you meet {person.name}
+                          Meeting prep: {person.name}
                         </Link>
                         <ul>
                           {person.lines.map((line, index) => (

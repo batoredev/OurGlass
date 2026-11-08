@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Today → Inbox (ROADMAP Stage 1c): who is waiting on a reply, and what looks
+ * Today → Emails to check (ROADMAP Stage 1c): who is waiting on a reply, and what looks
  * suspicious — decided by code from headers and the people you know.
  *
  * Everything shown from an email is QUOTED DATA (sender, subject, Gmail's own
@@ -38,7 +38,7 @@ export function InboxSection() {
     return (
       <section className="section" aria-labelledby="inbox-title">
         <h2 className="section-title" id="inbox-title">
-          Inbox
+          Emails to check
         </h2>
         <p className="profile-empty">
           {inbox.state === "needs_read_permission" ? (
@@ -63,7 +63,7 @@ export function InboxSection() {
       </h2>
       {waiting.length > 0 ? (
         <>
-          <h3 className="profile-subtitle">Waiting on your reply</h3>
+          <h3 className="profile-subtitle">Waiting for your reply</h3>
           <ul className="inbox-list">
             {waiting.map((message) => (
               <Row key={message.id} message={message} />

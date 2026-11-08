@@ -10,10 +10,10 @@ conversations**. Everything it needs is in this file and the docs it links. Read
 
 **Every ROADMAP stage has a built, tested first slice** (PR #26, branch
 `claude/repo-overview-requirements-2nlq28`): Stage 0 (security fixes, RLS, export and permanent
-delete), 1a (conversation context — switched off until its paid eval runs), 1b/1c (Google
+delete), 1a (follow-up understanding — switched off until its paid eval runs), 1b/1c (Google
 Calendar busy times and the Gmail inbox — verified against recorded responses only), 1d (spoken
-replies), 2 (person model, meeting briefs), 3 (day plan, meeting slots), 4 (greeting and sign-off
-per recipient, follow-ups, the edit-distance measure), 5 (morning brief and evening review in the
+replies), 2 (people profiles, meeting prep), 3 (today's plan, meeting times), 4 (email drafts in your style: greeting and sign-off
+per recipient, follow-ups, the edit-distance measure), 5 (morning and evening summaries in the
 app). Each stage's ROADMAP section has a **Status** paragraph saying what is built and what is
 not yet. Migrations 017–019 must be applied to Supabase before deploying this code.
 
@@ -38,12 +38,15 @@ not yet. Migrations 017–019 must be applied to Supabase before deploying this 
 
 ## The work left, in order
 
+**Waiting for the owner's go:** four separate accounts — read
+[`PLANNED-ACCOUNTS.md`](PLANNED-ACCOUNTS.md) and ask its open questions before starting.
+
 **Every stage now has a first slice; what is left in each is listed in its ROADMAP Status
 paragraph** — chiefly the model-based halves, which need paid eval runs the owner approves, and
-anything live against Google, which needs the OAuth client. Originally: Stage 0 (safe to
-hold this data) was built 2026-11-05; then 1 (conversation context, then calendar and email reading) → 2 (the person model and
-meeting briefs) → 3 (the personal scheduler) → 4 (replies per recipient) → 5 (the proactive
-loop). The Google halves of Stage 1 wait for the owner's OAuth client.
+anything live against Google, which needs the OAuth client. Originally: Stage 0 (security and
+data control) was built 2026-11-05; then 1 (follow-up understanding, then Google Calendar and Gmail reading) → 2 (people profiles and
+meeting prep) → 3 (today's plan and meeting times) → 4 (email drafts in your own style) → 5 (morning and evening
+summaries). The Google halves of Stage 1 wait for the owner's OAuth client.
 
 ### Stage 0 detail — the Phase 6 security review findings
 

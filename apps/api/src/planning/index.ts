@@ -20,10 +20,8 @@ import {
 
 export * from "./scheduler.js";
 export { localDayWindow } from "./local-day.js";
-import { nudgeTitle } from "./scheduler.js";
+import { alreadyBooked, nudgeTitle } from "./scheduler.js";
 
-/** How an accepted block is titled on the calendar (POST /api/plan/accept). */
-export const PLAN_PREFIX = { task: "Focus", nudge: "Nudge" } as const;
 
 /** Working hours, local. Until the owner states their own (ROADMAP Stage 3, not yet). */
 export const WORK_START_HOUR = 9;
@@ -74,7 +72,7 @@ export async function loadDayPlan(
   const open = (await commitments.listCurrent(tx)).filter((row) => OPEN.has(row.status));
   const tasks: TaskInput[] = open
     .filter((row) => selfId !== null && row.owner_id === selfId)
-    .filter((row) => !booked.has(`${PLAN_PREFIX.task}: ${row.object_text}`))
+    .filter((row) => !alreadyBooked(booked, "task", row.object_text))
     .map((row) => ({ id: row.id, title: row.object_text, due: row.expected_at }));
 
   const names = new Map<string, string>();
@@ -97,7 +95,7 @@ export async function loadDayPlan(
     });
   }
 
-  const notYetNudged = incoming.filter((item) => !booked.has(`${PLAN_PREFIX.nudge}: ${nudgeTitle(item)}`));
+  const notYetNudged = incoming.filter((item) => !alreadyBooked(booked, "nudge", nudgeTitle(item)));
   return { ...planDay(fixed, tasks, notYetNudged, { dayStart, dayEnd, now }, timeZone), dayStart, dayEnd };
 }
 

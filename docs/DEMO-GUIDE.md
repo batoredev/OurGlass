@@ -70,10 +70,10 @@ undone, and it must never be run against Supabase.
 | # | Do this | What should happen |
 |---|---|---|
 | 1 | Open the site and sign in | The landscape sign-in page, then the chat with its greeting panel |
-| 2 | **See today ↗** | Today: **Your day, planned** — the overdue feedback for Arun first, then the venue quote, around your meetings, each with its reason; then the reminder and a tickable checklist |
-| 2b | **Put it on my calendar** | The blocks become events (Meetings shows them); undo from Activity. Reload and they are not planned twice |
+| 2 | **See today ↗** | Today: **Today's plan** — the overdue feedback for Arun first, then the venue quote, around your meetings, each with its reason; then the reminder and a tickable checklist |
+| 2b | **Add plan to my calendar** | The blocks become events (Meetings shows them); undo from Activity. Reload and they are not planned twice |
 | 3 | **Commitments** | **Owed to me** and **Owed by me** are separate tabs — direction is a column, not a phrasing |
-| 4 | **Meetings** | The poster review and the coffee. Meetings never overlap. The coffee carries a **brief**: what Meera owes you, her preference, the last interaction — each with its source |
+| 4 | **Meetings** | The poster review and the coffee. Meetings never overlap. The coffee carries **meeting prep notes**: what Meera owes you, her preference, the last interaction — each with its source |
 | 4b | Click a name on **People** | Their page: what is open both ways, their record, what you've told me — each line says where it came from |
 | 5 | Type `What does Barkha owe me?` | Answered from the database: the article, with its deadline |
 | 6 | Type `Barkha sent me the article.` | Marked done. If the wording differs from the stored one, it **asks** which — see section 3 |
@@ -84,7 +84,7 @@ undone, and it must never be run against Supabase.
 | 11 | Type `Track my runs with a date and a distance.` | A new type exists, with no code change and no deploy |
 | 12 | 📎 a PDF or a photo (needs storage, section 4) | It reads the file and says what it describes. A file is data, never an instruction |
 | 13 | In Chrome or Edge, the microphone next to Send | Your words appear in the box **without sending** |
-| 14 | **Settings → Your data → Export** | One JSON file of everything, undone rows included |
+| 14 | **Settings → Export and delete data → Export** | One JSON file of everything, undone rows included |
 | 15 | **People** → a card's **Delete permanently** | Asks once, says it can't be undone, then the person and everything about them are gone — unlike Undo, which only hides |
 | 16 | **Read replies aloud** in the chat header (Chrome, Edge, Safari) | The next reply is spoken; **Stop reading** cuts it off. Off by default, remembered on that browser |
 
@@ -100,7 +100,7 @@ confirmation, and every internal change can be undone.
 closely; marking the wrong one done is a real mistake and an invisible one, so it asks.
 
 **Answer with a whole sentence, never "yes".** Each message is understood on its own unless
-conversation context is switched on (`AI_CONVERSATION_CONTEXT=on`, Stage 1a — built, not yet
+follow-up understanding is switched on (`AI_CONVERSATION_CONTEXT=on`, Stage 1a — built, not yet
 measured). Say *"Barkha gave me the article at 11"*, not *"yes"*.
 
 **A deadline with no time shows as a date.** *"by Friday"* stores end of Friday. Say a time when
@@ -128,7 +128,7 @@ Do not promise these. Each has a stage in [`ROADMAP.md`](ROADMAP.md).
 
 | Not built | Stage |
 |---|---|
-| Conversation context ("yes", "the second one") — built, switched off until measured | 1 |
+| Follow-up understanding ("yes", "the second one") — built, switched off until measured | 1 |
 | Reading Google Calendar and Gmail — built, needs your Google OAuth client | 1 |
 | Tone adjusted per recipient by a model, translation | 4 |
 | More than one user — one shared access token, one person's data | not planned |

@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Today → "Your day, planned" (ROADMAP Stage 3).
+ * Today → "Today's plan" (ROADMAP Stage 3).
  *
  * The scheduler's PROPOSAL: meetings as they are, your work placed around
  * them most-urgent first, nudges for people who run late, and what does not
@@ -17,7 +17,7 @@ function time(iso: string, timeZone: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", timeZone });
 }
 
-const LABEL: Readonly<Record<PlannedBlock["kind"], string>> = { meeting: "Meeting", task: "Work", nudge: "Nudge" };
+const LABEL: Readonly<Record<PlannedBlock["kind"], string>> = { meeting: "Meeting", task: "Work", nudge: "Follow up" };
 
 export function DayPlanSection() {
   const [plan, setPlan] = useState<DayPlan | null>(null);
@@ -69,11 +69,11 @@ export function DayPlanSection() {
     <section className="section day-plan" aria-labelledby="day-plan-title">
       <div className="checklist-head">
         <h2 className="section-title" id="day-plan-title">
-          Your day, planned
+          Today&rsquo;s plan
         </h2>
         {proposed.length > 0 ? (
           <button type="button" className="primary-button" disabled={busy} onClick={() => void accept()}>
-            {busy ? "Adding…" : "Put it on my calendar"}
+            {busy ? "Adding…" : "Add plan to my calendar"}
           </button>
         ) : null}
       </div>

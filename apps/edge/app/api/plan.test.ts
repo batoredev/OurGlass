@@ -21,7 +21,7 @@ vi.mock("./_lib", () => ({
 vi.mock("./_auth", () => ({ authorize: authMock }));
 vi.mock("@ourglass/db", () => ({ events: { listBetween } }));
 vi.mock("@ourglass/api/tools", () => ({ buildToolRegistry: () => ({}), executeTurn: executeMock }));
-vi.mock("@ourglass/api/planning", () => ({ PLAN_PREFIX: { task: "Focus", nudge: "Nudge" } }));
+vi.mock("@ourglass/api/planning", () => ({ PLAN_PREFIX: { task: "Focus", nudge: "Follow up" } }));
 
 const { POST } = await import("./plan/accept/route");
 
@@ -53,7 +53,7 @@ describe("POST /api/plan/accept", () => {
     const [calls] = executeMock.mock.calls[0]!;
     expect(calls.map((call: { name: string; input: { title: string } }) => [call.name, call.input.title])).toEqual([
       ["create_event", "Focus: the venue quote"],
-      ["create_event", "Nudge: Ask Barkha about the article"],
+      ["create_event", "Follow up: Ask Barkha about the article"],
     ]);
   });
 

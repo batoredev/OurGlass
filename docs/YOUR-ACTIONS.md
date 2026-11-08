@@ -48,8 +48,8 @@ re-checked since 2026-10-20 (item 9).
      tables' owner, which RLS does not restrict. If pages come back **empty**, the API connects as
      some other role — tell me, and I write the one-line compensating migration.
   3. Dashboard → **Advisors → Security Advisor**: the RLS warnings should be gone.
-  4. The same `pnpm db:migrate` applies **018** (the once-a-day brief index, Stage 5) and **019**
-     (draft edit distance, Stage 4): deploy the functions only after them, or briefs and the
+  4. The same `pnpm db:migrate` applies **018** (sends each summary only once a day, Stage 5) and **019**
+     (draft edit distance, Stage 4): deploy the functions only after them, or the summaries and the
      send-time measure fail (reminders and sending still work).
 
 ## Part 2 — Models and your data (decisions, about 10 minutes)
@@ -68,7 +68,7 @@ re-checked since 2026-10-20 (item 9).
 - [ ] **7. Approve the paid measurement** 👤 → 🤖
   Tell me "run the Claude eval". It is about 99 Claude calls; the project rules require your
   go-ahead before spending. I record the results in `docs/AI_EVALS.md`. The SDK upgrade waiting
-  in Dependabot #23 is confirmed the same way, and so is conversation context (Stage 1a): its
+  in Dependabot #23 is confirmed the same way, and so is follow-up understanding (Stage 1a, "yes" / "that one"): its
   multi-turn set is 8 calls per provider, and it is switched on (`supabase secrets set
   AI_CONVERSATION_CONTEXT=on`) only when every safety case passes.
 
@@ -149,7 +149,7 @@ re-checked since 2026-10-20 (item 9).
 - [ ] **17. Will there be a second customer?** Only a yes makes multi-user work worth doing.
 - [ ] **18. Terms of service and a privacy policy** before anyone outside your team uses it. The
       app stores commitments and facts about real people.
-- [ ] **19. The daily digest (Stage 5):** which address it is sent from, and your quiet hours.
+- [ ] **19. The daily summary email (Stage 5):** which address it is sent from, and your quiet hours.
 
 ## Part 7 — Optional
 

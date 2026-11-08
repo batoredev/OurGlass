@@ -174,6 +174,6 @@ describe("meeting briefs", () => {
   });
 
   it("says plainly when nothing is open", () => {
-    expect(briefFor(deriveProfile(data(), NOW)).lines).toEqual(["Nothing open between you."]);
+    expect(briefFor(deriveProfile(data(), NOW)).lines).toEqual(["No open commitments between you."]);
   });
 });

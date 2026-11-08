@@ -37,7 +37,7 @@ describe("composeMorning", () => {
       reminders: [{ body: "Ask Barkha for the article", at: at("2026-11-09T11:00:00Z") }],
     });
     expect(text.split("\n")).toEqual([
-      "Good morning. Your day:",
+      "Morning summary:",
       "• 10:00 Coffee with Meera",
       "  Meera: Owes you: the poster draft (due 11 Nov 2026).",
       "First: feedback on the backend plan at 09:00 — overdue since 7 Nov.",
@@ -49,7 +49,7 @@ describe("composeMorning", () => {
 
   it("says plainly when the day is empty, and adds last week on Mondays", () => {
     expect(composeMorning({ timeZone, meetings: [], first: null, youOwe: [], dueToYou: [], reminders: [] })).toBe(
-      "Good morning. Your day:\nNothing on record for today.",
+      "Morning summary:\nNothing on record for today.",
     );
     const monday = composeMorning({
       timeZone,
@@ -74,13 +74,13 @@ describe("composeEvening", () => {
       tomorrow: [{ title: "Hult poster review", start: at("2026-11-10T09:00:00Z"), people: [] }],
     });
     expect(text.split("\n")).toEqual([
-      "This evening:",
+      "Evening summary:",
       "Done today: the article (Barkha).",
       "Still open from today: the venue quote (Dev).",
       "Tomorrow: 09:00 Hult poster review.",
     ]);
     expect(composeEvening({ timeZone: "UTC", done: [], stillOpen: [], tomorrow: [] })).toBe(
-      "This evening:\nNothing was marked done today.",
+      "Evening summary:\nNothing was marked done today.",
     );
   });
 });
