@@ -9,6 +9,7 @@ not for what to do next.
 | File | Read it to |
 |---|---|
 | [`ROADMAP.md`](ROADMAP.md) | Know the vision, the principles, the scope, what is built and the stages left |
+| [`PLANNED-ACCOUNTS.md`](PLANNED-ACCOUNTS.md) | See the agreed-but-not-started plan for four separate logins (test, adharsh, srinivaas, arjun) |
 | [`HANDOFF.md`](HANDOFF.md) | Resume work in a fresh session: state, rules, the Stage 0 findings, gotchas |
 | [`YOUR-ACTIONS.md`](YOUR-ACTIONS.md) | See what only the owner can do: accounts, keys, decisions |
 | [`DEMO-GUIDE.md`](DEMO-GUIDE.md) | Run a prototype demo with a seeded week of data |

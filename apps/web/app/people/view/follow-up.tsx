@@ -12,7 +12,7 @@ export function FollowUp({ text, name, styleFrom }: { text: string; name: string
   return (
     <section className="section" aria-labelledby="follow-up-title">
       <h2 className="section-title" id="follow-up-title">
-        A follow-up to {name}
+        Suggested follow-up email to {name}
       </h2>
       <p className="profile-empty">
         {styleFrom > 0

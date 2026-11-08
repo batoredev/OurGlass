@@ -83,8 +83,8 @@ If any step fails, roll back.
 |---|---|
 | One wrong write from a conversation | **Undo** in the chat or on **Activity**, or `POST /api/undo` with the `turnId`. Every write is logged with its inverse; undo invalidates rather than deletes |
 | Many bad rows, or a bad migration | Supabase backups / **point-in-time recovery**. ⚠ Confirm what the project's plan offers *before* you need it — an owner setting, not yet verified |
-| Something must be gone **for good** (a person, a file, everything) | **Delete permanently** on People or Files, or **Settings → Your data**; the API is `POST /api/data/delete`. It removes the rows, scrubs the action log, and deletes the file's bytes from storage first — if storage refuses, nothing is deleted and it can be run again. It cannot be undone, and backups still hold the data until they age out |
-| Take a copy of everything | **Settings → Your data → Export**, or `GET /api/data/export` (every table as JSON; no file bytes, no search vectors, no Google token) |
+| Something must be gone **for good** (a person, a file, everything) | **Delete permanently** on People or Files, or **Settings → Export and delete data**; the API is `POST /api/data/delete`. It removes the rows, scrubs the action log, and deletes the file's bytes from storage first — if storage refuses, nothing is deleted and it can be run again. It cannot be undone, and backups still hold the data until they age out |
+| Take a copy of everything | **Settings → Export and delete data → Export**, or `GET /api/data/export` (every table as JSON; no file bytes, no search vectors, no Google token) |
 
 ## Secrets
 

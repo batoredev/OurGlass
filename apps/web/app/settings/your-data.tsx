@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Settings → Your data: export everything, or delete everything (ROADMAP Stage 0).
+ * Settings → Export and delete data: export everything, or delete everything (ROADMAP Stage 0).
  *
  * Export downloads one JSON file of every table. Delete everything asks for
  * the words "delete everything" to be typed — the same words the API
@@ -67,12 +67,12 @@ export function YourData() {
   return (
     <section className="section" aria-labelledby="your-data-title">
       <h2 className="section-title" id="your-data-title">
-        Your data
+        Export and delete data
       </h2>
       <div className="rule-list">
         <div className="row">
           <div>
-            <div className="row-title">Export everything</div>
+            <div className="row-title">Export all my data</div>
             <div className="row-subtitle">
               One JSON file: every person, commitment, memory, message and file&rsquo;s text, including
               what you undid. Uploaded files themselves stay on the Files page.
@@ -85,7 +85,7 @@ export function YourData() {
         </div>
         <div className="row delete-everything">
           <div>
-            <div className="row-title">Delete everything</div>
+            <div className="row-title">Delete all my data</div>
             <div className="row-subtitle">
               Removes every person, commitment, memory, message and file for good — not like Undo, which
               only hides. Your sign-in and your rules here stay. To delete one person or one file, use
@@ -110,7 +110,7 @@ export function YourData() {
             disabled={busy || typed.trim().toLowerCase() !== PHRASE}
             onClick={() => void deleteEverything()}
           >
-            {busy ? "Deleting…" : "Delete everything"}
+            {busy ? "Deleting…" : "Delete all my data"}
           </button>
         </div>
       </div>

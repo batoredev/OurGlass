@@ -66,7 +66,7 @@ owner's Google OAuth client); the deployed app since 2026-10-20.
 Stages that need no owner input are built first; the Google-dependent halves follow as soon as
 the OAuth client exists. Each stage is its own pull request.
 
-### Stage 0 — Safe to hold this data
+### Stage 0 — Security and data control
 
 *Why first: everything after it stores more about more people.*
 
@@ -87,9 +87,9 @@ Supabase ([`YOUR-ACTIONS.md`](YOUR-ACTIONS.md) item 4).
   export/delete are integration-tested, including that a purge leaves no row and no stored
   object behind.
 
-### Stage 1 — Remembers the conversation, then sees the calendar and the inbox
+### Stage 1 — Follow-up messages, Google Calendar and Gmail reading, replies read aloud
 
-- **1a Conversation context** (category 4): the last few turns go to Interpret as context, so
+- **1a Follow-up understanding** (category 4): the last few turns go to Interpret as context, so
   "yes", "the second one" and follow-ups work; temporary instructions ("for today…") are kept
   apart from lasting preferences. Stored message bodies stay out of every prompt except as
   quoted conversation, and the injection tests cover that path. **Built 2026-11-08, switched
@@ -97,18 +97,18 @@ Supabase ([`YOUR-ACTIONS.md`](YOUR-ACTIONS.md) item 4).
   are quoted, uploads never; any intent that does not quote the current message is dropped.
   An 8-case multi-turn eval set exists (`packages/evals/src/multi-turn.fixtures.ts`) and needs
   a paid run before it is switched on. Temporary instructions are not built yet.
-- **1b Calendar reading** (2): busy times from Google Calendar (the `calendar.events` scope
+- **1b Google Calendar reading** (2): busy times from Google Calendar (the `calendar.events` scope
   already granted), edit and cancel events, recurring events, more than one calendar.
-- **1c Email reading** (3, 24; owner default 2026-11-05: read-only Gmail): summaries, threads,
+- **1c Gmail reading** (3, 24; owner default 2026-11-05: read-only Gmail): summaries, threads,
   "needs a reply", suspicious-message flags. **Email text is data, never instructions** — the
   same boundary as uploads (a reading stage with a descriptive-only output).
-- **1d Spoken replies** (4; opt-in): the browser reads replies aloud, can be stopped. **Built
+- **1d Replies read aloud** (4; opt-in): the browser reads replies aloud, can be stopped. **Built
   2026-11-08** (`apps/web/app/speech.ts`): off until turned on in the chat header, remembered on
   that browser, never reads an upload's reply.
 - **1b and 1c built 2026-11-08, verified against recorded API responses only**
   (`apps/api/src/integrations/google-read.ts`): the day plan and meeting slots plan around
   Google Calendar's busy times (recurring events expanded; all-day, free and cancelled events
-  are not busy; OurGlass's own synced events counted once). **Today → Inbox** shows who is
+  are not busy; OurGlass's own synced events counted once). **Today → Emails to check** shows who is
   waiting on your reply and what looks suspicious (a known name from a stranger's address, a
   reply-to on another domain, look-alike domains, an unknown sender pressing for urgency) —
   sender, subject and Gmail's snippet as quoted data, decided by code, never a model.
@@ -119,7 +119,7 @@ Supabase ([`YOUR-ACTIONS.md`](YOUR-ACTIONS.md) item 4).
 - **Done when:** a multi-turn eval set passes; calendar and email adapters are tested against
   recorded API responses and, once the client exists, live.
 
-### Stage 2 — The person model and meeting briefs
+### Stage 2 — People profiles and meeting prep
 
 *The Machine's identity resolution and world model, over the owner's own data only.*
 
@@ -137,16 +137,15 @@ channel beyond a saved email, and searching document contents.
 - **Done when:** derivations are unit-tested on fixtures; a profile never shows a fact without a
   source; the brief appears for every meeting with a known person.
 
-### Stage 3 — The personal scheduler
+### Stage 3 — Today's plan and meeting times
 
 *The Machine's simulation and contingency, made deterministic.*
 
-**Status: built 2026-11-08** — `apps/api/src/planning/scheduler.ts`. **Today → Your day,
-planned**: your work placed around meetings (with a 10-minute buffer) most urgent first, a
+**Status: built 2026-11-08** — `apps/api/src/planning/scheduler.ts`. **Today → Today's plan**: your work placed around meetings (with a 10-minute buffer) most urgent first, a
 next-best task with its reason, nudges for anyone overdue or due today with a late record, and
-what does not fit. **Put it on my calendar** adds the blocks as events in one undoable turn,
+what does not fit. **Add plan to my calendar** adds the blocks as events in one undoable turn,
 re-checked against the calendar first; booked work is not planned twice. A person's page
-**finds a time to meet** inside their stated time of day. Property-tested over 500 random days:
+**suggests meeting times** inside their stated time of day. Property-tested over 500 random days:
 no double-booking, nothing outside working hours, every task accounted for. **Not yet:**
 constraints stated in words, learned durations, recurring tasks, subtasks, a week view, and
 the acceptance-rate eval.
@@ -160,7 +159,7 @@ the acceptance-rate eval.
 - **Done when:** property tests prove no plan double-books or breaks a hard constraint; an eval
   set measures how often proposed plans are accepted unchanged.
 
-### Stage 4 — Replies tailored to each person
+### Stage 4 — Email drafts in your own style
 
 **Status: the deterministic half built 2026-11-08** (`apps/api/src/replies/`): a drafted email
 takes the greeting and sign-off you use with that person (or with everyone), learned by counting
@@ -176,14 +175,14 @@ need an eval set scored against drafts you approve, and paid runs.
 - **Done when:** an eval set scores drafts against owner-approved examples; the edit distance
   before sending is recorded.
 
-### Stage 5 — The proactive loop
+### Stage 5 — Morning and evening summaries
 
 *The Machine's proactive contact and minimal disclosure.*
 
 **Status: built in the app 2026-11-08** (`apps/api/src/briefs/`) — every scheduled pass may
-deliver one brief into the conversation: a **morning brief** (08:00–12:00 local: meetings with
+deliver one brief into the conversation: a **morning summary** (08:00–12:00 local: meetings with
 who and what is open, the first thing to do, what is owed today, reminders; on Mondays last week
-and who has gone quiet with something open) and an **evening review** (18:00–21:00: done today,
+and who has gone quiet with something open) and an **evening summary** (18:00–21:00: done today,
 still open, tomorrow's meetings). Facts only, from stored rows, by template; once per day by a
 unique index (migration 018), even when passes race; never sent late. **Not yet:** the email
 digest (needs the owner's sender and quiet-hours decision), browser push, missed-notification
@@ -198,6 +197,12 @@ summaries, pending-reply nudges (need Stage 1c), priority rules.
 - **Done when:** briefs are generated from stored data by tested code (a model only phrases
   them, and its phrasing is checked against the facts like Respond's today); delivery is
   idempotent per day.
+
+### Next, when the owner says: four separate accounts
+
+`test`, `adharsh`, `srinivaas` and `arjun`, completely separate, each with a password they can
+change; the three new ones start empty. Agreed in outline 2026-11-08, not started — the design and
+the open questions are in [`PLANNED-ACCOUNTS.md`](PLANNED-ACCOUNTS.md).
 
 ### Later (potential, not scheduled)
 

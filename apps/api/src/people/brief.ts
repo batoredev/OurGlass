@@ -46,7 +46,7 @@ export function briefFor(profile: PersonProfile): BriefForPerson {
   const lines: string[] = [];
   if (profile.owesYou.value.length > 0) lines.push(`Owes you: ${list(profile.owesYou.value)}.`);
   if (profile.youOwe.value.length > 0) lines.push(`You owe them: ${list(profile.youOwe.value)}.`);
-  if (profile.owesYou.value.length === 0 && profile.youOwe.value.length === 0) lines.push("Nothing open between you.");
+  if (profile.owesYou.value.length === 0 && profile.youOwe.value.length === 0) lines.push("No open commitments between you.");
   if (profile.reliability) {
     const { onTime, late, typicalLateHours } = profile.reliability.value;
     lines.push(

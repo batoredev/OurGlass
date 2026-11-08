@@ -27,7 +27,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 const REFUSALS: Readonly<Record<string, { status: number; error: string }>> = {
   not_found: { status: 404, error: "There's nothing with that id to delete." },
-  self: { status: 400, error: "You can't delete yourself — use Delete everything to start over." },
+  self: { status: 400, error: "You can't delete yourself — use \"Delete all my data\" in Settings to start over." },
   storage_unavailable: {
     status: 503,
     error: "File storage isn't set up, so the file's bytes can't be removed. Nothing was deleted.",

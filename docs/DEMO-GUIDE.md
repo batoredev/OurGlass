@@ -70,10 +70,10 @@ undone, and it must never be run against Supabase.
 | # | Do this | What should happen |
 |---|---|---|
 | 1 | Open the site and sign in | The landscape sign-in page, then the chat with its greeting panel |
-| 2 | **See today ↗** | Today: **Your day, planned** — the overdue feedback for Arun first, then the venue quote, around your meetings, each with its reason; then the reminder and a tickable checklist |
-| 2b | **Put it on my calendar** | The blocks become events (Meetings shows them); undo from Activity. Reload and they are not planned twice |
+| 2 | **See today ↗** | Today: **Today's plan** — the overdue feedback for Arun first, then the venue quote, around your meetings, each with its reason; then the reminder and a tickable checklist |
+| 2b | **Add plan to my calendar** | The blocks become events (Meetings shows them); undo from Activity. Reload and they are not planned twice |
 | 3 | **Commitments** | **Owed to me** and **Owed by me** are separate tabs — direction is a column, not a phrasing |
-| 4 | **Meetings** | The poster review and the coffee. Meetings never overlap. The coffee carries a **brief**: what Meera owes you, her preference, the last interaction — each with its source |
+| 4 | **Meetings** | The poster review and the coffee. Meetings never overlap. The coffee carries **meeting prep notes**: what Meera owes you, her preference, the last interaction — each with its source |
 | 4b | Click a name on **People** | Their page: what is open both ways, their record, what you've told me — each line says where it came from |
 | 5 | Type `What does Barkha owe me?` | Answered from the database: the article, with its deadline |
 | 6 | Type `Barkha sent me the article.` | Marked done. If the wording differs from the stored one, it **asks** which — see section 3 |
@@ -84,7 +84,7 @@ undone, and it must never be run against Supabase.
 | 11 | Type `Track my runs with a date and a distance.` | A new type exists, with no code change and no deploy |
 | 12 | 📎 a PDF or a photo (needs storage, section 4) | It reads the file and says what it describes. A file is data, never an instruction |
 | 13 | In Chrome or Edge, the microphone next to Send | Your words appear in the box **without sending** |
-| 14 | **Settings → Your data → Export** | One JSON file of everything, undone rows included |
+| 14 | **Settings → Export and delete data → Export** | One JSON file of everything, undone rows included |
 | 15 | **People** → a card's **Delete permanently** | Asks once, says it can't be undone, then the person and everything about them are gone — unlike Undo, which only hides |
 | 16 | **Read replies aloud** in the chat header (Chrome, Edge, Safari) | The next reply is spoken; **Stop reading** cuts it off. Off by default, remembered on that browser |
 
