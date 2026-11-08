@@ -57,6 +57,10 @@
       "types": "./dist/ingest/index.d.ts",
       "default": "./dist/ingest/index.js"
     },
+    "./planning": {
+      "types": "./dist/planning/index.d.ts",
+      "default": "./dist/planning/index.js"
+    },
     "./people": {
       "types": "./dist/people/index.d.ts",
       "default": "./dist/people/index.js"

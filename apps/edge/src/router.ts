@@ -24,6 +24,9 @@ import * as confirmPending from "../app/api/pending-actions/[id]/confirm/route";
 import * as declinePending from "../app/api/pending-actions/[id]/decline/route";
 import * as people from "../app/api/people/route";
 import * as personProfile from "../app/api/people/[id]/profile/route";
+import * as plan from "../app/api/plan/route";
+import * as planAccept from "../app/api/plan/accept/route";
+import * as planSlots from "../app/api/plan/slots/route";
 import * as permissions from "../app/api/permissions/route";
 import * as projects from "../app/api/projects/route";
 import * as session from "../app/api/session/route";
@@ -77,6 +80,9 @@ const ROUTES: readonly Route[] = [
   route("/pending-actions/[id]/confirm", confirmPending),
   route("/pending-actions/[id]/decline", declinePending),
   route("/people/[id]/profile", personProfile),
+  route("/plan/accept", planAccept),
+  route("/plan/slots", planSlots),
+  route("/plan", plan),
   route("/people", people),
   route("/permissions", permissions),
   route("/projects", projects),

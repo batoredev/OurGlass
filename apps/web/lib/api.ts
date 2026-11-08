@@ -378,3 +378,39 @@ export interface PersonProfile {
 export async function fetchPersonProfile(id: string): Promise<PersonProfile> {
   return (await get<{ profile: PersonProfile }>(`/api/people/${encodeURIComponent(id)}/profile`)).profile;
 }
+
+// ---------------------------------------------------------------------------
+// The day plan and meeting slots (ROADMAP Stage 3)
+// ---------------------------------------------------------------------------
+
+export interface PlannedBlock {
+  readonly kind: "meeting" | "task" | "nudge";
+  readonly id: string;
+  readonly title: string;
+  readonly reason: string;
+  readonly start: string;
+  readonly end: string;
+}
+
+export interface DayPlan {
+  readonly timeZone: string;
+  readonly blocks: readonly PlannedBlock[];
+  readonly unplaced: readonly { readonly id: string; readonly title: string; readonly reason: string }[];
+  readonly next: PlannedBlock | null;
+}
+
+export async function fetchDayPlan(): Promise<DayPlan> {
+  return get<DayPlan>("/api/plan");
+}
+
+export interface SlotSuggestion {
+  readonly timeZone: string;
+  readonly person: string;
+  readonly preference: "morning" | "afternoon" | "evening" | null;
+  readonly basis: string;
+  readonly slots: readonly { readonly start: string; readonly end: string }[];
+}
+
+export async function fetchMeetingSlots(personId: string, minutes = 30): Promise<SlotSuggestion> {
+  return get<SlotSuggestion>(`/api/plan/slots?person=${encodeURIComponent(personId)}&minutes=${minutes}`);
+}

@@ -17,6 +17,7 @@ import { DeletePermanently } from "../../delete-permanently";
 import { Avatar } from "../../icons";
 import { fetchPersonProfile, type OpenItem, type PersonProfile, type Sourced } from "../../../lib/api";
 import { LoadFailure, PageHeader } from "../../surface";
+import { MeetingSlots } from "./meeting-slots";
 
 function Source({ text }: { text: string }) {
   return <span className="profile-source"> — {text}</span>;
@@ -99,6 +100,8 @@ function ProfileView({ profile }: { profile: PersonProfile }) {
           <p className="profile-empty">No record yet — nothing they owed you with a deadline has been finished.</p>
         )}
       </section>
+
+      <MeetingSlots personId={profile.id} name={profile.name} />
 
       <Facts title="Preferences" facts={profile.preferences} />
       <Facts title="What you've told me" facts={profile.facts} />

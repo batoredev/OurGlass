@@ -964,3 +964,20 @@ a.person-name:hover, a.person-name:focus-visible { text-decoration: underline; }
 .meeting-brief { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; line-height: 1.45; }
 .meeting-brief ul { margin: 6px 0 0; padding-left: 18px; }
 .meeting-brief-name { font-weight: 700; color: inherit; }
+
+/* Today → Your day, planned (ROADMAP Stage 3). */
+.day-plan-next { margin: 4px 0 12px; }
+.day-plan-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.day-plan-item { display: grid; grid-template-columns: 120px 64px 1fr; gap: 4px 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; align-items: baseline; }
+.day-plan-time { font-variant-numeric: tabular-nums; font-weight: 600; }
+.day-plan-kind { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.day-plan-title { font-weight: 600; }
+.day-plan-reason { grid-column: 3; color: var(--muted); font-size: 13px; }
+.day-plan-meeting { background: transparent; }
+.day-plan-task, .day-plan-nudge { background: var(--surface-strong); }
+.day-plan-unplaced { margin-top: 14px; font-size: 14px; }
+.day-plan-unplaced ul { margin: 6px 0 0; padding-left: 18px; }
+@media (max-width: 760px) {
+  .day-plan-item { grid-template-columns: 1fr; }
+  .day-plan-reason { grid-column: 1; }
+}

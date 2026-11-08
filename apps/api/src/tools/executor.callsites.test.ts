@@ -34,6 +34,10 @@ const ALLOWED: Readonly<Record<string, string>> = {
   // Demo data for a prototype display: fixed calls written by code, never a
   // model, and only into an empty database (demo/seed.ts, demo/seed-main.ts).
   "api/src/demo/seed.ts": "the demo seed — fixed fictional data into an empty database only",
+  // Stage 3: accepting a proposed day plan is the owner's own act. Only
+  // create_event, with times the scheduler computed and the route re-checked
+  // against the calendar — never chosen by a model (see the name check below).
+  "edge/app/api/plan/accept/route.ts": "accepting a proposed day plan — create_event only",
 };
 
 const SKIP_DIRS = new Set(["node_modules", "dist", ".next", "out"]);
@@ -95,6 +99,10 @@ describe("executeTurn call sites", () => {
     expect(new Set(toolNamesIn("api/src/ingest/ingest.ts"))).toEqual(
       new Set(["save_document", "link_document"]),
     );
+  });
+
+  it("accepting a day plan executes only create_event", () => {
+    expect(new Set(toolNamesIn("edge/app/api/plan/accept/route.ts"))).toEqual(new Set(["create_event"]));
   });
 
   it("the permissions route executes only control-plane tools", () => {

@@ -131,6 +131,16 @@ channel beyond a saved email, and searching document contents.
 
 *The Machine's simulation and contingency, made deterministic.*
 
+**Status: built 2026-11-08** — `apps/api/src/planning/scheduler.ts`. **Today → Your day,
+planned**: your work placed around meetings (with a 10-minute buffer) most urgent first, a
+next-best task with its reason, nudges for anyone overdue or due today with a late record, and
+what does not fit. **Put it on my calendar** adds the blocks as events in one undoable turn,
+re-checked against the calendar first; booked work is not planned twice. A person's page
+**finds a time to meet** inside their stated time of day. Property-tested over 500 random days:
+no double-booking, nothing outside working hours, every task accounted for. **Not yet:**
+constraints stated in words, learned durations, recurring tasks, subtasks, a week view, and
+the acceptance-rate eval.
+
 - The model extracts constraints ("mornings are for writing", "Dev only after 3"); **code places
   work**: a day and week plan around fixed meetings and deadlines, focus blocks, estimated
   durations, recurring tasks and subtasks, a next-best-task suggestion with its reason,
@@ -183,11 +193,13 @@ planned) · — not planned, with the reason.
 | Subtasks / checklists | ✅ Today checklist · subtasks S3 |
 | Deadlines · reminders | ✅ |
 | Priorities | ✅ Thoughts board · commitments S3 |
-| Recurring tasks | S3 |
-| Daily / weekly / monthly plans · auto-reschedule unfinished | S3 |
+| Recurring tasks | S3 (not yet) |
+| Daily plan · re-planned on every visit | ✅ |
+| Weekly / monthly plans | S3 (not yet) |
 | Daily agenda | ✅ Today page · generated plan S3 |
 | Track completion · identify overdue | ✅ |
-| Estimate duration · focus blocks · next best task | S3 |
+| Focus blocks · next best task with its reason | ✅ |
+| Estimated durations (fixed 30 min today) | S3 (not yet learned) |
 | Detect conflicting commitments | ✅ meetings · tasks S3 |
 | Convert messages into tasks | ✅ |
 | Break large goals into smaller tasks | S3 (proposed, confirmed) |
@@ -201,7 +213,8 @@ planned) · — not planned, with the reason.
 | Event reminders | S1 |
 | Birthdays and important dates | S2 |
 | Meeting briefs | ✅ for meetings in the next 7 days |
-| Find slots that suit both people · reschedule clashes · schedule tasks around meetings | S3 |
+| Find slots that suit the other person · schedule tasks around meetings | ✅ |
+| Reschedule clashes automatically | S3 (not yet) |
 | Daily and weekly summaries | S5 |
 | Travel time between appointments | L (needs a maps integration) |
 

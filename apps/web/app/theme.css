@@ -335,3 +335,6 @@ button.checklist-item:hover { transform: translateY(-1px); box-shadow: 0 18px 34
 /* Meeting briefs and the person page, in the theme's softer cards. */
 .meeting-brief { border-radius: 16px; background: var(--surface-strong); }
 .profile-subtitle { font: 600 16px/1.2 var(--display); }
+
+/* The day plan in the theme's cards. */
+.day-plan-item { border-radius: 16px; }
